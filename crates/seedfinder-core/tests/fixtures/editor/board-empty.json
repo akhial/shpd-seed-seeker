@@ -1,0 +1,22 @@
+{
+  "about": "An empty board.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": []
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 0
+    },
+    "focus": null,
+    "items": [],
+    "next_key": 1,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": []
+  }
+}

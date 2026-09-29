@@ -1,0 +1,178 @@
+{
+  "about": "Removal is the one edit an unreadable row accepts; a join onto it does nothing.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 1,
+        "target": 2,
+        "type": "join"
+      },
+      {
+        "key": 2,
+        "type": "remove"
+      }
+    ],
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_of_wonders",
+        "key": 2,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 2
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any wand, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              3
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Any wand",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any ring, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1
+            ],
+            "key": 3,
+            "kind": "ring",
+            "lifted": null,
+            "name": "Any ring",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Any ring",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Any ring",
+        "problem": null
+      }
+    ],
+    "next_key": 4,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  }
+}

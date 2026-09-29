@@ -30,10 +30,7 @@ pub fn present(
         .description("Ready-made queries shipped with Seed Seeker.")
         .build();
     for preset in presets::built_in() {
-        let row = adw::ActionRow::builder()
-            .title(preset.name)
-            .subtitle("Included with the app")
-            .build();
+        let row = adw::ActionRow::builder().title(preset.name).build();
         let load = gtk::Button::builder()
             .label("Load")
             .valign(gtk::Align::Center)

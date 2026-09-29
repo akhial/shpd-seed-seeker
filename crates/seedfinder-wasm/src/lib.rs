@@ -6,6 +6,7 @@ use shpd_seedfinder_core::auto_trinkets::{self, SeedRecipe};
 use shpd_seedfinder_core::catalog::{Effect, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::deep_link;
+use shpd_seedfinder_core::editor;
 use shpd_seedfinder_core::engine_info::document as engine_info_document;
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::json_query;
@@ -222,6 +223,24 @@ struct AdvanceOutput {
 #[must_use]
 pub fn engine_info() -> String {
     engine_info_document().to_string()
+}
+
+/// Answers a requirement-board request (`docs/requirement-editor.md`). The
+/// board itself loads the lean `seedfinder_editor` module before first
+/// render; this copy serves workers and tests that already hold the engine.
+/// Never throws: a request the editor cannot read answers `{"error": ...}`.
+#[wasm_bindgen]
+#[must_use]
+pub fn requirement_board(request_json: &str) -> String {
+    editor::requirement_board(request_json)
+}
+
+/// Answers a requirement-sheet request (`docs/requirement-editor.md`); see
+/// [`requirement_board`].
+#[wasm_bindgen]
+#[must_use]
+pub fn requirement_editor(request_json: &str) -> String {
+    editor::requirement_editor(request_json)
 }
 
 /// Detects and groups partial seed codes or daily dates as you type. The
@@ -1052,6 +1071,22 @@ mod tests {
     fn engine_info_serializes_the_shared_document_with_the_browser_cap() {
         let info: Value = serde_json::from_str(&engine_info()).unwrap();
         assert_eq!(info, engine_info_document());
+    }
+
+    #[test]
+    fn requirement_editor_exports_answer_the_shared_envelopes() {
+        let board = r#"{"rows":[{"key":1,"kind":"wand"}],"edits":[{"type":"set_count","key":1,"count":2}]}"#;
+        assert_eq!(
+            super::requirement_board(board),
+            shpd_seedfinder_core::editor::requirement_board(board)
+        );
+        let open = r#"{"op":"open","rows":[]}"#;
+        assert_eq!(
+            super::requirement_editor(open),
+            shpd_seedfinder_core::editor::requirement_editor(open)
+        );
+        let error: Value = serde_json::from_str(&super::requirement_board("[")).unwrap();
+        assert!(error["error"].is_string());
     }
 
     #[test]

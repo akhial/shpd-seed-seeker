@@ -75,6 +75,12 @@ export interface LevelSum {
 }
 
 export interface RequirementState {
+  /**
+   * The row's identity for the requirement editor, stable across its edits.
+   * `fromQueryJson` numbers a loaded list 1…n and the editor mints the rest;
+   * it is never written to a query document.
+   */
+  key: number;
   /** Reserve this wand without budgeting Auto resin upgrades. */
   excludeResin?: boolean;
   /** Extra filter on an item assigned to an ordinary requirement. */
@@ -156,6 +162,419 @@ export interface AnyOfDocument {
 
 export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
 
+// The requirement editor's JSON envelopes (docs/requirement-editor.md). The
+// shared core owns every rule and every word behind them; these types only
+// spell out the wire format.
+
+/** One requirement of the editor's flat list: the document entry, its key and its either/or label. */
+export interface RequirementRow extends RequirementDocument {
+  key: number;
+  alternative_group?: number;
+}
+
+/** The query's Arcane Resin condition as the editor reads it. */
+export interface ResinCondition {
+  amount: number | "auto";
+  filter: {
+    uncursed: boolean;
+    max_depth: number | null;
+    source: ItemSource | null;
+    include_mage_wand: boolean;
+  } | null;
+}
+
+/** One board edit; keys name visible rows (a chip or one cluster member). */
+export type BoardEdit =
+  | { type: "normalize" }
+  | { type: "join"; source: number; target: number }
+  | { type: "detach"; key: number }
+  /** The chip menu's Remove: the chip with its whole stack. */
+  | { type: "remove"; key: number }
+  /** A drop on the remove target: one item of the chip. */
+  | { type: "remove_one"; key: number }
+  | { type: "remove_item"; key: number }
+  | { type: "set_count"; key: number; count: number }
+  | { type: "set_total"; key: number; total: number | null }
+  | { type: "toggle_levels"; key: number }
+  | { type: "set_copy_depth"; key: number; max_depth: number | null }
+  | {
+      type: "save";
+      key: number | null;
+      requirement: RequirementDocument;
+      count: number;
+      total: number | null;
+      copy_depth: number | null;
+    };
+
+export interface BoardRequest {
+  rows: RequirementRow[];
+  next_key?: number;
+  edits?: BoardEdit[];
+  resin?: ResinCondition | null;
+}
+
+export interface BoardRefusal {
+  reason: "blanket_total" | "no_free_group";
+  message: string;
+}
+
+/**
+ * A qualifier beside a chip's name. The upgrade is tinted apart from the rest,
+ * and on the resin chip so is the resin it counts (`credit`: the amount and
+ * `Mage +2`) from the donor filter.
+ */
+export interface ChipTag {
+  text: string;
+  style: "plain" | "upgrade" | "credit";
+  /** The tag's own hover text; only the resin chip's `Auto` and `Mage +2` have one. */
+  tooltip: string | null;
+}
+
+/** A stack (×N / ≤N) or combined-level (Σ) badge. */
+export interface StackBadge {
+  text: string;
+  compact_text: string;
+  tooltip: string;
+}
+
+/** A chip's stack (×N / ≤N) and combined-level (Σ) badges, each absent when not shown. */
+export interface ChipBadges {
+  count: StackBadge | null;
+  total: StackBadge | null;
+}
+
+/** What a chip's count and combined-level steppers offer. */
+export interface StackView {
+  count: number;
+  max: number;
+  can_grow: boolean;
+  can_change_count: boolean;
+  /** The count stepper's upper bound: `max` while the chip can grow, else its count. */
+  count_max: number;
+  total: number | null;
+  can_count_levels: boolean;
+  level_capacity: number;
+  default_total: number;
+  copy_depth: number | null;
+  can_set_copy_depth: boolean;
+  count_text: string;
+  total_text: string;
+}
+
+/**
+ * What a chip shows of one item: its own row's face, or the face of the bare
+ * copy a drag of it carries (`ChipView.lifted`). Drawn, never edited.
+ */
+export interface ChipFace {
+  name: string;
+  title: string;
+  item: string | null;
+  /** Null only for a row the editor cannot read. */
+  kind: RequirementKind | null;
+  family: ItemCategory | null;
+  tags: ChipTag[];
+  trailing_tags: ChipTag[];
+  effect: {
+    label: string;
+    effects: string[];
+    any_enchantment: boolean;
+    curses_only: boolean;
+  } | null;
+  uncursed: boolean;
+  details: string[];
+  description: string;
+}
+
+/** One visible row of the board: a chip, or one member of a cluster. Its face is its own row's. */
+export interface ChipView extends ChipFace {
+  key: number;
+  relations: { glyph: "or" | "sum" | "times"; text: string }[];
+  problem: string | null;
+  /** The badges at rest; a cluster member's are its own, drawn on its chip. */
+  badges: ChipBadges;
+  /**
+   * The badges the chip keeps while one item is lifted away, which a drag's
+   * origin shows; null when the chip has no copies and the whole chip leaves.
+   */
+  remaining_badges: ChipBadges | null;
+  /**
+   * The face of the item a drag of the chip carries — a bare copy of it, which
+   * the moving chip draws — or null when the chip has no copies and moves itself.
+   */
+  lifted: ChipFace | null;
+  /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
+  copies: number[];
+  stack: StackView;
+  in_cluster: boolean;
+  can_detach: boolean;
+  /** The visible rows this chip may join, in list order. */
+  join: number[];
+  /** The visible rows a join onto is refused, with the reason. */
+  refuse: ({ key: number } & BoardRefusal)[];
+}
+
+/** One board entry: a chip, or an either/or cluster. Stacks and badges are its chips'. */
+export interface BoardItemView {
+  /** `r<key>` for a chip, `c<label>` for a cluster; stable while the entry survives an edit. */
+  id: string;
+  blanket: boolean;
+  cluster: number | null;
+  label: string | null;
+  /** The entry's name where a menu names it: a chip's name, or its members' joined with ` or `. */
+  name: string;
+  members: number[];
+  extras: number[];
+  chips: ChipView[];
+  problem: string | null;
+}
+
+export interface ResinChipView {
+  name: string;
+  tags: ChipTag[];
+  uncursed: boolean;
+  /** The chip's hover text: the donors' source, the one filter no tag shows. */
+  tooltip: string | null;
+  details: string[];
+  description: string;
+}
+
+export interface RequirementProblem {
+  message: string;
+  keys: number[];
+  scope: "row" | "group" | "list";
+}
+
+export interface BoardResponse {
+  rows: RequirementRow[];
+  next_key: number;
+  changed: boolean;
+  rekeyed: [number, number][];
+  focus: number | null;
+  refused: BoardRefusal | null;
+  items: BoardItemView[];
+  counts: { ordinary: number; blanket: number };
+  problems: RequirementProblem[];
+  resin: ResinChipView | null;
+}
+
+/**
+ * A requirement sheet between two requests. The core owns its contents; the
+ * app keeps the string as it came and sends it back with the next request.
+ */
+export type EditorDraft = string & { readonly __editorDraft: unique symbol };
+
+export type TierMode = TierFilter["mode"];
+export type UpgradeMode = UpgradeFilter["mode"];
+export type EffectMode = "any" | "any_enchantment" | "specific";
+export type WeaponType = "any" | "melee" | "thrown";
+
+/** One control the user moved. */
+export type EditorChange =
+  | { type: "set_category"; value: ItemCategory }
+  | { type: "set_weapon_type"; value: WeaponType }
+  | { type: "set_kind"; value: RequirementKind }
+  /** An item's stable id, `null` for the wildcard, or `arcane_resin`. */
+  | { type: "set_item"; value: string | null }
+  | { type: "set_tier_mode"; value: TierMode }
+  | { type: "set_upgrade_mode"; value: UpgradeMode }
+  | { type: "set_effect_mode"; value: EffectMode }
+  | { type: "toggle_effect"; value: string }
+  | { type: "set_source"; value: ItemSource | null }
+  | {
+      type:
+        | "set_tier"
+        | "set_upgrade"
+        | "set_floor_limit"
+        | "set_transmutations"
+        | "set_count"
+        | "set_copy_depth"
+        | "set_total";
+      value: number;
+    }
+  | {
+      type:
+        | "set_uncursed"
+        | "set_floor_limit_enabled"
+        | "set_exclude_resin"
+        | "set_transmutations_enabled"
+        | "set_select_trinket"
+        | "set_copy_depth_enabled"
+        | "set_count_levels"
+        | "set_resin_auto"
+        | "set_include_mage_wand";
+      value: boolean;
+    }
+  /** The number as typed, `null` for an empty field. */
+  | { type: "set_resin_amount"; value: number | null };
+
+export type EditorRequest =
+  | {
+      op: "open";
+      rows: RequirementRow[];
+      /** The row the sheet opens on; `null` for a new chip. */
+      key?: number | null;
+      /** The new chip's section. */
+      blanket?: boolean;
+      /** The query's resin condition, which seeds the resin section. */
+      resin?: ResinCondition | null;
+      offer_resin?: boolean;
+      /** Opens the query's resin chip. */
+      open_resin?: boolean;
+    }
+  | { op: "change"; draft: EditorDraft; change: EditorChange }
+  | { op: "save"; draft: EditorDraft; rows: RequirementRow[]; next_key?: number };
+
+/** One choice of a picker; `hidden` marks one offered only because the draft names it. */
+export interface EditorOption<T> {
+  value: T;
+  label: string;
+  /** The heading the choice sits under (`Tier 3`). */
+  group: string | null;
+  hidden: boolean;
+}
+
+export interface EditorChoice<T> {
+  visible: boolean;
+  value: T;
+  options: EditorOption<T>[];
+}
+
+/** A check box, with the help text shown under it whenever it shows. */
+export interface EditorToggle {
+  visible: boolean;
+  value: boolean;
+  label: string;
+  caption: string | null;
+}
+
+/** A mode picker with its value slider. */
+export interface EditorModeRange<M> {
+  visible: boolean;
+  mode: M;
+  modes: EditorOption<M>[];
+  /** The value slider shows: the control does, in a mode other than `any`. */
+  value_visible: boolean;
+  value: number;
+  min: number;
+  max: number;
+  value_label: string;
+}
+
+/** A switch with a floor slider, whose options skip the empty boss floors. */
+export interface EditorFloorToggle {
+  visible: boolean;
+  enabled: boolean;
+  value: number;
+  options: EditorOption<number>[];
+  label: string;
+  value_label: string;
+}
+
+/** A switch with a stepper or slider, which shows while the switch is on. */
+export interface EditorRangeToggle {
+  visible: boolean;
+  enabled: boolean;
+  value: number;
+  min: number;
+  max: number;
+  label: string;
+  caption: string | null;
+  /** The caption shows: while the switch is on for the transmutation limit, whenever the control does for the combined level. */
+  caption_visible: boolean;
+  value_label: string;
+}
+
+export type EffectGroup = "enchantment" | "curse";
+
+/** Everything the sheet shows for a draft. */
+export interface EditorForm {
+  v: number;
+  mode: "new" | "edit";
+  origin: { type: "new" } | { type: "row"; key: number } | { type: "resin" };
+  blanket: boolean;
+  in_cluster: boolean;
+  resin_picked: boolean;
+  /** The header's title; there even while the draft has errors. */
+  title: string;
+  /** The chip a save would produce, or `null` while there are errors or resin is picked. */
+  preview: ChipView | null;
+  category: EditorChoice<ItemCategory>;
+  kind: EditorChoice<RequirementKind>;
+  weapon_type: EditorChoice<WeaponType>;
+  item: EditorChoice<string | null>;
+  tier: EditorModeRange<TierMode>;
+  upgrade: EditorModeRange<UpgradeMode>;
+  effect: {
+    visible: boolean;
+    /** The section's label: `Enchantment`, or `Glyph` on armor. */
+    label: string;
+    mode: EffectMode;
+    modes: EditorOption<EffectMode>[];
+    /** The "Specific…" grid shows: the control does, in mode `specific`. */
+    choices_visible: boolean;
+    choices: { value: string; label: string; group: EffectGroup; selected: boolean }[];
+    groups: EditorOption<EffectGroup>[];
+    caption: string;
+  };
+  uncursed: EditorToggle;
+  source: EditorChoice<ItemSource | null>;
+  floor_limit: EditorFloorToggle;
+  exclude_resin: EditorToggle;
+  transmutations: EditorRangeToggle;
+  select_trinket: EditorToggle;
+  stack: {
+    visible: boolean;
+    /** The section's label, which the count stepper takes too. */
+    label: string;
+    count: number;
+    min: number;
+    max: number;
+    value_label: string;
+    copy_depth: EditorFloorToggle;
+    count_levels: EditorRangeToggle;
+  };
+  resin: {
+    visible: boolean;
+    /** The section's label, which the amount field takes too. */
+    label: string;
+    auto: boolean;
+    /** The Amount/Auto choice, each option valued as `auto` is. */
+    modes: EditorOption<boolean>[];
+    /** What Auto means, shown in the amount field's place while `auto` is on. */
+    caption: string;
+    /** The amount as typed; `null` for an empty field. */
+    amount: number | null;
+    /** The amounts that save. */
+    min: number;
+    max: number;
+    include_mage_wand: EditorToggle;
+  };
+  /** Why the draft cannot be saved, in the order to show them. */
+  errors: string[];
+  can_save: boolean;
+}
+
+/** An open sheet: the draft to send back and the form it shows. */
+export interface EditorSheet {
+  draft: EditorDraft;
+  form: EditorForm;
+}
+
+/** What a save wrote. */
+export interface EditorSaved {
+  rows: RequirementRow[];
+  next_key: number;
+  changed: boolean;
+  rekeyed: [number, number][];
+  /** The visible row the save landed on. */
+  focus: number | null;
+  /** The query's resin: set when Arcane Resin was saved, cleared when the resin chip became a row. */
+  resin: { set: ResinCondition } | { clear: true } | null;
+}
+
+/** Open and change answer a sheet; save answers what it saved, or the sheet with its errors. */
+export type EditorResponse = EditorSheet | { saved: EditorSaved };
+
 /** The keys this release writes. Documents saved by older releases may carry
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
@@ -193,6 +612,10 @@ export interface EngineLimits {
   maxUpgradeWeapon: number;
   maxUpgradeAnyTier: number;
   extraUpgradeTier: number;
+  /** The most items one stack of the requirement editor asks for, its anchor included. */
+  stackMax: number;
+  trinketTransmutationsMax: number;
+  artifactTransmutationsMax: number;
   resultsFileMaxBytes: number;
 }
 

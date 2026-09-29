@@ -6,7 +6,6 @@ import {
   fromQueryJson,
   nearestOptionIndex,
   normalizeFloorLimit,
-  slotCount,
   toQueryDocument,
   toQueryJson,
 } from "./query";
@@ -20,6 +19,7 @@ describe("query serialization", () => {
         ...defaultQueryState(),
         requirements: [
           {
+            key: 1,
             kind: "wand",
             tier: { mode: "any", value: 3 },
             upgrade: { mode: "any", value: 1 },
@@ -35,12 +35,14 @@ describe("query serialization", () => {
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "armor" as const,
           tier: { mode: "at_least" as const, value: 4 },
           upgrade: { mode: "at_least" as const, value: 2 },
           uncursed: false,
         },
         {
+          key: 2,
           kind: "ring" as const,
           item: "ring_haste",
           tier: { mode: "any" as const, value: 3 },
@@ -65,18 +67,21 @@ describe("query serialization", () => {
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "melee_weapon",
           tier: { mode: "exact", value: 5 },
           upgrade: { mode: "any", value: 1 },
           uncursed: false,
         },
         {
+          key: 2,
           kind: "thrown_weapon",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
           uncursed: false,
         },
         {
+          key: 3,
           kind: "thrown_weapon",
           item: "shuriken",
           tier: { mode: "any", value: 3 },
@@ -108,6 +113,7 @@ describe("query serialization", () => {
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           item: "sword",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -135,6 +141,7 @@ describe("query serialization", () => {
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "wand" as const,
           tier: { mode: "any" as const, value: 3 },
           upgrade: { mode: "any" as const, value: 1 },
@@ -166,6 +173,7 @@ describe("query serialization", () => {
       autoApplyTrinket: false,
       requirements: [
         {
+          key: 1,
           kind: "weapon",
           item: undefined,
           tier: { mode: "at_most", value: 4 },
@@ -230,6 +238,7 @@ describe("query serialization", () => {
   });
 
   const plain = (patch: Partial<RequirementState>): RequirementState => ({
+    key: 1,
     kind: "weapon",
     tier: { mode: "any", value: 3 },
     upgrade: { mode: "any", value: 1 },
@@ -275,9 +284,9 @@ describe("query serialization", () => {
           upgrade: { mode: "exact", value: 2 },
           effect: ["Blocking", "Projecting", "Vampiric"],
         }),
-        plain({ kind: "armor", effect: "any_enchantment", uncursed: true }),
-        plain({ kind: "ring", item: "ring_might", levelSum: { group: 1, atLeast: 4 } }),
-        plain({ kind: "ring", item: "ring_might", levelSum: { group: 1, atLeast: 4 } }),
+        plain({ key: 2, kind: "armor", effect: "any_enchantment", uncursed: true }),
+        plain({ key: 3, kind: "ring", item: "ring_might", levelSum: { group: 1, atLeast: 4 } }),
+        plain({ key: 4, kind: "ring", item: "ring_might", levelSum: { group: 1, atLeast: 4 } }),
       ],
     };
     expect(JSON.parse(toQueryJson(state))).toEqual({
@@ -346,7 +355,6 @@ describe("query serialization", () => {
         { kind: "weapon", item: "dagger" },
       ],
     });
-    expect(slotCount(state.requirements)).toBe(4);
     const reread = fromQueryJson(toQueryJson(state));
     // Members regroup contiguously at the first member's position, numbered 1, 2, … in document order.
     expect(
@@ -364,5 +372,13 @@ describe("query serialization", () => {
     expect(() =>
       fromQueryJson('{"requirements":[{"any_of":[{"any_of":[{"item":"sword"}]}]}]}'),
     ).toThrowError(/nest/);
+  });
+
+  it("keys a loaded list 1…n for the requirement editor and never writes the keys", () => {
+    const json =
+      '{"requirements":[{"any_of":[{"kind":"weapon","item":"spear"},{"kind":"weapon","item":"mace"}]},{"kind":"wand"}]}';
+    const state = fromQueryJson(json);
+    expect(state.requirements.map((requirement) => requirement.key)).toEqual([1, 2, 3]);
+    expect(toQueryJson(state)).toBe(json);
   });
 });

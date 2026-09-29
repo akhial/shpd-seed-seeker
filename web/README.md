@@ -19,9 +19,10 @@ src/
   app/                 App shell, global styles, and persisted application state
   engine/              WASM bindings, engine types, and contract tests
     pkg/               Generated wasm-pack output (gitignored)
+    editor-pkg/        Generated requirement-editor module, loaded before first render (gitignored)
   features/
     query/             Query form, serialization, validation, and share links
-      requirements/    Requirement board, editor, relationships, and summaries
+      requirements/    Requirement board and editor, drawn by the shared core's editor
     results/           Result list, import/export, and result navigation
     search/            Search coordination, workers, progress, and status UI
     scout/             Seed and daily-run scouting, floor summaries
@@ -46,8 +47,12 @@ live with the query feature.
 
 Use direct module imports. Keep worker entry points and their `new URL(...,
 import.meta.url)` references together when moving code so Vite can bundle them.
-The WASM build script owns `engine/pkg/`, `generated/`, and the generated runtime
-assets under `public/`; rerun it after Rust engine changes.
+The WASM build script owns `engine/pkg/`, `engine/editor-pkg/`, `generated/`, and the generated
+runtime assets under `public/`; rerun it after Rust engine changes.
+
+The requirement editor's rules and words, the board's and the sheet's, live in the shared core
+(`docs/requirement-editor.md`): `engine/editor.ts` is the one place that calls its envelopes,
+and `features/query/requirements/board.ts` and `sheet.ts` move the query in and out of them.
 
 Global styles remain in `app/styles.css`, while map and seed-info styles live
 with their features. The existing CSS selectors and import order are preserved.

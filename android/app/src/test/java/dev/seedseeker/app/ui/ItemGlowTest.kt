@@ -7,6 +7,7 @@ import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.RequirementEditor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -84,7 +85,8 @@ class ItemGlowTest {
             for (uncursed in listOf(false, true)) {
                 val requirement = ItemRequirement(key = 1, item = item, upgrade = 1, kind = ItemKind.WAND, requireUncursed = uncursed)
                 assertEquals(EffectFilter.Any, requirement.effect)
-                assertEquals(emptyList<Glow>(), ItemGlows.forFilter(requirement.effect))
+                // A chip glows from the effect cue the editor gives it, and a wand has none.
+                assertNull(RequirementEditor.view(listOf(requirement)).items.single().chips.single().effect)
             }
         }
     }

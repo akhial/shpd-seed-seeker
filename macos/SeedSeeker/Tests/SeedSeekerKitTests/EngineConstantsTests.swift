@@ -40,6 +40,7 @@ final class EngineConstantsTests: XCTestCase {
         }
         XCTAssertEqual(SearchLimits.maxUpgradeAnyTier, limit("maxUpgradeAnyTier"))
         XCTAssertEqual(SearchLimits.extraUpgradeTier, limit("extraUpgradeTier"))
+        XCTAssertEqual(SearchLimits.stackMax, limit("stackMax"))
     }
 
     /// Only a tier-4 weapon is levelled past `maxUpgradeAnyTier`, so a

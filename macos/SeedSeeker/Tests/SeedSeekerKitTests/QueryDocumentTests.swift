@@ -40,7 +40,6 @@ final class QueryDocumentTests: XCTestCase {
         XCTAssertEqual(entries[0]["tier"] as? [String: Int], ["at_least": 4])
         XCTAssertNil(entries[0]["upgrade"])
         XCTAssertNil(entries[0]["effect"])
-        XCTAssertEqual(requirement.title, "Any Tier 4+ armor")
     }
 
     func testLoadedQueryGoldenDocument() throws {
@@ -150,7 +149,7 @@ final class QueryDocumentTests: XCTestCase {
         XCTAssertEqual(entries[0]["level_sum"] as? [String: Int], ["group": 1, "at_least": 4])
         XCTAssertEqual(entries[1]["level_sum"] as? [String: Int], ["group": 1, "at_least": 4])
         XCTAssertNil(entries[0]["upgrade_sum"])
-        XCTAssertEqual(first.description, "Any upgrade • levels ≥ 4 together • by floor 4")
+        XCTAssertEqual(entries[0]["max_depth"] as? Int, 4)
         try assertEngineAgrees(SavedQuery(requirements: [first, second]))
 
         // A same-item group is a stack: the anchor may be constrained, the copies are plain.
@@ -424,19 +423,23 @@ final class QueryDocumentTests: XCTestCase {
         XCTAssertNoThrow(try SearchRequest(requirements: [named(1), named(2, group: 2)]))
     }
 
-    func testSummaryTextDescribesTheNewState() throws {
+    /// A requirement keeps its effects in catalog order and knows how far
+    /// its levels reach; how a chip words it is the shared core's.
+    func testRequirementsOrderTheirEffectsAndBoundTheirLevels() throws {
         let set = try ItemRequirement(key: 1, item: ItemCatalog.findById("greatshield"), upgrade: 2,
                                       effect: .oneOf(["Projecting", "Blocking"]), kind: .weapon)
-        XCTAssertEqual(set.description, "+2 exactly • Blocking/Projecting")
+        XCTAssertEqual(set.effect, .oneOf(["Blocking", "Projecting"]))
+        XCTAssertEqual(set.upgradeMatch, .exactly)
         let enchanted = try ItemRequirement(key: 2, item: nil, upgrade: 0, effect: .anyEnchantment,
                                             kind: .weapon, upgradeMatch: .any, requireUncursed: true)
-        XCTAssertEqual(enchanted.description, "Any upgrade • any enchantment • uncursed")
+        XCTAssertEqual(enchanted.effect, .anyEnchantment)
+        XCTAssertTrue(enchanted.requireUncursed)
         let glyphed = try ItemRequirement(key: 3, item: nil, upgrade: 1, effect: .anyEnchantment,
                                           kind: .armor, upgradeMatch: .atLeast)
-        XCTAssertEqual(glyphed.description, "+1 or higher • any glyph")
+        XCTAssertEqual(glyphed.effect, .anyEnchantment)
         let summed = try ItemRequirement(key: 4, item: nil, upgrade: 0, kind: .ring, upgradeMatch: .any,
                                          levelSum: LevelSum(group: 2, atLeast: 4))
-        XCTAssertEqual(summed.description, "Any upgrade • levels ≥ 4 together")
+        XCTAssertEqual(summed.levelSum, LevelSum(group: 2, atLeast: 4))
         XCTAssertEqual(summed.maximumContributedUpgrade, 4)
         XCTAssertEqual(summed.maximumLevel, 5)
         let exact = try ItemRequirement(key: 5, item: nil, upgrade: 2, kind: .wand)

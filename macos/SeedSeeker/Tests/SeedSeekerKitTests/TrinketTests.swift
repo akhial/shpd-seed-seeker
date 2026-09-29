@@ -91,15 +91,15 @@ final class TrinketTests: XCTestCase {
                                         upgrade: 0, kind: .trinket, upgradeMatch: .any)
         let second = try ItemRequirement(key: 2, item: XCTUnwrap(ItemCatalog.findById("rat_skull")),
                                          upgrade: 0, kind: .trinket, upgradeMatch: .any)
-        let requirements = [first, second].joinAlternatives(source: 0, target: 1)
+        let requirements = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 2)],
+                                                                to: [first, second])).rows
         XCTAssertEqual(requirements.slotCount, 1)
-        XCTAssertFalse(requirements.canStack(requirements.boardItems()[0]))
+        XCTAssertTrue(try XCTUnwrap(RequirementBoard.of(requirements).items.first).chips.allSatisfy { !$0.stack.canGrow })
         let query = SavedQuery(requirements: requirements)
         let document = ResultsExport.encodeQuery(query)
         let restored = try ResultsExport.decodeQuery(document)
         XCTAssertEqual(restored.requirements.map { $0.item?.id }, requirements.map { $0.item?.id })
         XCTAssertEqual(restored.requirements.slotCount, 1)
-        XCTAssertEqual(first.title, "Mimic Tooth")
         XCTAssertThrowsError(try ItemRequirement(key: 3, item: nil, upgrade: 0,
                                                kind: .trinket, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 3, item: first.item, upgrade: 1,

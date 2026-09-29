@@ -1,0 +1,22 @@
+{
+  "about": "An edit whose requirement cannot be read fails the request.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "copy_depth": null,
+        "count": 1,
+        "key": null,
+        "requirement": {
+          "item": "wand_of_wonders"
+        },
+        "total": null,
+        "type": "save"
+      }
+    ],
+    "rows": []
+  },
+  "response": {
+    "error": "edit 1: unknown item 'wand_of_wonders'"
+  }
+}

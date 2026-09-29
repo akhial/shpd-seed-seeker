@@ -60,6 +60,7 @@ export const builtInPresets: Preset[] = [
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 3 },
@@ -67,6 +68,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 2,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -74,6 +76,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 3,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -81,6 +84,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 4,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "at_least", value: 1 },
@@ -97,6 +101,7 @@ export const builtInPresets: Preset[] = [
       maxDepth: VAULT_FLOOR_LIMIT,
       requirements: [
         {
+          key: 1,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 4 },
@@ -104,6 +109,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 2,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -111,6 +117,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 3,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -118,6 +125,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 4,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "at_least", value: 1 },
@@ -132,12 +140,14 @@ export const builtInPresets: Preset[] = [
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 3 },
           uncursed: false,
         },
         {
+          key: 2,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 2 },
@@ -145,6 +155,7 @@ export const builtInPresets: Preset[] = [
           maxDepth: 4,
         },
         {
+          key: 3,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 2 },
@@ -152,6 +163,7 @@ export const builtInPresets: Preset[] = [
           maxDepth: 4,
         },
         {
+          key: 4,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "exact", value: 2 },
@@ -166,6 +178,7 @@ export const builtInPresets: Preset[] = [
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "ring",
           item: "ring_wealth",
           tier: { mode: "any", value: 3 },
@@ -174,6 +187,7 @@ export const builtInPresets: Preset[] = [
           source: "imp_reward",
         },
         {
+          key: 2,
           kind: "ring",
           item: "ring_wealth",
           tier: { mode: "any", value: 3 },
@@ -192,6 +206,7 @@ export const builtInPresets: Preset[] = [
       maxDepth: VAULT_FLOOR_LIMIT,
       requirements: [
         {
+          key: 1,
           kind: "weapon",
           tier: { mode: "exact", value: 4 },
           upgrade: { mode: "exact", value: 5 },
@@ -199,6 +214,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 2,
           kind: "weapon",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -206,6 +222,7 @@ export const builtInPresets: Preset[] = [
           identityGroup: 1,
         },
         {
+          key: 3,
           kind: "weapon",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },

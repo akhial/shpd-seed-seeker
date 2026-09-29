@@ -105,8 +105,8 @@ internal sealed class LevelMapView : Grid
     private readonly TextBlock identity = new() { TextWrapping = TextWrapping.Wrap, Opacity = .75 };
     private readonly Button previous = new() { Content = "Previous" };
     private readonly Button next = new() { Content = "Next" };
-    private readonly ToggleButton secrets = new() { Content = "Secrets", IsEnabled = false };
-    private readonly Grid stage = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.Black) };
+    private readonly ToggleButton secrets = new() { Content = IconLabel("", "Secrets"), IsEnabled = false, Height = 32, Padding = new Thickness(10, 0, 12, 0) };
+    private readonly Grid stage = new() { Background = new SolidColorBrush(Microsoft.UI.Colors.Black), CornerRadius = new CornerRadius(4) };
     private readonly ContentControl stageHost = new() { IsTabStop = true, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
     private readonly Image art = new() { Stretch = Stretch.Fill };
     private readonly StackPanel status = new() { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -161,12 +161,7 @@ internal sealed class LevelMapView : Grid
             name.Blocks.Add(paragraph);
             Grid.SetColumn(name, 1); heading.Children.Add(name);
             if (item.Upgrade is > 0 and int upgrade) {
-                var chip = new Border { Padding = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(4),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Background = (Brush)Application.Current.Resources["SystemFillColorSuccessBackgroundBrush"],
-                    Child = new TextBlock { Text = $"+{upgrade}", FontSize = 11, FontFamily = new FontFamily("Consolas"),
-                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                        Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"] } };
+                var chip = Palette.Tag($"+{upgrade}", Palette.Upgrade, Palette.UpgradeFill);
                 AutomationProperties.SetName(chip, $"Upgrade +{upgrade}");
                 paragraph.Inlines.Add(new Run { Text = "\u00a0" });
                 paragraph.Inlines.Add(new InlineUIContainer { Child = chip });
@@ -174,9 +169,7 @@ internal sealed class LevelMapView : Grid
             if (item.Quantity > 1) paragraph.Inlines.Add(new Run { Text = $"\u00a0×{item.Quantity}" });
             body.Children.Add(heading);
             var modifiers = new WrapPanel { Spacing = 6, LineSpacing = 4 };
-            if (item.Cursed || item.Curse is not null) modifiers.Children.Add(new TextBlock {
-                Text = item.Cursed ? "Cursed" : "Curse", FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] });
+            if (item.Cursed || item.Curse is not null) modifiers.Children.Add(Palette.Tag(item.Cursed ? "Cursed" : "Curse", Palette.Curse, Palette.CurseFill));
             if (modifiers.Children.Count > 0) body.Children.Add(modifiers);
             if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });
             if (item.Description.Length > 0) body.Children.Add(new TextBlock { Text = item.Description, FontSize = 12, Opacity = .85, TextWrapping = TextWrapping.Wrap });
@@ -186,8 +179,10 @@ internal sealed class LevelMapView : Grid
             Width = cardWidth, MaxHeight = Math.Max(1, Math.Min(320, stage.ActualHeight - 16)), Padding = new Thickness(14),
             CornerRadius = (CornerRadius)Application.Current.Resources["OverlayCornerRadius"], BorderThickness = new Thickness(1),
             Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["SurfaceStrokeColorFlyoutBrush"],
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            // Raised like a flyout, so the card reads above the map it describes.
+            Shadow = new ThemeShadow(), Translation = new System.Numerics.Vector3(0, 0, 32),
             Child = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
         };
         itemCard.PointerPressed += (_, e) => e.Handled = true;
@@ -211,10 +206,10 @@ internal sealed class LevelMapView : Grid
         RowSpacing = 8;
         if (!expanded) Height = 390;
         toolbar.Children.Add(areas); toolbar.Children.Add(secrets);
-        AddButton("−", () => Zoom(zoom / 1.5, new Point()), "Zoom out (−)");
-        AddButton("+", () => Zoom(zoom * 1.5, new Point()), "Zoom in (+)");
-        AddButton("Fit", Reset, "Fit map (0)");
-        if (!expanded) AddButton("Expand", () => _ = Expand(), "Expand floor map");
+        AddButton("", () => Zoom(zoom / 1.5, new Point()), "Zoom out (−)");
+        AddButton("", () => Zoom(zoom * 1.5, new Point()), "Zoom in (+)");
+        AddButton("", Reset, "Fit map (0)");
+        if (!expanded) AddButton("", () => _ = Expand(), "Expand floor map");
         var header = new StackPanel { Spacing = 8 };
         if (expanded)
         {
@@ -317,10 +312,19 @@ internal sealed class LevelMapView : Grid
     }
 
     private void RootChanged(XamlRoot sender, XamlRootChangedEventArgs args) { SyncAnimation(); Render(); }
-    private void AddButton(string title, Action action, string help)
+    /// <summary>A toolbar icon button; its tooltip names it and its shortcut.</summary>
+    private void AddButton(string glyph, Action action, string help)
     {
-        var button = new Button { Content = title, Padding = new Thickness(10, 5, 10, 5) };
+        var button = new Button { Content = new FontIcon { Glyph = glyph, FontSize = 14 }, Width = 36, Height = 32, Padding = new Thickness(0) };
         button.Click += (_, _) => action(); ToolTipService.SetToolTip(button, help); AutomationProperties.SetName(button, help); toolbar.Children.Add(button);
+    }
+    /// <summary>A glyph beside its label, the content of a labelled toolbar button.</summary>
+    private static StackPanel IconLabel(string glyph, string label)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        content.Children.Add(new FontIcon { Glyph = glyph, FontSize = 14, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+        return content;
     }
     private void ProfileChanged()
     {
@@ -382,13 +386,12 @@ internal sealed class LevelMapView : Grid
         identity.Text = string.Join(" · ", new[] { region, feeling == FloorFeeling.None ? "" : $"{feeling} floor",
             quest is null ? "" : ScoutQuests.VariantLabel(quest.Variant) }.Where(text => text.Length > 0));
         secrets.IsChecked = session.Secrets; secrets.IsEnabled = bundle?.Map.HasSecrets == true;
-        secrets.Content = session.Secrets ? "✓ Secrets" : "Secrets";
         ToolTipService.SetToolTip(secrets, bundle?.Map.HasSecrets == false ? "No secrets on this map" : "Reveal secret rooms, doors and traps");
         areas.Children.Clear();
         if (branches.Length == 0) return;
         foreach (var area in new[] { (Branch: 0, Label: "Main") }.Concat(branches.Select(b => (b.Branch, Label: b.Kind == "imp_vault" ? "Imp Vault" : "Blacksmith Mine"))))
         {
-            var button = new ToggleButton { Content = area.Label, IsChecked = area.Branch == branch, Padding = new Thickness(8, 5, 8, 5) };
+            var button = new ToggleButton { Content = area.Label, IsChecked = area.Branch == branch, Height = 32, Padding = new Thickness(10, 0, 10, 0) };
             button.Click += (_, _) => { branch = area.Branch; _ = Load(); }; areas.Children.Add(button);
         }
     }
@@ -407,13 +410,18 @@ internal sealed class LevelMapView : Grid
     private async Task Expand()
     {
         if (XamlRoot is null) return;
+        // The dialog may grow to the window less a margin; the map takes what
+        // its title, padding and button row leave, so Fit shows the whole
+        // floor instead of a map the dialog clips at the bottom.
+        var maxHeight = Math.Max(420, XamlRoot.Size.Height - 48);
         var view = new LevelMapView(session, depth, true)
         {
             branch = branch, branches = branches, profileKey = profileKey, profileLocationKey = profileLocationKey,
-            Width = Math.Clamp(XamlRoot.Size.Width - 120, 320, 1100), Height = Math.Max(300, XamlRoot.Size.Height - 180),
+            Width = Math.Clamp(XamlRoot.Size.Width - 120, 320, 1100), Height = Math.Max(220, maxHeight - 200),
         };
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = "Floor maps", Content = view, CloseButtonText = "Close" };
         dialog.Resources["ContentDialogMaxWidth"] = 1200d;
+        dialog.Resources["ContentDialogMaxHeight"] = maxHeight;
         suspended = true; SyncAnimation();
         try { await dialog.ShowAsync(); }
         finally { suspended = false; requestKey = null; _ = Load(); SyncAnimation(); }

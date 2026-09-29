@@ -1,0 +1,166 @@
+{
+  "about": "One item of a Ring of Energy ×3 counting levels to at least 11 dropped on the remove target: two rings are left, their total capped at the 8 they can reach.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "key": 1,
+        "type": "remove_one"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 1,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
+              },
+              "total": {
+                "compact_text": "Σ≥8",
+                "text": "Σ ≥ 8",
+                "tooltip": "Levels add to at least 8 (a +0 item counts 1)"
+              }
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Ring of Energy",
+            "details": [],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_energy",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 8"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "≤2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": 8,
+              "total_text": "Σ ≥ 8"
+            },
+            "tags": [],
+            "title": "Ring of Energy",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Ring of Energy",
+        "problem": null
+      }
+    ],
+    "next_key": 3,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 8,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 8,
+          "group": 1
+        }
+      }
+    ]
+  }
+}

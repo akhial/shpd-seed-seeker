@@ -11,8 +11,8 @@ import {
   fromQueryJson,
   toQueryDocument,
   toQueryJson,
-  validateQuery,
 } from "../../features/query/query";
+import { validateQuery } from "../../features/query/validation";
 import { decodeResultsFile, encodeResultsFile } from "../../features/results/results-file";
 import init, {
   analyze_query,

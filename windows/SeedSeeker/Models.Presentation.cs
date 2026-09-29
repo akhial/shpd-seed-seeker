@@ -21,13 +21,6 @@ public sealed partial class ItemRequirement
     [JsonIgnore] public Visibility SpriteVisibility => Item is null ? Visibility.Collapsed : Visibility.Visible;
     /// <summary>The generic glyph shows only where there is genuinely no concrete item.</summary>
     [JsonIgnore] public Visibility FallbackVisibility => Item is null ? Visibility.Visible : Visibility.Collapsed;
-    /// <summary>
-    /// Glow for the pinned enchantment or curse, with the bare-effect-name semantics
-    /// of the web's <c>effectGlow</c>: an unrecognised effect is a curse and glows
-    /// black. There is nothing to tint without a sprite, so wildcards never glow.
-    /// </summary>
-    [JsonIgnore] public Windows.UI.Color GlowColor => ItemGlow.ForEffect(Modifier)?.Color ?? default;
-    [JsonIgnore] public double GlowPeriod => Item is null ? 0 : ItemGlow.ForEffect(Modifier)?.Period ?? 0;
 }
 
 /// <summary>Renders a floor slider's raw index as the floor it selects, for the thumb tooltip.</summary>
@@ -35,6 +28,15 @@ public sealed class FloorLimitIndexConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language) =>
         FloorLimits.Options[Math.Clamp((int)Math.Round((double)value), 0, FloorLimits.Options.Length - 1)].ToString();
+    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
+}
+
+/// <summary>Renders an option slider's raw index as the option's label, for the thumb tooltip; the labels are the requirement sheet's.</summary>
+public sealed class OptionLabelConverter : IValueConverter
+{
+    public IReadOnlyList<string> Labels { get; set; } = [];
+    public object Convert(object value, Type targetType, object parameter, string language) =>
+        Labels.Count == 0 ? "" : Labels[Math.Clamp((int)Math.Round((double)value), 0, Labels.Count - 1)];
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
 

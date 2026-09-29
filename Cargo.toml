@@ -4,6 +4,7 @@ members = [
     "crates/seedfinder-core",
     "crates/seedfinder-session",
     "crates/seedfinder-wasm",
+    "crates/seedfinder-editor-wasm",
     "crates/seedfinder-jni",
     "crates/seedfinder-ffi",
     "linux",

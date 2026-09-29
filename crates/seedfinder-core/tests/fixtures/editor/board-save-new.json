@@ -1,0 +1,226 @@
+{
+  "about": "A new chip saved from the sheet is appended with a fresh key.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "copy_depth": 6,
+        "count": 2,
+        "key": null,
+        "requirement": {
+          "kind": "thrown_weapon",
+          "upgrade": {
+            "at_least": 2
+          }
+        },
+        "total": null,
+        "type": "save"
+      }
+    ],
+    "next_key": 5,
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 2
+    },
+    "focus": 5,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any wand, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              5
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Any wand",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              6
+            ],
+            "description": "Any thrown weapon, +2 or higher",
+            "details": [
+              "+2 or higher"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1
+            ],
+            "key": 5,
+            "kind": "thrown_weapon",
+            "lifted": {
+              "description": "Any thrown weapon, any upgrade, floors 1–6",
+              "details": [
+                "any upgrade",
+                "floors 1–6"
+              ],
+              "effect": null,
+              "family": "weapon",
+              "item": null,
+              "kind": "thrown_weapon",
+              "name": "Any thrown",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤6",
+                  "tooltip": null
+                }
+              ],
+              "title": "Any thrown weapon",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Any thrown",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, floors 1–6"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 6,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2↑",
+                "tooltip": null
+              }
+            ],
+            "title": "Any thrown weapon",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          6
+        ],
+        "id": "r5",
+        "label": null,
+        "members": [
+          5
+        ],
+        "name": "Any thrown",
+        "problem": null
+      }
+    ],
+    "next_key": 7,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 5,
+        "kind": "thrown_weapon",
+        "upgrade": {
+          "at_least": 2
+        }
+      },
+      {
+        "identity_group": 1,
+        "key": 6,
+        "kind": "weapon",
+        "max_depth": 6
+      }
+    ]
+  }
+}

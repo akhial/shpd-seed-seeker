@@ -139,7 +139,8 @@ object ResultsExport {
         }
     }
 
-    private fun encodeRequirement(requirement: ItemRequirement) = JSONObject().apply {
+    /** One requirement object of the document; [RequirementEditor]'s rows are this plus their key. */
+    internal fun encodeRequirement(requirement: ItemRequirement) = JSONObject().apply {
         put("kind", requirement.kind.name.lowercase())
         requirement.item?.let { put("item", it.id) }
         when (requirement.tierMatch) {
@@ -255,7 +256,8 @@ object ResultsExport {
         }
     }
 
-    private fun decodeRequirement(entry: JSONObject, index: Int, key: Long): ItemRequirement {
+    /** Reads one requirement object; [index] names the document entry in messages. */
+    internal fun decodeRequirement(entry: JSONObject, index: Int, key: Long): ItemRequirement {
         require(!entry.has("upgrade_sum")) {
             "upgrade_sum is no longer supported; use level_sum"
         }

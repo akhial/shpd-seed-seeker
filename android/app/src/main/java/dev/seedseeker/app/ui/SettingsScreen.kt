@@ -53,9 +53,9 @@ import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
 import dev.seedseeker.app.R
 import dev.seedseeker.app.catalog.ItemCatalog
-import dev.seedseeker.app.model.ArcaneResinFilter
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.RequirementEditor
 
 /** Appearance and Android preferences; query controls live in Search settings. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -226,9 +226,11 @@ internal fun SectionHeading(
 @Composable
 private fun ChipPreview(compact: Boolean) {
     val sample = remember {
-        listOfNotNull(
-            ItemCatalog.findById("wand_fireblast")?.let { ItemRequirement(key = 1, item = it, upgrade = 3) },
-            ItemRequirement(key = 2, item = null, kind = ItemKind.RING, upgrade = 2),
+        RequirementEditor.view(
+            listOfNotNull(
+                ItemCatalog.findById("wand_fireblast")?.let { ItemRequirement(key = 1, item = it, upgrade = 3) },
+                ItemRequirement(key = 2, item = null, kind = ItemKind.RING, upgrade = 2),
+            ),
         )
     }
     Surface(
@@ -240,17 +242,12 @@ private fun ChipPreview(compact: Boolean) {
             .clearAndSetSemantics {},
     ) {
         RequirementBoard(
-            requirements = sample,
+            board = sample,
             enabled = false,
             compact = compact,
             onChange = {},
-            onEdit = { _, _ -> },
-            onRemove = {},
+            onEdit = {},
             onAdd = {},
-            arcaneResin = 0,
-            arcaneResinFilter = ArcaneResinFilter(),
-            onEditResin = {},
-            onRemoveResin = {},
             modifier = Modifier.padding(12.dp).animateContentSize(LayoutSizeSpring),
         )
     }

@@ -36,8 +36,10 @@ public enum ResultsExport {
     }
 
     /// Stable document names, indexed by the matching enum raw value.
-    private static let kindNames = ["weapon", "armor", "wand", "ring", "melee_weapon", "thrown_weapon", "trinket", "artifact"]
-    private static let sourceNames = [
+    /// Internal, not private: the requirement editor's rows (`EditorEngine`)
+    /// spell kinds and sources the way the query document does.
+    static let kindNames = ["weapon", "armor", "wand", "ring", "melee_weapon", "thrown_weapon", "trinket", "artifact"]
+    static let sourceNames = [
         "heap", "chest", "locked_chest", "crystal_chest", "tomb", "skeleton",
         "sacrificial_fire", "mimic", "golden_mimic", "crystal_mimic", "statue",
         "armored_statue", "shop", "ghost_reward", "wandmaker_reward",
@@ -143,7 +145,9 @@ public enum ResultsExport {
         return output
     }
 
-    private static func encodeRequirement(_ requirement: ItemRequirement) -> [String: Any] {
+    // Internal, like `decodeRequirement`: a requirement-editor row is one
+    // entry of the document plus its key and either/or label.
+    static func encodeRequirement(_ requirement: ItemRequirement) -> [String: Any] {
         var output: [String: Any] = ["kind": kindNames[requirement.kind.rawValue]]
         if let item = requirement.item { output["item"] = item.id }
         switch requirement.tierMatch {
@@ -244,8 +248,8 @@ public enum ResultsExport {
             arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter, arcaneResinAuto: value["arcane_resin"] as? String == "auto", floorRequirements: floors)
     }
 
-    private static func decodeRequirement(_ entry: [String: Any], key: Int64,
-                                          alternativeGroup: Int? = nil) throws -> ItemRequirement {
+    static func decodeRequirement(_ entry: [String: Any], key: Int64,
+                                  alternativeGroup: Int? = nil) throws -> ItemRequirement {
         var item: CatalogItem?
         if let id = entry["item"] as? String {
             guard let found = ItemCatalog.findById(id) else {

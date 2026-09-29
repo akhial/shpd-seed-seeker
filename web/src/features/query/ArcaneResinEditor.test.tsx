@@ -51,6 +51,19 @@ async function click(name: string) {
   await act(async () => button!.click());
 }
 
+const resinChip = () => host.querySelector<HTMLButtonElement>(".d1-resin-chip")!;
+
+const menuItems = () =>
+  [...host.querySelectorAll('[role="menu"] [role="menuitem"]')].map((item) => item.textContent);
+
+async function openResinMenu() {
+  await act(async () =>
+    resinChip().dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }),
+    ),
+  );
+}
+
 async function selectItem(value: string) {
   const select = host.querySelector<HTMLSelectElement>(".d1-modal select")!;
   await act(async () => {
@@ -59,12 +72,17 @@ async function selectItem(value: string) {
   });
 }
 
-async function toggle(name: string) {
+function checkbox(name: string) {
   const label = [...host.querySelectorAll("label")].find(
     (label) => label.textContent?.trim() === name,
-  )!;
-  expect(label).toBeDefined();
-  await act(async () => label.querySelector<HTMLInputElement>("input")!.click());
+  );
+  expect(label, name).toBeDefined();
+  return label!.querySelector<HTMLInputElement>("input")!;
+}
+
+async function toggle(name: string) {
+  const input = checkbox(name);
+  await act(async () => input.click());
 }
 
 it("adds resin from the second wand option, edits its filters, and removes the chip", async () => {
@@ -80,7 +98,8 @@ it("adds resin from the second wand option, edits its filters, and removes the c
   expect(host.querySelector(".d1-modal")!.textContent).not.toContain("Upgrade level");
   expect(host.querySelector(".d1-modal")!.textContent).not.toContain("Total item count");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).not.toBeNull();
-  await toggle("Require uncursed wands");
+  // The resin section starts from the query's resin, uncursed donors by default.
+  expect(checkbox("Require uncursed wands").checked).toBe(true);
   await toggle("Limit wands to a floor");
   await click("Add Requirement");
   expect(toQueryDocument(queryStore.state)).toMatchObject({
@@ -88,6 +107,7 @@ it("adds resin from the second wand option, edits its filters, and removes the c
     arcane_resin: 2,
     arcane_resin_filter: { max_depth: 4 },
   });
+  expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({ max_depth: 4 });
   const chip = host.querySelector(".d1-resin-chip")!;
   expect(chip.textContent).toContain("≥2");
   expect(chip.textContent).toContain("F≤4");
@@ -102,7 +122,8 @@ it("adds resin from the second wand option, edits its filters, and removes the c
   await toggle("Limit wands to a floor");
   await click("Save Changes");
   expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({ uncursed: false });
-  await click("Remove Arcane Resin");
+  await openResinMenu();
+  await click("Remove");
   expect(queryStore.state.arcaneResin).toBeUndefined();
   expect(queryStore.state.arcaneResinFilter).toBeUndefined();
   expect(host.querySelector(".d1-resin-chip")).toBeNull();
@@ -133,13 +154,11 @@ it("selects Auto, preserves filters, and restores the mode when editing", async 
   await click("Auto");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
   expect(host.querySelector(".d1-modal")!.textContent).toContain("each kept wand to +3");
-  await toggle("Require uncursed wands");
+  expect(checkbox("Require uncursed wands").checked).toBe(true);
   await toggle("Limit wands to a floor");
   await click("Add Requirement");
-  expect(toQueryDocument(queryStore.state)).toMatchObject({
-    arcane_resin: "auto",
-    arcane_resin_filter: { max_depth: 4 },
-  });
+  expect(toQueryDocument(queryStore.state)).toMatchObject({ arcane_resin: "auto" });
+  expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({ max_depth: 4 });
   expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("Auto");
   expect(host.querySelector(".d1-resin-chip")!.textContent).not.toContain("≥");
   expect(host.textContent).toContain("1 requirement");
@@ -192,6 +211,79 @@ it("excludes a reserved wand from Auto and clears the flag when changing its kin
   expect(queryStore.state.requirements[0].excludeResin).toBeUndefined();
 });
 
+it("removes resin through its chip menu, with no remove button of its own", async () => {
+  queryStore.setState(() =>
+    fromQueryJson('{"arcane_resin":"auto","requirements":[{"kind":"wand"}]}'),
+  );
+  await render();
+  const chip = resinChip();
+  expect(chip.getAttribute("aria-label")).toBe("Edit Arcane Resin");
+  expect(chip.querySelectorAll("button")).toHaveLength(0);
+  expect(host.querySelector('[aria-label="Remove Arcane Resin"]')).toBeNull();
+  // Right-click: the resin stacks, joins and detaches nothing.
+  await openResinMenu();
+  expect(menuItems()).toEqual(["Edit…", "Remove"]);
+  await click("Edit…");
+  expect(host.querySelector('[role="menu"]')).toBeNull();
+  expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
+  expect(
+    host.querySelector('[aria-label="Resin amount mode"] [aria-pressed="true"]')!.textContent,
+  ).toBe("Auto");
+  await click("Cancel");
+  expect(host.querySelector(".d1-modal")).toBeNull();
+  // The keyboard's menu key.
+  await act(async () =>
+    resinChip().dispatchEvent(new KeyboardEvent("keydown", { key: ".", bubbles: true })),
+  );
+  expect(menuItems()).toEqual(["Edit…", "Remove"]);
+  await click("Remove");
+  expect(queryStore.state.arcaneResin).toBeUndefined();
+  expect(queryStore.state.requirements).toHaveLength(1);
+  expect(host.querySelector(".d1-resin-chip")).toBeNull();
+  expect(host.querySelector('[role="menu"]')).toBeNull();
+  expect(host.querySelector(".d1-modal")).toBeNull();
+});
+
+it("opens the resin menu on a long press without opening its sheet", async () => {
+  vi.useFakeTimers();
+  try {
+    queryStore.setState(() => fromQueryJson('{"arcane_resin":6,"requirements":[]}'));
+    await render();
+    const chip = resinChip();
+    chip.setPointerCapture = vi.fn();
+    const touch = (type: string) =>
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: "touch",
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+      });
+    await act(async () => chip.dispatchEvent(touch("pointerdown")));
+    await act(async () => vi.advanceTimersByTime(600));
+    expect(menuItems()).toEqual(["Edit…", "Remove"]);
+    await act(async () => chip.dispatchEvent(touch("pointerup")));
+    await act(async () =>
+      chip.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })),
+    );
+    expect(host.querySelector(".d1-modal")).toBeNull();
+    expect(menuItems()).toEqual(["Edit…", "Remove"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("removes the focused resin chip with Delete", async () => {
+  queryStore.setState(() => fromQueryJson('{"arcane_resin":6,"requirements":[]}'));
+  await render();
+  await act(async () =>
+    resinChip().dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true })),
+  );
+  expect(queryStore.state.arcaneResin).toBeUndefined();
+  expect(host.querySelector(".d1-resin-chip")).toBeNull();
+});
+
 it("loads an Auto chip and uses its label while dragging to remove", async () => {
   queryStore.setState(() =>
     fromQueryJson('{"arcane_resin":"auto","requirements":[{"kind":"wand"}]}'),
@@ -217,7 +309,7 @@ it("loads an Auto chip and uses its label while dragging to remove", async () =>
 });
 
 async function startResinDrag(pointerType = "mouse", amountLabel = "≥6") {
-  const button = host.querySelector<HTMLButtonElement>(".d1-resin-edit")!;
+  const button = resinChip();
   button.setPointerCapture = vi.fn();
   await act(async () =>
     button.dispatchEvent(

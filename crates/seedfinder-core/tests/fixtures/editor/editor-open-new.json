@@ -1,0 +1,1179 @@
+{
+  "about": "A sheet for a new chip starts on any weapon; Arcane Resin is offered among the wands.",
+  "envelope": "requirement_editor",
+  "request": {
+    "blanket": false,
+    "key": null,
+    "offer_resin": true,
+    "op": "open",
+    "open_resin": false,
+    "resin": null,
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "rat_skull",
+        "key": 2,
+        "kind": "trinket"
+      }
+    ]
+  },
+  "response": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"query_resin\":null,\"requirement\":{\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "form": {
+      "blanket": false,
+      "can_save": true,
+      "category": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Weapon",
+            "value": "weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armor",
+            "value": "armor"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wand",
+            "value": "wand"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring",
+            "value": "ring"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Trinket",
+            "value": "trinket"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Artifact",
+            "value": "artifact"
+          }
+        ],
+        "value": "weapon",
+        "visible": true
+      },
+      "effect": {
+        "caption": "Tick the effects the item may carry; none ticked means any.",
+        "choices": [
+          {
+            "group": "enchantment",
+            "label": "Blazing",
+            "selected": false,
+            "value": "Blazing"
+          },
+          {
+            "group": "enchantment",
+            "label": "Chilling",
+            "selected": false,
+            "value": "Chilling"
+          },
+          {
+            "group": "enchantment",
+            "label": "Kinetic",
+            "selected": false,
+            "value": "Kinetic"
+          },
+          {
+            "group": "enchantment",
+            "label": "Shocking",
+            "selected": false,
+            "value": "Shocking"
+          },
+          {
+            "group": "enchantment",
+            "label": "Venomous",
+            "selected": false,
+            "value": "Venomous"
+          },
+          {
+            "group": "enchantment",
+            "label": "Blocking",
+            "selected": false,
+            "value": "Blocking"
+          },
+          {
+            "group": "enchantment",
+            "label": "Blooming",
+            "selected": false,
+            "value": "Blooming"
+          },
+          {
+            "group": "enchantment",
+            "label": "Eldritch",
+            "selected": false,
+            "value": "Eldritch"
+          },
+          {
+            "group": "enchantment",
+            "label": "Elastic",
+            "selected": false,
+            "value": "Elastic"
+          },
+          {
+            "group": "enchantment",
+            "label": "Lucky",
+            "selected": false,
+            "value": "Lucky"
+          },
+          {
+            "group": "enchantment",
+            "label": "Projecting",
+            "selected": false,
+            "value": "Projecting"
+          },
+          {
+            "group": "enchantment",
+            "label": "Unstable",
+            "selected": false,
+            "value": "Unstable"
+          },
+          {
+            "group": "enchantment",
+            "label": "Vorpal",
+            "selected": false,
+            "value": "Vorpal"
+          },
+          {
+            "group": "enchantment",
+            "label": "Corrupting",
+            "selected": false,
+            "value": "Corrupting"
+          },
+          {
+            "group": "enchantment",
+            "label": "Crystal",
+            "selected": false,
+            "value": "Crystal"
+          },
+          {
+            "group": "enchantment",
+            "label": "Grim",
+            "selected": false,
+            "value": "Grim"
+          },
+          {
+            "group": "enchantment",
+            "label": "Vampiric",
+            "selected": false,
+            "value": "Vampiric"
+          },
+          {
+            "group": "curse",
+            "label": "Annoying",
+            "selected": false,
+            "value": "Annoying"
+          },
+          {
+            "group": "curse",
+            "label": "Displacing",
+            "selected": false,
+            "value": "Displacing"
+          },
+          {
+            "group": "curse",
+            "label": "Dazzling",
+            "selected": false,
+            "value": "Dazzling"
+          },
+          {
+            "group": "curse",
+            "label": "Explosive",
+            "selected": false,
+            "value": "Explosive"
+          },
+          {
+            "group": "curse",
+            "label": "Friendly",
+            "selected": false,
+            "value": "Friendly"
+          },
+          {
+            "group": "curse",
+            "label": "Polarized",
+            "selected": false,
+            "value": "Polarized"
+          },
+          {
+            "group": "curse",
+            "label": "Pressurized",
+            "selected": false,
+            "value": "Pressurized"
+          },
+          {
+            "group": "curse",
+            "label": "Sacrificial",
+            "selected": false,
+            "value": "Sacrificial"
+          },
+          {
+            "group": "curse",
+            "label": "Wayward",
+            "selected": false,
+            "value": "Wayward"
+          },
+          {
+            "group": "curse",
+            "label": "Wondrous",
+            "selected": false,
+            "value": "Wondrous"
+          }
+        ],
+        "choices_visible": false,
+        "groups": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Enchantments",
+            "value": "enchantment"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Curses",
+            "value": "curse"
+          }
+        ],
+        "label": "Enchantment",
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any enchantment",
+            "value": "any_enchantment"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Specific…",
+            "value": "specific"
+          }
+        ],
+        "visible": true
+      },
+      "errors": [],
+      "exclude_resin": {
+        "caption": "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
+        "label": "Exclude from Auto resin",
+        "value": false,
+        "visible": false
+      },
+      "floor_limit": {
+        "enabled": false,
+        "label": "Limit this item to a floor",
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "1",
+            "value": 1
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "2",
+            "value": 2
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "3",
+            "value": 3
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "4",
+            "value": 4
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "6",
+            "value": 6
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "7",
+            "value": 7
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "8",
+            "value": 8
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "9",
+            "value": 9
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "11",
+            "value": 11
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "12",
+            "value": 12
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "13",
+            "value": 13
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "14",
+            "value": 14
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "16",
+            "value": 16
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "17",
+            "value": 17
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "18",
+            "value": 18
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "19",
+            "value": 19
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "20",
+            "value": 20
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "21",
+            "value": 21
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "22",
+            "value": 22
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "23",
+            "value": 23
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "24",
+            "value": 24
+          }
+        ],
+        "value": 4,
+        "value_label": "Within first 4 floors",
+        "visible": true
+      },
+      "in_cluster": false,
+      "item": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any weapon",
+            "value": null
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Shortsword",
+            "value": "shortsword"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Hand Axe",
+            "value": "hand_axe"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Spear",
+            "value": "spear"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Quarterstaff",
+            "value": "quarterstaff"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Dirk",
+            "value": "dirk"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Sickle",
+            "value": "sickle"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Fishing Spear",
+            "value": "fishing_spear"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Throwing Club",
+            "value": "throwing_club"
+          },
+          {
+            "group": "Tier 2",
+            "hidden": false,
+            "label": "Shuriken",
+            "value": "shuriken"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Sword",
+            "value": "sword"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Mace",
+            "value": "mace"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Scimitar",
+            "value": "scimitar"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Round Shield",
+            "value": "round_shield"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Sai",
+            "value": "sai"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Whip",
+            "value": "whip"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Throwing Spear",
+            "value": "throwing_spear"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Kunai",
+            "value": "kunai"
+          },
+          {
+            "group": "Tier 3",
+            "hidden": false,
+            "label": "Bolas",
+            "value": "bolas"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Longsword",
+            "value": "longsword"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Battle Axe",
+            "value": "battle_axe"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Flail",
+            "value": "flail"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Runic Blade",
+            "value": "runic_blade"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Assassin's Blade",
+            "value": "assassins_blade"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Crossbow",
+            "value": "crossbow"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Katana",
+            "value": "katana"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Javelin",
+            "value": "javelin"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Tomahawk",
+            "value": "tomahawk"
+          },
+          {
+            "group": "Tier 4",
+            "hidden": false,
+            "label": "Heavy Boomerang",
+            "value": "heavy_boomerang"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Greatsword",
+            "value": "greatsword"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "War Hammer",
+            "value": "war_hammer"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Glaive",
+            "value": "glaive"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Greataxe",
+            "value": "greataxe"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Greatshield",
+            "value": "greatshield"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Stone Gauntlet",
+            "value": "gauntlet"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "War Scythe",
+            "value": "war_scythe"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Trident",
+            "value": "trident"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Throwing Hammer",
+            "value": "throwing_hammer"
+          },
+          {
+            "group": "Tier 5",
+            "hidden": false,
+            "label": "Force Cube",
+            "value": "force_cube"
+          }
+        ],
+        "value": null,
+        "visible": true
+      },
+      "kind": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Weapon",
+            "value": "weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Melee weapon",
+            "value": "melee_weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Thrown weapon",
+            "value": "thrown_weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armor",
+            "value": "armor"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wand",
+            "value": "wand"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring",
+            "value": "ring"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Trinket",
+            "value": "trinket"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Artifact",
+            "value": "artifact"
+          }
+        ],
+        "value": "weapon",
+        "visible": true
+      },
+      "mode": "new",
+      "origin": {
+        "type": "new"
+      },
+      "preview": {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "can_detach": false,
+        "copies": [],
+        "description": "Any weapon, any upgrade",
+        "details": [
+          "any upgrade"
+        ],
+        "effect": null,
+        "family": "weapon",
+        "in_cluster": false,
+        "item": null,
+        "join": [],
+        "key": 0,
+        "kind": "weapon",
+        "lifted": null,
+        "name": "Any weapon",
+        "problem": null,
+        "refuse": [],
+        "relations": [],
+        "remaining_badges": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_max": 3,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        },
+        "tags": [],
+        "title": "Any weapon",
+        "trailing_tags": [],
+        "uncursed": false
+      },
+      "resin": {
+        "amount": 2.0,
+        "auto": false,
+        "caption": "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.",
+        "include_mage_wand": {
+          "caption": "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.",
+          "label": "Include Mage’s starting wand",
+          "value": false,
+          "visible": false
+        },
+        "label": "Minimum resin",
+        "max": 65535,
+        "min": 1,
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Amount",
+            "value": false
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Auto",
+            "value": true
+          }
+        ],
+        "visible": false
+      },
+      "resin_picked": false,
+      "select_trinket": {
+        "caption": "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
+        "label": "Choose matching trinket at +3",
+        "value": false,
+        "visible": false
+      },
+      "source": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": null
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Heap",
+            "value": "heap"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Chest",
+            "value": "chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Locked chest",
+            "value": "locked_chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Crystal chest",
+            "value": "crystal_chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Tomb",
+            "value": "tomb"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Skeleton",
+            "value": "skeleton"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Sacrificial fire",
+            "value": "sacrificial_fire"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Mimic",
+            "value": "mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Golden mimic",
+            "value": "golden_mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Crystal mimic",
+            "value": "crystal_mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Statue",
+            "value": "statue"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armored statue",
+            "value": "armored_statue"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Shop",
+            "value": "shop"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ghost reward",
+            "value": "ghost_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wandmaker reward",
+            "value": "wandmaker_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Blacksmith reward",
+            "value": "blacksmith_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Imp reward",
+            "value": "imp_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Vault treasure",
+            "value": "vault_treasure"
+          }
+        ],
+        "value": null,
+        "visible": true
+      },
+      "stack": {
+        "copy_depth": {
+          "enabled": false,
+          "label": "Limit the extra copies to a floor",
+          "options": [
+            {
+              "group": null,
+              "hidden": false,
+              "label": "1",
+              "value": 1
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "2",
+              "value": 2
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "3",
+              "value": 3
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "4",
+              "value": 4
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "6",
+              "value": 6
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "7",
+              "value": 7
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "8",
+              "value": 8
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "9",
+              "value": 9
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "11",
+              "value": 11
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "12",
+              "value": 12
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "13",
+              "value": 13
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "14",
+              "value": 14
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "16",
+              "value": 16
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "17",
+              "value": 17
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "18",
+              "value": 18
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "19",
+              "value": 19
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "20",
+              "value": 20
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "21",
+              "value": 21
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "22",
+              "value": 22
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "23",
+              "value": 23
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "24",
+              "value": 24
+            }
+          ],
+          "value": 4,
+          "value_label": "Copies within first 4 floors",
+          "visible": false
+        },
+        "count": 1,
+        "count_levels": {
+          "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
+          "caption_visible": false,
+          "enabled": false,
+          "label": "Count levels together",
+          "max": 5,
+          "min": 1,
+          "value": 1,
+          "value_label": "≥ 1 across up to 1",
+          "visible": false
+        },
+        "label": "Total item count",
+        "max": 3,
+        "min": 1,
+        "value_label": "×1",
+        "visible": true
+      },
+      "tier": {
+        "max": 5,
+        "min": 2,
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Exactly",
+            "value": "exact"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At least",
+            "value": "at_least"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At most",
+            "value": "at_most"
+          }
+        ],
+        "value": 3,
+        "value_label": "Tier 3",
+        "value_visible": false,
+        "visible": true
+      },
+      "title": "Any weapon",
+      "transmutations": {
+        "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "caption_visible": false,
+        "enabled": false,
+        "label": "Allow transmutations",
+        "max": 13,
+        "min": 1,
+        "value": 1,
+        "value_label": "At most 1",
+        "visible": false
+      },
+      "uncursed": {
+        "caption": null,
+        "label": "Require uncursed",
+        "value": false,
+        "visible": true
+      },
+      "upgrade": {
+        "max": 5,
+        "min": 1,
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Exactly",
+            "value": "exact"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At least",
+            "value": "at_least"
+          }
+        ],
+        "value": 1,
+        "value_label": "+1",
+        "value_visible": false,
+        "visible": true
+      },
+      "v": 1,
+      "weapon_type": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Melee",
+            "value": "melee"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Thrown",
+            "value": "thrown"
+          }
+        ],
+        "value": "any",
+        "visible": true
+      }
+    }
+  }
+}

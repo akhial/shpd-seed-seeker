@@ -4,8 +4,9 @@ namespace SeedSeeker.Tests;
 
 /// <summary>
 /// The queries the app ships as read-only presets: every one must pass the same
-/// local validation the editor runs before the engine is asked, and the two
-/// vault presets must ask for the levels only the Imp's vault reaches.
+/// checks Start runs before the engine is asked — the query's own and the
+/// board's — and the two vault presets must ask for the levels only the Imp's
+/// vault reaches.
 /// </summary>
 public sealed class BuiltInPresetsTests
 {
@@ -13,7 +14,13 @@ public sealed class BuiltInPresetsTests
     public void EveryPresetIsARunnableQuery()
     {
         foreach (var preset in BuiltInPresets.All)
-            Assert.Null(QueryRelationships.Validate(preset.Query));
+        {
+            // Applied as the window applies a preset: to a copy, taken in by the board.
+            var query = preset.Query.Clone();
+            var editor = new BoardEditor();
+            editor.Load(query);
+            Assert.Null(editor.Problem(query));
+        }
     }
 
     [Fact]
@@ -45,7 +52,13 @@ public sealed class BuiltInPresetsTests
         Assert.Equal(4, requirements[0].Tier);
         Assert.Equal(UpgradeMatch.Exactly, requirements[0].UpgradeMatch);
         Assert.Equal(5, requirements[0].Upgrade);
-        // Only the anchor may constrain the item a stack binds to.
-        Assert.All(requirements.Skip(1), requirement => Assert.True(requirement.IsBare));
+        // Only the anchor may constrain the item a stack binds to: the board
+        // folds the plain copies into one ×3 chip.
+        var query = preset.Query.Clone();
+        var item = Assert.Single(new BoardEditor().View(query).Entries);
+        var chip = Assert.Single(item.Chips);
+        Assert.Equal(3, chip.Stack.Count);
+        Assert.Equal("×3", chip.CountBadge!.Text);
+        Assert.Null(item.Problem);
     }
 }

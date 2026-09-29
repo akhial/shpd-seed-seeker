@@ -13,18 +13,29 @@ struct FinderView: View {
 
     private var controller: SearchController { model.controller }
     private var requirementCount: Int {
-        model.query.requirements.filter { !$0.blanket }.boardCount
+        model.query.board.ordinaryCount
             + (model.query.arcaneResinAuto || model.query.arcaneResin > 0 ? 1 : 0)
     }
+    /// Each entry under the name the core gives it and its count — a
+    /// cluster's members each with their own count, joined by "or"
+    /// (`Wand of Frost ×2 or Wand of Disintegration`), since stacks are the
+    /// chips' — and the resin chip as its amount tag (always its first) and
+    /// its name.
     private var requirementsSummary: String {
-        let requirements = model.query.requirements
-        var parts = requirements.boardItems().map { board in
-            (requirements[board.anchor].blanket ? "Blanket: " : "")
-                + board.members.map { requirements[$0].title }.joined(separator: " or ")
-                + (board.stackCount > 1 ? " ×\(board.stackCount)" : "")
+        let board = model.query.board
+        func counted(_ name: String, _ chip: BoardChip?) -> String {
+            name + (chip?.countBadge.map { " \($0.compactText)" } ?? "")
         }
-        if model.query.arcaneResinAuto { parts.append("Auto Arcane Resin") }
-        else if model.query.arcaneResin > 0 { parts.append("≥\(model.query.arcaneResin) Arcane Resin") }
+        var parts = board.items.map { item -> String in
+            let name = item.cluster == nil
+                ? counted(item.name, item.chips.first)
+                : item.chips.map { counted($0.name, $0) }.joined(separator: " or ")
+            return (item.blanket ? "Blanket: " : "") + name
+        }
+        if let resin = board.resin {
+            let amount = resin.tags.first.map { "\($0.text) " } ?? ""
+            parts.append(amount + resin.name)
+        }
         return parts.joined(separator: " · ")
     }
     private var resultTitle: String {
@@ -290,8 +301,8 @@ struct FinderView: View {
                             .glassEffectTransition(.matchedGeometry)
                     }
                     .buttonStyle(.plain)
-                    .disabled(model.request == nil)
-                    .opacity(model.request == nil ? 0.45 : 1)
+                    .disabled(!model.canSearch)
+                    .opacity(model.canSearch ? 1 : 0.45)
                 }
             }
             .frame(maxWidth: 680)

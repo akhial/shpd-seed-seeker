@@ -58,6 +58,59 @@ impl ItemSource {
         Self::ImpReward,
         Self::VaultTreasure,
     ];
+
+    /// The source as English UI text, in sentence case ("Locked chest",
+    /// "Ghost reward") — the wording five of the six frontends already used,
+    /// shared now by the requirement editor's chips, pickers and the scout.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Heap => "Heap",
+            Self::Chest => "Chest",
+            Self::LockedChest => "Locked chest",
+            Self::CrystalChest => "Crystal chest",
+            Self::Tomb => "Tomb",
+            Self::Skeleton => "Skeleton",
+            Self::SacrificialFire => "Sacrificial fire",
+            Self::Mimic => "Mimic",
+            Self::GoldenMimic => "Golden mimic",
+            Self::CrystalMimic => "Crystal mimic",
+            Self::Statue => "Statue",
+            Self::ArmoredStatue => "Armored statue",
+            Self::Shop => "Shop",
+            Self::GhostReward => "Ghost reward",
+            Self::WandmakerReward => "Wandmaker reward",
+            Self::BlacksmithReward => "Blacksmith reward",
+            Self::ImpReward => "Imp reward",
+            Self::VaultTreasure => "Vault treasure",
+        }
+    }
+}
+
+/// Stable document name for one item source: the `source` value of the
+/// query document, the share link's JSON form and the editor envelopes.
+#[must_use]
+pub const fn source_name(source: ItemSource) -> &'static str {
+    match source {
+        ItemSource::Heap => "heap",
+        ItemSource::Chest => "chest",
+        ItemSource::LockedChest => "locked_chest",
+        ItemSource::CrystalChest => "crystal_chest",
+        ItemSource::Tomb => "tomb",
+        ItemSource::Skeleton => "skeleton",
+        ItemSource::SacrificialFire => "sacrificial_fire",
+        ItemSource::Mimic => "mimic",
+        ItemSource::GoldenMimic => "golden_mimic",
+        ItemSource::CrystalMimic => "crystal_mimic",
+        ItemSource::Statue => "statue",
+        ItemSource::ArmoredStatue => "armored_statue",
+        ItemSource::Shop => "shop",
+        ItemSource::GhostReward => "ghost_reward",
+        ItemSource::WandmakerReward => "wandmaker_reward",
+        ItemSource::BlacksmithReward => "blacksmith_reward",
+        ItemSource::ImpReward => "imp_reward",
+        ItemSource::VaultTreasure => "vault_treasure",
+    }
 }
 
 /// Co-acquisition constraints for a generated reward.

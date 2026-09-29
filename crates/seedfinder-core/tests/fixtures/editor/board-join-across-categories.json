@@ -1,0 +1,213 @@
+{
+  "about": "A wand dropped on a +2 Ring of Might ×2 (#190 refused it): the ring keeps its stack as a member, its plain repeat now a bare ring copy under a label of its own — two Rings of Might, or the wand.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 3,
+        "target": 1,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "key": 3,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 3,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [
+              2
+            ],
+            "description": "Ring of Might, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": true,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any wand"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Any wand, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": null,
+            "join": [],
+            "key": 3,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Ring of Might"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [
+          2
+        ],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          1,
+          3
+        ],
+        "name": "Ring of Might or Any wand",
+        "problem": null
+      }
+    ],
+    "next_key": 4,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "alternative_group": 1,
+        "key": 3,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "ring"
+      }
+    ]
+  }
+}

@@ -7,7 +7,7 @@ use std::num::NonZeroUsize;
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JLongArray};
 use jni::sys::{jint, jlong};
-use shpd_seedfinder_core::{deep_link, engine_info, json_query, results_export, seed};
+use shpd_seedfinder_core::{deep_link, editor, engine_info, json_query, results_export, seed};
 use shpd_seedfinder_session::{
     FilterPacketError, MAX_RESULTS, NativeSession, ScoutCallError, ScoutMatchError,
     ScoutPacketError, SearchError, StartSessionError, available_workers, close_session, json,
@@ -505,6 +505,87 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_engineInfo<'lo
     )
 }
 
+/// Answers a requirement-board request (`docs/requirement-editor.md`): the
+/// board's rows after the request's edits, with everything the board draws,
+/// both as UTF-8 JSON bytes. A request the editor cannot read — including
+/// bytes that are not UTF-8 — is answered with `{"error": ...}` rather than
+/// an exception, so the board never has to catch; only a panic inside the
+/// editor throws `IllegalStateException`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_requirementBoard<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+) -> JByteArray<'local> {
+    editor_call(
+        &mut env,
+        &request,
+        editor::requirement_board,
+        "requirement board",
+    )
+}
+
+/// Answers a requirement-sheet request (`docs/requirement-editor.md`):
+/// `open`, `change` or `save`, as UTF-8 JSON bytes. Errors as for
+/// `requirementBoard`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_requirementEditor<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+) -> JByteArray<'local> {
+    editor_call(
+        &mut env,
+        &request,
+        editor::requirement_editor,
+        "requirement sheet",
+    )
+}
+
+fn editor_call<'local>(
+    env: &mut JNIEnv<'local>,
+    request: &JByteArray<'_>,
+    envelope: fn(&str) -> String,
+    what: &str,
+) -> JByteArray<'local> {
+    let bytes = env
+        .convert_byte_array(request)
+        .map_err(|error| error.to_string());
+    match editor_answer(bytes, envelope) {
+        Ok(answer) => utf8_response(env, &answer, what),
+        Err(message) => {
+            android_error(&format!("the {what} panicked: {message}"));
+            throw_illegal_state(env, format!("the {what} failed: {message}"));
+            JByteArray::default()
+        }
+    }
+}
+
+/// The JVM-free half of an editor call: reads the request without throwing
+/// (an unreadable array or non-UTF-8 bytes answer `{"error": ...}`, as the
+/// envelope answers any request it cannot read) and runs the envelope with
+/// its panics contained. `Err` carries a panic's message.
+fn editor_answer(
+    bytes: Result<Vec<u8>, String>,
+    envelope: fn(&str) -> String,
+) -> Result<String, String> {
+    let error = |message: String| Ok(serde_json::json!({ "error": message }).to_string());
+    let text = match bytes {
+        Ok(bytes) => match String::from_utf8(bytes) {
+            Ok(text) => text,
+            Err(_) => return error("the request is not valid UTF-8".to_owned()),
+        },
+        Err(reason) => return error(format!("the request cannot be read: {reason}")),
+    };
+    std::panic::catch_unwind(|| envelope(&text)).map_err(|panic| {
+        panic
+            .downcast_ref::<&str>()
+            .map(|message| (*message).to_owned())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "unknown panic".to_owned())
+    })
+}
+
 /// Detects and groups partial UTF-8 seed codes or daily dates as you type.
 /// The formatter is `seed::format_input`, shared with every other frontend.
 #[unsafe(no_mangle)]
@@ -710,4 +791,34 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_close<'local>(
     handle: jlong,
 ) {
     close_session(registry(), handle);
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+    use shpd_seedfinder_core::editor;
+
+    use super::editor_answer;
+
+    #[test]
+    fn editor_calls_answer_the_envelopes_and_never_throw_for_bad_bytes() {
+        let request = r#"{"rows":[{"key":1,"kind":"wand"}]}"#;
+        assert_eq!(
+            editor_answer(Ok(request.as_bytes().to_vec()), editor::requirement_board),
+            Ok(editor::requirement_board(request))
+        );
+        let open = r#"{"op":"open","rows":[]}"#;
+        assert_eq!(
+            editor_answer(Ok(open.as_bytes().to_vec()), editor::requirement_editor),
+            Ok(editor::requirement_editor(open))
+        );
+        for bytes in [Ok(vec![0xff, 0xfe]), Err("null array".to_owned())] {
+            let answer = editor_answer(bytes, editor::requirement_board).unwrap();
+            let answer: Value = serde_json::from_str(&answer).unwrap();
+            assert!(answer["error"].is_string(), "{answer}");
+        }
+        // A panic is contained and reported, never unwound into the JVM.
+        let answer = editor_answer(Ok(Vec::new()), |_| panic!("boom"));
+        assert_eq!(answer, Err("boom".to_owned()));
+    }
 }

@@ -8,53 +8,11 @@ enum RequirementChipDrag: Equatable {
     case resin
 }
 
-/// Resin-specific fields inside the requirement editor's existing form.
-struct ArcaneResinFields: View {
-    @Binding var amount: Int
-    @Binding var auto: Bool
-    @Binding var filter: ArcaneResinFilter
-
-    var body: some View {
-        Section {
-            Picker("Minimum resin", selection: $auto) {
-                Text("Amount").tag(false)
-                Text("Auto").tag(true)
-            }.pickerStyle(.segmented)
-            if auto {
-                Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Stepper(value: $amount, in: 1...65535) {
-                    LabeledContent("Minimum resin") {
-                        Text("\(amount)").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Toggle("Include Mage’s starting wand", isOn: $filter.includeMageWand)
-                .toggleStyle(.checkbox)
-            Text("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Require uncursed wands", isOn: $filter.uncursed)
-                .toggleStyle(.checkbox)
-            Picker("Wand floor limit", selection: $filter.maximumDepth) {
-                Text("Search limit").tag(Int?.none)
-                ForEach(1...SearchLimits.maxDepth, id: \.self) { depth in Text("Floor \(depth)").tag(Int?.some(depth)) }
-            }
-            Picker("Wand source", selection: $filter.source) {
-                Text("Any source").tag(ScoutItemSource?.none)
-                ForEach(ScoutItemSource.allCases, id: \.self) { source in Text(source.label).tag(ScoutItemSource?.some(source)) }
-            }
-        }
-    }
-}
-
 /// A query-wide requirement: it supports the board's edit and removal gestures,
-/// while item-only relationships (alternatives and stacks) do not apply.
+/// while item-only relationships (alternatives and stacks) do not apply. Its
+/// words are the shared core's board chip for the query's resin condition.
 struct ArcaneResinChip: View {
-    let amount: Int
-    let auto: Bool
-    private var amountLabel: String { auto ? "Auto" : "≥\(amount)" }
-    let filter: ArcaneResinFilter
+    let chip: BoardResinChip
     @Binding var dragging: RequirementChipDrag?
     let onEdit: () -> Void
     let onRemove: () -> Void
@@ -63,12 +21,12 @@ struct ArcaneResinChip: View {
     var body: some View {
         HStack(spacing: 5) {
             ItemSpriteView(item: arcaneResinItem, pointSize: 16)
-            Text(arcaneResinItem.name)
+            Text(chip.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            tag(amountLabel, color: .shatteredYellow)
-            if filter.includeMageWand { tag("Mage +2", color: .shatteredMint) }
-            if let depth = filter.maximumDepth { tag("F≤\(depth)", color: .shatteredYellow) }
-            if filter.uncursed { tag("✓", color: .shatteredMint) }
+            // The resin it counts is tinted apart from its donor filter, and
+            // Auto and "Mage +2" explain themselves on hover.
+            ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
+            if chip.uncursed { tagView("✓", color: .shatteredMint) }
         }
         .padding(.horizontal, 7)
         .frame(height: 30)
@@ -78,7 +36,7 @@ struct ArcaneResinChip: View {
         .opacity(dragging == .resin ? 0.35 : 1)
         .contentShape(Capsule())
         .onTapGesture(perform: onEdit)
-        .help("\(amountLabel) Arcane Resin\n\(filter.summary)")
+        .help(helpText)
         .focusable()
         .focused($focused)
         .onKeyPress(.delete) { onRemove(); return .handled }
@@ -93,12 +51,19 @@ struct ArcaneResinChip: View {
             Button("Remove", role: .destructive, action: onRemove)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(amountLabel) Arcane Resin, \(filter.summary)")
+        .accessibilityLabel(chip.description)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onEdit() }
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
+    /// The chip's name and details; its tags carry their own hover text.
+    private var helpText: String {
+        var lines = [chip.name]
+        if !chip.details.isEmpty { lines.append(chip.details.joined(separator: " · ")) }
+        return lines.joined(separator: "\n")
+    }
+
+    private func tagView(_ text: String, color: Color) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold, design: .monospaced))
             .foregroundStyle(color)

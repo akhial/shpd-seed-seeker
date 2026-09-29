@@ -1,0 +1,61 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+/*
+ * The web app's palette (web/src/app/styles.css `:root`), laid over
+ * libadwaita's dark style while it is active: slate surfaces and borders,
+ * the game's yellow, its action green, the upgrade green, enchantment teal,
+ * curse red, secret violet and the region colours. style.css holds the light
+ * counterparts.
+ */
+:root {
+  --window-bg-color: #262a33;
+  --window-fg-color: #eaeaea;
+  --view-bg-color: #262a33;
+  --view-fg-color: #eaeaea;
+  --headerbar-bg-color: #262a33;
+  --headerbar-fg-color: #eaeaea;
+  --headerbar-backdrop-color: #262a33;
+  --headerbar-shade-color: #333846;
+  --sidebar-bg-color: #262a33;
+  --sidebar-fg-color: #eaeaea;
+  --sidebar-backdrop-color: #262a33;
+  --sidebar-border-color: #333846;
+  --secondary-sidebar-bg-color: #262a33;
+  --secondary-sidebar-fg-color: #eaeaea;
+  --secondary-sidebar-backdrop-color: #262a33;
+  --secondary-sidebar-border-color: #333846;
+  --card-bg-color: #2e323d;
+  --card-fg-color: #eaeaea;
+  --dialog-bg-color: #262a33;
+  --dialog-fg-color: #eaeaea;
+  --popover-bg-color: #2e323d;
+  --popover-fg-color: #eaeaea;
+  --thumbnail-bg-color: #2e323d;
+  --thumbnail-fg-color: #eaeaea;
+  --border-color: #3f4553;
+  --accent-bg-color: #56bd52;
+  --accent-fg-color: #08210a;
+  --accent-color: #63ca5f;
+  --success-bg-color: #3f9a3c;
+  --success-fg-color: #ffffff;
+  --success-color: #6ec98f;
+  --warning-bg-color: #e0a83c;
+  --warning-fg-color: rgb(0 0 0 / 80%);
+  --warning-color: #ffff55;
+  --error-bg-color: #8d3633;
+  --error-fg-color: #ffffff;
+  --error-color: #d96c5f;
+  --destructive-bg-color: #8d3633;
+  --destructive-fg-color: #ffffff;
+  --destructive-color: #f2958a;
+  --upgrade-color: #83fc64;
+  --enchant-color: #58c2b4;
+  --curse-color: #f2958a;
+  --secret-color: #c9a6f5;
+  --spd-yellow-color: #ffff55;
+  --sewers-color: #7fe2b8;
+  --prison-color: #8fb7e8;
+  --caves-color: #d8a26b;
+  --city-color: #c9a6e8;
+  --halls-color: #e88f8f;
+}

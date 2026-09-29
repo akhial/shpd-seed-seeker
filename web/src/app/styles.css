@@ -1235,8 +1235,7 @@ input[type="range"]::-moz-range-thumb {
 }
 /* The name belongs to the icon beside it, so it sits closer than the tags do. */
 .d1-chip > .d1-sprite,
-.d1-chip > .d1-chip-wildcard,
-.d1-resin-edit > .d1-sprite {
+.d1-chip > .d1-chip-wildcard {
   margin-right: -8px;
 }
 
@@ -1349,6 +1348,11 @@ input[type="range"]::-moz-range-thumb {
 .d1-drop-alternative {
   border-color: var(--d1-amber) !important;
   box-shadow: 0 0 0 2px var(--d1-amber-dim);
+}
+/* A join the editor refuses; the status line says why. */
+.d1-drop-refused {
+  border-color: var(--d1-danger) !important;
+  border-style: dashed;
 }
 
 /* Pick mode (menu fallback): the source is held, the others invite a click. */
@@ -1506,12 +1510,6 @@ input[type="range"]::-moz-range-thumb {
   font-size: 11px;
   border: none;
   background: transparent;
-}
-
-/* The cluster's badges sit at its trailing edge. */
-.d1-cluster > .d1-stack-badge,
-.d1-cluster > .d1-stack-edit {
-  margin: 0 3px;
 }
 
 .d1-board-status {
@@ -2003,6 +2001,28 @@ input[type="range"]::-moz-range-thumb {
   color: #f2b4ab;
   background: rgba(217, 108, 95, 0.1);
   border: 1px solid rgba(217, 108, 95, 0.35);
+}
+
+/* The query pane's fallback when the requirement editor fails. */
+.d1-query-failure {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin: 16px;
+}
+.d1-query-failure > p {
+  margin: 0;
+}
+
+/* The whole page when the requirement editor cannot load. */
+.d1-boot-failure {
+  max-width: 36em;
+  margin: 20vh auto 0;
+  padding: 0 20px;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  color: #f2b4ab;
 }
 
 .d1-banner-info {
@@ -3270,38 +3290,17 @@ input[type="range"]::-moz-range-thumb {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-.d1-resin-chip {
-  padding: 0;
-  gap: 0;
-}
-
-.d1-resin-edit,
-.d1-resin-remove {
-  display: inline-flex;
-  align-self: stretch;
+/* The resin section's one row: the Amount/Auto choice, then the amount. */
+.d1-resin-amount {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  padding: 0 0 0 9px;
-  border-radius: inherit;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.d1-resin-edit {
-  cursor: grab;
-  touch-action: none;
-}
-
-.d1-resin-remove {
-  padding: 0 8px 0 6px;
-  color: var(--d1-text-3);
-}
-
-.d1-resin-remove:hover {
-  color: var(--d1-danger);
+.d1-resin-amount .d1-input {
+  width: 96px;
 }
 
 .d1-farming-floors {

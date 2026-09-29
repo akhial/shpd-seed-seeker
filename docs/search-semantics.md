@@ -63,3 +63,17 @@ model. A pending search restarts verification and scanning under this model.
 The results-file schema remains unchanged. Exporting current matches and
 reimporting them does not carry the private per-seed source queries; imported
 null recipes use the exported query as their source.
+
+## Stacks on either/or groups
+
+Verification uses the current matcher's reading of stacks. A stack label on
+only some members of an either/or group is those members' own stack: its
+copies are required when such a member fills the group and waived when another
+member does ([stacks](search-query-format.md#stacks)). A saved query written
+with that shape before this reading — its copies then always required — is
+verified under the new one, so re-verifying the pool can change which saved
+seeds match — typically admitting seeds whose other member matched. Its
+members anchor the stack even when they name no quality, so a saved query
+whose label on some members also sits on another either/or group, on a lone
+requirement naming qualities, or on a copy with a combined level now has two
+anchors: it fails validation and no longer loads.

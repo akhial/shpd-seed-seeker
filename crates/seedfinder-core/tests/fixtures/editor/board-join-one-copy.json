@@ -1,0 +1,643 @@
+{
+  "about": "Wand of Disintegration ×2 dragged onto Wand of Frost: one Disintegration — the stack's last copy, key 20 — joins Frost, and the chip stays behind on its own (the stack's count never becomes the group's).",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 1,
+        "target": 7,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "item": "wand_disintegration",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_lightning",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring",
+        "upgrade": 4
+      },
+      {
+        "item": "ring_energy",
+        "key": 4,
+        "kind": "ring",
+        "max_depth": 20
+      },
+      {
+        "item": "ring_energy",
+        "key": 5,
+        "kind": "ring",
+        "max_depth": 20
+      },
+      {
+        "item": "plate_armor",
+        "key": 6,
+        "kind": "armor",
+        "upgrade": 3
+      },
+      {
+        "item": "wand_frost",
+        "key": 7,
+        "kind": "wand"
+      },
+      {
+        "key": 8,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 20,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 6
+    },
+    "focus": 20,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_disintegration",
+            "join": [
+              2,
+              3,
+              6,
+              7,
+              20,
+              8
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Wand of Disintegration",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Lightning, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_lightning",
+            "join": [
+              1,
+              3,
+              6,
+              7,
+              20,
+              8
+            ],
+            "key": 2,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Lightning",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Lightning",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "name": "Wand of Lightning",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              4,
+              5
+            ],
+            "description": "Ring of Energy, exactly +4",
+            "details": [
+              "exactly +4"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_energy",
+            "join": [
+              1,
+              2,
+              6,
+              7,
+              20,
+              8
+            ],
+            "key": 3,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade, floors 1–20",
+              "details": [
+                "any upgrade",
+                "floors 1–20"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤20",
+                  "tooltip": null
+                }
+              ],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, floors 1–20"
+              }
+            ],
+            "remaining_badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 20,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+4",
+                "tooltip": null
+              }
+            ],
+            "title": "Ring of Energy",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          4,
+          5
+        ],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Ring of Energy",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Plate Armor, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "armor",
+            "in_cluster": false,
+            "item": "plate_armor",
+            "join": [
+              1,
+              2,
+              3,
+              7,
+              20,
+              8
+            ],
+            "key": 6,
+            "kind": "armor",
+            "lifted": null,
+            "name": "Plate Armor",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Plate Armor",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r6",
+        "label": null,
+        "members": [
+          6
+        ],
+        "name": "Plate Armor",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_frost",
+            "join": [
+              1,
+              2,
+              3,
+              6,
+              8
+            ],
+            "key": 7,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_disintegration",
+            "join": [
+              1,
+              2,
+              3,
+              6,
+              8
+            ],
+            "key": 20,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Frost"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          7,
+          20
+        ],
+        "name": "Wand of Frost or Wand of Disintegration",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any wand, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1,
+              2,
+              3,
+              6,
+              7,
+              20
+            ],
+            "key": 8,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r8",
+        "label": null,
+        "members": [
+          8
+        ],
+        "name": "Any wand",
+        "problem": null
+      }
+    ],
+    "next_key": 21,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "wand_disintegration",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_lightning",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring",
+        "upgrade": 4
+      },
+      {
+        "item": "ring_energy",
+        "key": 4,
+        "kind": "ring",
+        "max_depth": 20
+      },
+      {
+        "item": "ring_energy",
+        "key": 5,
+        "kind": "ring",
+        "max_depth": 20
+      },
+      {
+        "item": "plate_armor",
+        "key": 6,
+        "kind": "armor",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_frost",
+        "key": 7,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_disintegration",
+        "key": 20,
+        "kind": "wand"
+      },
+      {
+        "key": 8,
+        "kind": "wand",
+        "upgrade": 3
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "about": "An artifact asking for the city vault's +5, which the sheet has no control for, saved untouched: the rows come back as they were.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":19,\"in_cluster\":false,\"key\":1,\"offer_resin\":false,\"origin\":{\"key\":1,\"type\":\"row\"},\"query_resin\":null,\"requirement\":{\"item\":\"sandals_of_nature\",\"kind\":\"artifact\",\"max_depth\":19,\"upgrade\":5},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"item\":\"sandals_of_nature\",\"key\":1,\"kind\":\"artifact\",\"max_depth\":19,\"upgrade\":5}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":5,\"v\":1}",
+    "op": "save",
+    "rows": [
+      {
+        "item": "sandals_of_nature",
+        "key": 1,
+        "kind": "artifact",
+        "max_depth": 19,
+        "upgrade": 5
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": false,
+      "focus": 1,
+      "next_key": 2,
+      "rekeyed": [],
+      "resin": null,
+      "rows": [
+        {
+          "item": "sandals_of_nature",
+          "key": 1,
+          "kind": "artifact",
+          "max_depth": 19,
+          "upgrade": 5
+        }
+      ]
+    }
+  }
+}
