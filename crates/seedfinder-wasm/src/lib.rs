@@ -299,11 +299,24 @@ pub fn encode_results_file(request_json: &str) -> Result<String, JsError> {
     results_export::encode_document(request_json).map_err(|error| JsError::new(&error))
 }
 
+/// Rewrites a canonical JSON query document as the pretty-printed document a
+/// "Copy search" action puts on the clipboard; [`decode_results_file`] reads
+/// it back with `"bare_query": true`.
+///
+/// # Errors
+///
+/// Returns a JavaScript error for an invalid query.
+#[wasm_bindgen]
+pub fn encode_query_document(query_json: &str) -> Result<String, JsError> {
+    results_export::encode_query_document(query_json).map_err(|error| JsError::new(&error))
+}
+
 /// Decodes results-file text into `{"query": <canonical query document>,
-/// "seeds": [...], "dropped": <number>, "app_version": ..., "shpd_version":
-/// ...}`. The seeds are already deduplicated and capped at the shared result
-/// limit, so every platform restores the identical list, and `dropped` counts
-/// the exported entries that step removed.
+/// "seeds": [...], "dropped": <number>, "bare_query": <bool>, "app_version":
+/// ..., "shpd_version": ...}`. The seeds are already deduplicated and capped
+/// at the shared result limit, so every platform restores the identical list,
+/// `dropped` counts the exported entries that step removed, and `bare_query`
+/// marks a pasted query document, which carries no seeds.
 ///
 /// # Errors
 ///

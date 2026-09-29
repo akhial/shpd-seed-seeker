@@ -592,11 +592,41 @@ pub extern "C" fn seedfinder_results_encode(
     .unwrap_or(INTERNAL)
 }
 
+/// Rewrites a canonical JSON query document as the pretty-printed document a
+/// "Copy search" action puts on the clipboard (UTF-8 in, UTF-8 out); the
+/// results import reads it back. Invalid queries return `INVALID`.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_query_document(
+    query_json: *const u8,
+    query_json_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(query_json, query_json_len) else {
+            return INVALID;
+        };
+        let Ok(document) = std::str::from_utf8(bytes) else {
+            return INVALID;
+        };
+        match results_export::encode_query_document(document) {
+            Ok(contents) => return_packet(contents.into_bytes(), out_packet, out_len),
+            Err(_) => INVALID,
+        }
+    }))
+    .unwrap_or(INTERNAL)
+}
+
 /// Decodes results-file text into `{"query": <canonical query document>,
-/// "seeds": [...], "dropped": <number>, "app_version": ..., "shpd_version":
-/// ...}` (UTF-8 JSON). The seeds are already deduplicated and capped at the
-/// shared result limit, `dropped` counts the exported entries that step
-/// removed, and input above the codec's 2 MiB cap is rejected.
+/// "seeds": [...], "dropped": <number>, "bare_query": <bool>, "app_version":
+/// ..., "shpd_version": ...}` (UTF-8 JSON). The seeds are already
+/// deduplicated and capped at the shared result limit, `dropped` counts the
+/// exported entries that step removed, `bare_query` marks a pasted query
+/// document (no seeds), and input above the codec's 2 MiB cap is rejected.
 #[unsafe(no_mangle)]
 pub extern "C" fn seedfinder_results_decode(
     contents: *const u8,
@@ -1259,6 +1289,40 @@ mod tests {
                 ptr::null_mut(),
                 &raw mut len
             ),
+            INVALID
+        );
+    }
+
+    #[test]
+    fn copied_query_documents_import_back_as_bare_queries() {
+        let document = br#"{"requirements":[{"item":"wand_fireblast","upgrade":{"at_least":3}}]}"#;
+        let mut pointer = ptr::null_mut();
+        let mut len = 0;
+        assert_eq!(
+            seedfinder_query_document(
+                document.as_ptr(),
+                document.len(),
+                &raw mut pointer,
+                &raw mut len
+            ),
+            OK
+        );
+        let copied = unsafe { take_packet(pointer, len) };
+        assert_eq!(
+            seedfinder_results_decode(
+                copied.as_ptr(),
+                copied.len(),
+                &raw mut pointer,
+                &raw mut len
+            ),
+            OK
+        );
+        let decoded: serde_json::Value =
+            serde_json::from_slice(&unsafe { take_packet(pointer, len) }).unwrap();
+        assert_eq!(decoded["bare_query"], serde_json::json!(true));
+        assert_eq!(decoded["seeds"], serde_json::json!([]));
+        assert_eq!(
+            seedfinder_query_document(b"not json".as_ptr(), 8, &raw mut pointer, &raw mut len),
             INVALID
         );
     }

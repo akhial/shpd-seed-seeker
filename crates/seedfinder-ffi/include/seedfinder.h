@@ -83,6 +83,11 @@ int32_t seedfinder_filter_seeds(const uint8_t *request, size_t request_len, cons
 // seedfinder_buffer_free.
 int32_t seedfinder_share_encode(const uint8_t *query_json, size_t query_json_len, uint8_t **out_packet, size_t *out_len);
 int32_t seedfinder_share_decode(const uint8_t *text, size_t text_len, uint8_t **out_packet, size_t *out_len);
+// Rewrites a canonical UTF-8 JSON query document as the pretty-printed
+// document "Copy search" puts on the clipboard. seedfinder_results_decode
+// accepts it back and reports "bare_query": true with no seeds. Invalid
+// queries return -1; the packet is freed with seedfinder_buffer_free.
+int32_t seedfinder_query_document(const uint8_t *query_json, size_t query_json_len, uint8_t **out_packet, size_t *out_len);
 // On-demand regular-floor map: UTF-8 JSON request/response, as documented in
 // docs/level-map-format.md. Unsupported floors/invalid requests return -1;
 // generation failures return -2. Free buffers with seedfinder_buffer_free.
