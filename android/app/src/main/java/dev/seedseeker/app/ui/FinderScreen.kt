@@ -1386,20 +1386,24 @@ private fun PresetRow(preset: QueryPreset, onApply: () -> Unit, onDelete: () -> 
         modifier = modifier.fillMaxWidth().pressScale(interaction, pressed = 0.96f),
     ) {
         Row(Modifier.padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // The first few requirements, fanned like a hand of cards, the
-            // first on top.
+            // The first few distinct items, fanned like a hand of cards, the
+            // first on top. A repeat would draw the same sprite twice.
             Box(Modifier.width(56.dp).height(36.dp)) {
-                preset.query.requirements.filterNot { it.blanket }.take(3).forEachIndexed { index, requirement ->
-                    SpriteTile(
-                        item = requirement.item,
-                        wildcardKind = requirement.kind,
-                        tileSize = 30,
-                        modifier = Modifier
-                            .zIndex(-index.toFloat())
-                            .padding(start = (index * 12).dp, top = 3.dp)
-                            .rotate((index - 1) * 8f),
-                    )
-                }
+                preset.query.requirements
+                    .filterNot { it.blanket }
+                    .distinctBy { it.item ?: it.kind }
+                    .take(3)
+                    .forEachIndexed { index, requirement ->
+                        SpriteTile(
+                            item = requirement.item,
+                            wildcardKind = requirement.kind,
+                            tileSize = 30,
+                            modifier = Modifier
+                                .zIndex(-index.toFloat())
+                                .padding(start = (index * 12).dp, top = 3.dp)
+                                .rotate((index - 1) * 8f),
+                        )
+                    }
             }
             Spacer(Modifier.width(8.dp))
             Text(
