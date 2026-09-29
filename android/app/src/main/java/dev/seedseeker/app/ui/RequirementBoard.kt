@@ -634,14 +634,16 @@ private fun RequirementChip(
     badges: BadgesView?,
     /** The item the chip draws: its own, or the one a drag of it carries. */
     face: ChipFace = chip.face,
+    /** The problem it wears and says: the chip's own, which a bare copy it carries does not share. */
+    problem: String? = chip.problem,
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
-        description = listOfNotNull(face.description, chip.problem).joinToString(", "),
+        description = listOfNotNull(face.description, problem).joinToString(", "),
         enabled = enabled,
         dimmed = dimmed,
         highlighted = highlighted,
-        faulty = chip.problem != null,
+        faulty = problem != null,
         modifier = modifier,
         onPlaced = onPlaced,
         onClick = onClick,
@@ -673,13 +675,15 @@ private fun RequirementChip(
 /**
  * The one item a drag holds, without the `×N` or `Σ` [chip] wears on the
  * board, since only one of its items moves: the bare copy the editor says a
- * drag of it lifts ([ChipView.lifted]), else the chip itself.
+ * drag of it lifts ([ChipView.lifted]), else the chip itself. Only the chip
+ * itself wears its problem; the bare copy is drawn and named without it.
  */
 @Composable
 internal fun HeldChip(chip: ChipView) {
     RequirementChip(
         chip = chip,
         face = chip.movingFace,
+        problem = chip.problem.takeIf { chip.lifted == null },
         enabled = false,
         dimmed = false,
         highlighted = false,

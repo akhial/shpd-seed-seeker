@@ -34,6 +34,7 @@ import dev.seedseeker.app.model.ResinCondition
 import dev.seedseeker.app.model.StackView
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
+import dev.seedseeker.app.ui.theme.SpdDanger
 import dev.seedseeker.app.ui.theme.SpdGreen
 import java.io.File
 import org.junit.Assert.*
@@ -501,6 +502,55 @@ class RequirementBoardTest {
         show()
         compose.onNodeWithContentDescription("Ring of Might,", substring = true)
             .assert(hasContentDescription("A stack must share one combined level.", substring = true))
+    }
+
+    /** How many pixels where [node] is drawn are, within rounding, the error outline's colour. */
+    private fun errorPixels(node: SemanticsNodeInteraction): Int {
+        val bounds = node.fetchSemanticsNode().boundsInWindow
+        val window = compose.captureWindow(compose.activity.window)
+        val error = SpdDanger.toArgb()
+        fun near(pixel: Int, shift: Int) = kotlin.math.abs((pixel shr shift and 0xFF) - (error shr shift and 0xFF)) <= 8
+        val xs = bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(window.width)
+        val ys = bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(window.height)
+        return xs.sumOf { x -> ys.count { y -> window.getPixel(x, y).let { near(it, 16) && near(it, 8) && near(it, 0) } } }
+    }
+
+    @Test fun aBareCopyInHandLeavesTheProblemOfTheChipItCameFrom() {
+        // Ring of Might ×2 whose combined levels disagree, and a wand in an
+        // either/or group with a blanket armor: each is outlined in the error
+        // colour.
+        val might = ItemCatalog.findById("ring_might")!!
+        requirements.value = listOf(
+            ItemRequirement(1, might, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 3)),
+            ItemRequirement(2, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(3, might, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 4)),
+            ItemRequirement(4, null, 0, kind = ItemKind.ARMOR, upgradeMatch = UpgradeMatch.ANY, blanket = true, alternativeGroup = 1),
+        )
+        amount.value = 0
+        show()
+        val ring = RequirementEditor.view(requirements.value).itemOf(1)!!.chips.single()
+        assertEquals("A stack must share one combined level.", ring.problem)
+        assertEquals("Ring of Might, any upgrade", ring.lifted?.description)
+        val inHand = hasAnyAncestor(hasTestTag(HELD_CHIP_TAG))
+
+        // The wand has no copies: it moves itself, problem and all.
+        pickUp(compose.onNodeWithContentDescription("Any wand,", substring = true))
+        compose.onNode(inHand and hasContentDescription("cannot mix ordinary and blanket requirements.", substring = true))
+            .assertExists()
+        assertTrue(errorPixels(compose.onNodeWithTag(HELD_CHIP_TAG)) > 0)
+        compose.onRoot().performTouchInput { cancel() }
+        compose.onNodeWithTag(HELD_CHIP_TAG).assertDoesNotExist()
+
+        // The ring stack carries a bare copy, which has no combined level to
+        // disagree about: it is drawn and named without the stack's problem.
+        val ringChip = compose.onNodeWithContentDescription("Ring of Might,", substring = true)
+        assertTrue(errorPixels(ringChip) > 0)
+        pickUp(ringChip)
+        compose.onNode(inHand and hasContentDescription("Ring of Might, any upgrade")).assertExists()
+        compose.onNode(inHand and hasContentDescription("A stack must share one combined level.", substring = true))
+            .assertDoesNotExist()
+        assertEquals(0, errorPixels(compose.onNodeWithTag(HELD_CHIP_TAG)))
+        compose.onRoot().performTouchInput { cancel() }
     }
 
     @Test fun searchingDisablesResinEditingAndDragging() {
