@@ -137,10 +137,12 @@ export const builtInPresets: Preset[] = [
     },
   },
   {
-    // Early gear for a wealth run, and the dark garden floor 17 farms on.
+    // Early gear for a wealth run, and the dark garden floor 17 farms on. It already names its
+    // trinket, so AutoTrinket is off.
     name: "Ring of Wealth",
     query: {
       ...defaultQueryState(),
+      autoApplyTrinket: false,
       floorRequirements: [{ depth: 17, feeling: "dark", any_rooms: ["garden", "secret_garden"] }],
       requirements: [
         {

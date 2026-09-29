@@ -12,8 +12,8 @@ final class SeedSeekerKitTests: XCTestCase {
         // never names one of these.
         let retired = (1...5).map { UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA27210\($0)")! }
         XCTAssertTrue(ids.isDisjoint(with: retired))
+        XCTAssertEqual(BuiltInPresets.all.map(\.query.autoApplyTrinket), [true, true, false, true, true])
         for preset in BuiltInPresets.all {
-            XCTAssertTrue(preset.query.autoApplyTrinket, preset.name)
             XCTAssertEqual(preset.query.requirements.map(\.key),
                            Array(1...Int64(preset.query.requirements.count)), preset.name)
             XCTAssertNotNil(preset.query.validated(), preset.name)

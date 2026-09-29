@@ -518,7 +518,7 @@ final class QueryDocumentTests: XCTestCase {
                 {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}
                 """),
             ("Ring of Wealth", """
-                {"auto_apply_trinket":true,\
+                {\
                 "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],\
                 "requirements":[\
                 {"item":"ring_wealth","kind":"ring","upgrade":4},\

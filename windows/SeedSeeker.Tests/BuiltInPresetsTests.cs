@@ -28,7 +28,7 @@ public sealed class BuiltInPresetsTests
                 {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}
             """),
         ("ring-of-wealth", "Ring of Wealth", """
-            {"auto_apply_trinket":true,
+            {
              "floor_requirements":[{"depth":17,"feeling":"dark","any_rooms":["garden","secret_garden"]}],
              "requirements":[
                 {"item":"ring_wealth","kind":"ring","upgrade":4},

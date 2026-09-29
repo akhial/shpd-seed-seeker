@@ -474,7 +474,7 @@ public static class BuiltInPresets
             Id = "ring-of-wealth", Name = "Ring of Wealth", IsBuiltIn = true,
             Query = new QuerySettings
             {
-                AutoApplyTrinket = true,
+                AutoApplyTrinket = false,
                 FloorRequirements = [new() { Depth = 17, Feeling = "dark", AnyRooms = ["garden", "secret_garden"] }],
                 Requirements = [
                     new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly },

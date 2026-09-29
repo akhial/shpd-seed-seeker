@@ -85,6 +85,7 @@ object BuiltInPresets {
         name = "Ring of Wealth",
         isBuiltIn = true,
         query = PresetQuery(
+            autoApplyTrinket = false,
             requirements = listOf(
                 ItemRequirement(1, item("ring_wealth"), 4, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.EXACT),
                 ItemRequirement(

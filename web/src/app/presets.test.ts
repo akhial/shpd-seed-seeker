@@ -23,7 +23,7 @@ const documents: [string, string][] = [
   ],
   [
     "Ring of Wealth",
-    `{"auto_apply_trinket":true,
+    `{
       "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],
       "requirements":[
       {"item":"ring_wealth","kind":"ring","upgrade":4},

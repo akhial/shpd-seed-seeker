@@ -93,10 +93,11 @@ public struct QueryPreset: Codable, Hashable, Identifiable, Sendable {
 extension SavedQuery: Hashable {}
 
 public enum BuiltInPresets {
-    // Every preset keeps `SavedQuery`'s default of applying the chosen
-    // trinket automatically. The ids are fresh rather than the retired
-    // presets' (…272101 to …272105), so an id a user hid or stored never
-    // lands on a different query.
+    // Every preset but Ring of Wealth, which names its own trinket, keeps
+    // `SavedQuery`'s default of applying the chosen trinket automatically.
+    // The ids are fresh rather than the retired presets' (…272101 to
+    // …272105), so an id a user hid or stored never lands on a different
+    // query.
     public static let all: [QueryPreset] = [disintegrate, guerillaAssassin, ringOfWealth, necromancer, bloodBerserker]
 
     public static let disintegrate = QueryPreset(
@@ -145,7 +146,7 @@ public enum BuiltInPresets {
                                  maximumDepth: 9),
             try! ItemRequirement(key: 5, item: ItemCatalog.findById("dimensional_sundial"), upgrade: 0,
                                  kind: .trinket, upgradeMatch: .any, trinketTransmutations: 1),
-        ], floorRequirements: [
+        ], autoApplyTrinket: false, floorRequirements: [
             FloorRequirement(depth: 17, feeling: "dark", anyRooms: ["garden", "secret_garden"]),
         ]))
 

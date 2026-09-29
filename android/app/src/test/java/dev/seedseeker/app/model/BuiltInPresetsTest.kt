@@ -29,7 +29,7 @@ class BuiltInPresetsTest {
               {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}
         """,
         "ring-of-wealth" to """
-            {"auto_apply_trinket":true,
+            {
              "floor_requirements":[{"depth":17,"feeling":"dark","any_rooms":["garden","secret_garden"]}],
              "requirements":[
               {"item":"ring_wealth","kind":"ring","upgrade":4},
@@ -63,7 +63,11 @@ class BuiltInPresetsTest {
             listOf("DISINTEGRATE", "Guerilla Assassin", "Ring of Wealth", "Necromancer", "Blood Berserker"),
             BuiltInPresets.all.map { it.name },
         )
-        assertTrue(BuiltInPresets.all.all { it.isBuiltIn && it.query.autoApplyTrinket })
+        assertTrue(BuiltInPresets.all.all { it.isBuiltIn })
+        assertEquals(
+            listOf(true, true, false, true, true),
+            BuiltInPresets.all.map { it.query.autoApplyTrinket },
+        )
     }
 
     /**

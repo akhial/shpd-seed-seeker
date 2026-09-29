@@ -98,7 +98,8 @@ fn guerilla_assassin() -> BuiltInPreset {
     )
 }
 
-/// Early gear for a wealth run, and the dark garden floor 17 farms on.
+/// Early gear for a wealth run, and the dark garden floor 17 farms on. It
+/// already names its trinket, so automatic trinket selection is off.
 fn ring_of_wealth() -> BuiltInPreset {
     let mut preset = preset(
         "Ring of Wealth",
@@ -129,6 +130,7 @@ fn ring_of_wealth() -> BuiltInPreset {
             },
         ],
     );
+    preset.state.auto_apply_trinket = false;
     preset.state.floor_requirements.push(FloorRequirement {
         depth: 17,
         feeling: Some(Feeling::Dark),
@@ -214,7 +216,7 @@ mod tests {
         ),
         (
             "Ring of Wealth",
-            r#"{"auto_apply_trinket":true,
+            r#"{
                 "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],
                 "requirements":[
                 {"item":"ring_wealth","kind":"ring","upgrade":4},
