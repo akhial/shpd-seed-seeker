@@ -8,9 +8,10 @@
 //! and expressed in keys. Where the older suites pinned a stack following
 //! its chip into a cluster, the cases pin the one-item join instead: a bare
 //! copy joins and the chip stays behind with its constraints, one item
-//! fewer, while a stacked target keeps its stack as a member. #190's refusal of a join across categories with a
-//! stack is lifted — every copy keeps its own chip's kind — and the cases
-//! that pinned it now pin the join.
+//! fewer, while a stacked target keeps its stack as a member. #190's
+//! refusal of a join across categories with a stack is lifted — every copy
+//! keeps its own chip's kind — and the cases that pinned it now pin the
+//! join.
 
 use super::super::testing::{
     Rng, assert_emittable, named, query, random_edit, random_requirement, random_rows,
@@ -3370,7 +3371,16 @@ fn joined_demands(rows: &[Row], source: usize, target: usize) -> Vec<Demand> {
     let source_stack = source_item.stack(source).expect("a chip");
     let chip = rows[source].requirement;
     let mut copies = requirements_at(rows, &source_stack.copies);
-    let moved = copies.pop().map_or(chip, |last| carried_copy(&chip, &last));
+    // The item that moves, built apart from the edit's own code: the chip's
+    // item (or kind) with its melee/thrown narrowing and section, the floor
+    // limit of the last copy — the one the bin takes — and nothing else.
+    let moved = copies.pop().map_or(chip, |last| Requirement {
+        item: chip.item,
+        weapon_category: chip.weapon_category,
+        blanket: chip.blanket,
+        max_depth: last.max_depth,
+        ..Requirement::any(chip.kind)
+    });
     if source_item.cluster.is_some() {
         let stacks: Vec<(Requirement, Vec<Requirement>)> = stacks_of(rows, source_item)
             .into_iter()
