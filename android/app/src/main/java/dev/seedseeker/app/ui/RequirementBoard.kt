@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -1113,6 +1114,17 @@ private fun Modifier.dashedOutline(
     )
 }
 
+/** Every tag's square-cornered shape; Scout's item cards set their tags in it too. */
+internal val TagShape = RoundedCornerShape(6.dp)
+
+/** A tag's insets around its label at the current chip size (outside a board, the regular size). */
+internal val tagInsets: PaddingValues
+    @Composable get() = LocalChipMetrics.current.tagPadding.let { PaddingValues(horizontal = it, vertical = it - 4.dp) }
+
+/** An upgrade tag, as a chip wears it beside its name; Scout's item cards wear it too. */
+@Composable
+internal fun UpgradeTag(text: String) = ChipTag(TagView(text, TagStyle.UPGRADE))
+
 /** The qualifier badges beside a chip's name, in the order given. */
 @Composable
 private fun ChipTags(tags: List<TagView>) {
@@ -1139,12 +1151,11 @@ private fun ChipTag(tag: TagView) {
         TagStyle.UPGRADE -> SpdUpgrade
         TagStyle.PLAIN, TagStyle.CREDIT -> MaterialTheme.colorScheme.onTertiaryContainer
     }
-    val padding = LocalChipMetrics.current.tagPadding
     HoverTooltip(tag.tooltip) { modifier ->
-        Surface(shape = RoundedCornerShape(6.dp), color = container, modifier = modifier) {
+        Surface(shape = TagShape, color = container, modifier = modifier) {
             Text(
                 tag.text,
-                modifier = Modifier.padding(horizontal = padding, vertical = padding - 4.dp),
+                modifier = Modifier.padding(tagInsets),
                 style = chipLabelStyle,
                 fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.SemiBold,
@@ -1189,7 +1200,7 @@ private fun UncursedTag() {
     val labelHeight = with(LocalDensity.current) { chipLabelStyle.lineHeight.toDp() }
     val verticalPadding = LocalChipMetrics.current.tagPadding - 4.dp
     Surface(
-        shape = RoundedCornerShape(6.dp),
+        shape = TagShape,
         color = SpdGreen.copy(alpha = 0.14f),
         // Match text tags at both chip sizes and follow the user's font scale.
         modifier = Modifier.size(labelHeight + verticalPadding * 2),

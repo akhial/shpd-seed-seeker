@@ -258,7 +258,8 @@ private fun LevelMapPanel(
             }
         }
     }
-    if (!full) Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow,
+    // The card clips its toolbar and stage to its corners, matching the item cards below it.
+    if (!full) Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).springEntrance(rise = 12f)) {
         Column {
             toolbar()

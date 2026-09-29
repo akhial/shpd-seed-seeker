@@ -29,6 +29,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.model.RingGems
@@ -164,6 +166,43 @@ class ScoutItemCardTest {
         compose.runOnIdle { donor.value = false }
         compose.onNodeWithText("match").assertIsDisplayed()
         compose.onAllNodesWithContentDescription("Arcane Resin donor match").assertCountEquals(0)
+    }
+
+    @Test fun upgradeTagIsSetLikeTheBoardsAndTagsKeepTheTitleRowHeight() {
+        val fontScale = mutableStateOf(1f)
+        val tagged = mutableStateOf(true)
+        val item = ScoutItem(
+            item = requireNotNull(ItemCatalog.findById("plate_armor")),
+            depth = 1, upgrade = 3, effect = "Viscosity", cursed = true,
+            source = ScoutItemSource.TOMB,
+            accessibility = ScoutAccessibility.Independent,
+        )
+        compose.setContent {
+            SeedSeekerTheme {
+                CompositionLocalProvider(LocalDensity provides Density(compose.density.density, fontScale.value)) {
+                    ScoutItemCard(
+                        if (tagged.value) item else item.copy(upgrade = 0, cursed = false), RingGems.CATALOG,
+                        matches = true, modifier = Modifier.width(560.dp).testTag("item-card"),
+                    )
+                }
+            }
+        }
+        // The upgrade wears the requirement board's upgrade tag: monospace, semibold.
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText("+3").performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val style = layouts.single().layoutInput.style
+        assertEquals(FontFamily.Monospace, style.fontFamily)
+        assertEquals(FontWeight.SemiBold, style.fontWeight)
+        for (scale in listOf(1f, 1.5f, 2f)) {
+            val heights = listOf(true, false).map { withTags ->
+                compose.runOnIdle {
+                    fontScale.value = scale
+                    tagged.value = withTags
+                }
+                compose.onNodeWithTag("item-card").fetchSemanticsNode().boundsInRoot.height
+            }
+            assertEquals("Tags must not grow the card at $scale", heights[1], heights[0], 0.5f)
+        }
     }
 
     @Test fun longNamesStayCompleteWithBadgesAndLargeFonts() {
