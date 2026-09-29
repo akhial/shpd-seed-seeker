@@ -17,33 +17,19 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ripple
-import androidx.compose.material3.LocalMinimumInteractiveComponentSize
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -57,82 +43,108 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.model.CatalogItem
-import dev.seedseeker.app.model.EffectFilter
-import dev.seedseeker.app.model.FLOOR_LIMIT_OPTIONS
-import dev.seedseeker.app.model.ItemKind
+import dev.seedseeker.app.model.EditorSheet
 import dev.seedseeker.app.model.ItemRequirement
-import dev.seedseeker.app.model.ScoutItemSource
-import dev.seedseeker.app.model.SearchLimits
-import dev.seedseeker.app.model.TierMatch
-import dev.seedseeker.app.model.UpgradeMatch
-import dev.seedseeker.app.model.floorLimitIndex
+import dev.seedseeker.app.model.RequirementEditor
+import dev.seedseeker.app.model.SheetChange
+import dev.seedseeker.app.model.SheetEffect
+import dev.seedseeker.app.model.SheetFloors
+import dev.seedseeker.app.model.SheetForm
+import dev.seedseeker.app.model.SheetOption
+import dev.seedseeker.app.model.SheetPicker
+import dev.seedseeker.app.model.SheetSave
 import java.util.Locale
 import kotlin.math.roundToInt
 
 private enum class SheetStep { ITEM, DETAILS }
 
-/** The three shapes an effect filter takes in the editor. */
-private enum class EffectMode(val label: String) {
-    ANY("Any"),
-    ANY_ENCHANTMENT("Any enchantment"),
-    SPECIFIC("Specific…"),
-}
+/** The tier slider's name under each mode that takes a value (dialog chrome). */
+private val TIER_SLIDER = mapOf("exact" to "Exact tier", "at_least" to "Minimum tier", "at_most" to "Maximum tier")
+
+/** The upgrade slider's name under each mode that takes a value (dialog chrome). */
+private val UPGRADE_SLIDER = mapOf("exact" to "Level", "at_least" to "At least")
 
 /**
- * The requirement editor. It edits one chip — the anchor of its stack — plus
- * the shape of that stack: [editingCount] items of the same kind, reaching
- * [editingTotal] combined levels when a total is set, its extra copies kept to
- * [editingCopyDepth]'s floor. [onSave] hands the finished chip and stack shape
- * back — with [editing]'s key and alternative group, or key 0 for a new chip —
- * for the caller to place through `applyEdit`.
+ * The requirement editor. It draws the shared core's form for [sheet] —
+ * which controls show, what they offer, their ranges, labels, section labels
+ * and help texts, the chip a save would produce, and why the draft cannot be
+ * saved — and sends every control the user moves back to the core as a
+ * change; the draft is the core's and stays opaque here. The sheet's own are
+ * its dialog chrome: its two steps, its titles, its buttons, the headings of
+ * its pickers and mode pickers, and its sliders' names.
  *
- * [startWithItemPicker] opens an existing chip on the item step, which is what
- * a freshly forked alternative wants: the copy is meant to become a different
- * item.
+ * Save stores the draft onto [rows], the list as it is now, a new row taking
+ * its key from [nextKey] on. [onSaved] gets what the save stored — the list
+ * and the chip it landed in — for the caller to adopt; a save the editor
+ * refuses keeps the sheet open on its reasons.
+ *
+ * [onPickResin] is where the Arcane Resin choice leads when the sheet offers
+ * it: the query's resin has a sheet of its own.
  *
  * [onRemove], given for an existing chip, takes it off the board from here: the
  * board's chips flow across lines, so a tap is the sure way to reach one, and
@@ -141,129 +153,19 @@ private enum class EffectMode(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RequirementSheet(
-    editing: ItemRequirement?,
-    otherRequirements: List<ItemRequirement> = emptyList(),
-    onAddResin: (() -> Unit)? = null,
-    editingCount: Int = 1,
-    editingTotal: Int? = null,
-    editingCopyDepth: Int? = null,
-    startWithItemPicker: Boolean = false,
-    blanket: Boolean = editing?.blanket ?: false,
-    initialKind: ItemKind = ItemKind.WEAPON,
+    sheet: EditorSheet,
+    rows: List<ItemRequirement>,
+    nextKey: Long? = null,
     onDismiss: () -> Unit,
-    onSave: (requirement: ItemRequirement, count: Int, total: Int?, copyDepth: Int?) -> Unit,
+    onSaved: (SheetSave.Saved) -> Unit,
     onRemove: (() -> Unit)? = null,
+    onPickResin: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val identity = editing?.key ?: -1L
-    var step by remember(identity) {
-        mutableStateOf(if (editing == null || startWithItemPicker) SheetStep.ITEM else SheetStep.DETAILS)
-    }
-    var kind by remember(identity) { mutableStateOf(editing?.kind ?: initialKind) }
-    var selectedItem by remember(identity) {
-        mutableStateOf<CatalogItem?>(
-            if (editing == null) {
-                if (blanket && !kind.requiresNamedItem) null else searchableItems(kind).first()
-            } else {
-                editing.item
-            },
-        )
-    }
-    var upgradeMatch by remember(identity) { mutableStateOf(editing?.upgradeMatch ?: UpgradeMatch.EXACT) }
-    var upgrade by remember(identity) {
-        val initialMatch = editing?.upgradeMatch ?: UpgradeMatch.EXACT
-        val initialCeiling = editing?.upgradeCeiling ?: ItemKind.WEAPON.maximumSearchUpgrade
-        mutableStateOf(normalizedUpgrade(editing?.upgrade ?: 1, initialMatch, initialCeiling))
-    }
-    var upgradeMenuExpanded by remember(identity) { mutableStateOf(false) }
-    var tierMatch by remember(identity) { mutableStateOf(editing?.tierMatch ?: TierMatch.ANY) }
-    var tier by remember(identity) { mutableStateOf(editing?.tier?.takeIf { it >= 2 } ?: 2) }
-    var tierMenuExpanded by remember(identity) { mutableStateOf(false) }
-    var effectMode by remember(identity) {
-        mutableStateOf(
-            when (editing?.effect) {
-                null, EffectFilter.Any -> EffectMode.ANY
-                EffectFilter.AnyEnchantment -> EffectMode.ANY_ENCHANTMENT
-                is EffectFilter.OneOf -> EffectMode.SPECIFIC
-            },
-        )
-    }
-    var selectedEffects by remember(identity) {
-        mutableStateOf((editing?.effect as? EffectFilter.OneOf)?.names?.toSet() ?: emptySet())
-    }
-    var source by remember(identity) { mutableStateOf(editing?.source) }
-    var sourceMenuExpanded by remember(identity) { mutableStateOf(false) }
-    var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
-    var selectTrinket by remember(identity) { mutableStateOf(editing?.selectTrinket ?: false) }
-    var trinketTransmutations by remember(identity) { mutableStateOf(editing?.trinketTransmutations ?: 0) }
-    var artifactTransmutations by remember(identity) { mutableStateOf(editing?.artifactTransmutations ?: 0) }
-    var excludeResin by remember(identity) { mutableStateOf(editing?.excludeResin ?: false) }
-    var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
-    // The stack this chip anchors: how many items of its kind to find, and the
-    // combined level they must reach together (null when it just wants copies).
-    var stackCount by remember(identity) { mutableStateOf(editingCount.coerceIn(1, SearchLimits.STACK_MAX)) }
-    var stackTotal by remember(identity) { mutableStateOf(editingTotal) }
-    // The chip's own floor limit bounds the one item it describes; this one
-    // bounds the copies behind it, which carry no constraints of their own.
-    var copyDepth by remember(identity) { mutableStateOf(editingCopyDepth) }
-
-    // A member of an either/or cluster leaves the stack to the cluster itself.
-    val inAlternativeGroup = editing?.alternativeGroup != null
-    // Only a tier-4 weapon is levelled past `MAX_UPGRADE_ANY_TIER`, so the
-    // draft's ceiling follows the item and tier it is asking for, not just
-    // its family.
-    val upgradeCeiling = SearchLimits.maximumUpgrade(kind, selectedItem, tierMatch, tier)
-    val draftMaximumUpgrade = if (upgradeMatch == UpgradeMatch.EXACT) upgrade else upgradeCeiling
-    // Every item of a stack that counts levels is a copy of the anchor, and each
-    // contributes its upgrade plus one — bounded by what a world generates,
-    // which levels only the Imp vault's one ring past the standard +2 roll.
-    fun levelCapacityFor(count: Int): Int = minOf(
-        (draftMaximumUpgrade + 1) * count,
-        SearchLimits.ringStackCapacity(count),
-    )
-    val levelCapacity = levelCapacityFor(stackCount)
-
-    // The edit that lowers the ceiling has to pass the ceiling it leaves
-    // behind: the state it reads has not recomposed yet.
-    fun clampUpgrade(match: UpgradeMatch, ceiling: Int) {
-        upgrade = normalizedUpgrade(upgrade, match, ceiling)
-    }
-
-    fun resetEffects() {
-        effectMode = EffectMode.ANY
-        selectedEffects = emptySet()
-    }
-
-    val draft: Result<ItemRequirement> = runCatching {
-        require(blanket || kind != ItemKind.TRINKET || selectedItem == null ||
-            otherRequirements.none { !it.blanket && it.item?.id == selectedItem?.id }) {
-            "This trinket is already required. Each trinket appears only once in the deck."
-        }
-        ItemRequirement(
-            key = editing?.key ?: 0L,
-            item = selectedItem,
-            upgrade = if (kind.requiresNamedItem) 0 else upgrade,
-            effect = when (effectMode) {
-                EffectMode.ANY -> EffectFilter.Any
-                EffectMode.ANY_ENCHANTMENT -> EffectFilter.AnyEnchantment
-                EffectMode.SPECIFIC -> EffectFilter.of(selectedEffects, kind)
-            },
-            kind = kind,
-            tier = if (tierMatch == TierMatch.ANY) 0 else tier,
-            tierMatch = tierMatch,
-            upgradeMatch = if (kind.requiresNamedItem) UpgradeMatch.ANY else upgradeMatch,
-            source = if (kind == ItemKind.TRINKET) null else source,
-            identityGroup = if (blanket || !kind.supportsStacks) null else editing?.identityGroup,
-            maximumDepth = if (kind == ItemKind.TRINKET) null else maximumDepth,
-            requireUncursed = kind != ItemKind.TRINKET && requireUncursed,
-            selectTrinket = !blanket && kind == ItemKind.TRINKET && trinketTransmutations == 0 && selectTrinket,
-            trinketTransmutations = if (kind == ItemKind.TRINKET) trinketTransmutations else 0,
-            artifactTransmutations = if (kind == ItemKind.ARTIFACT) artifactTransmutations else 0,
-            blanket = blanket,
-            excludeResin = !blanket && kind == ItemKind.WAND && excludeResin,
-            alternativeGroup = editing?.alternativeGroup,
-            levelSum = if (blanket || !kind.supportsStacks) null else editing?.levelSum,
-        )
+    val edited = rememberEditedSheet(sheet)
+    val form = edited.sheet.form
+    var step by rememberSaveable(sheet.draft) {
+        mutableStateOf(if (sheet.form.adding) SheetStep.ITEM else SheetStep.DETAILS)
     }
 
     ModalBottomSheet(
@@ -287,9 +189,9 @@ fun RequirementSheet(
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         when {
-                            blanket -> if (editing == null) "Add blanket requirement" else "Edit blanket requirement"
-                            editing == null -> "Add requirement"
-                            inAlternativeGroup -> "Edit alternative"
+                            form.blanket -> if (form.adding) "Add blanket requirement" else "Edit blanket requirement"
+                            form.adding -> "Add requirement"
+                            form.inCluster -> "Edit alternative"
                             else -> "Edit requirement"
                         },
                         style = MaterialTheme.typography.titleLarge,
@@ -316,140 +218,7 @@ fun RequirementSheet(
             ) { shownStep ->
             Column(Modifier.fillMaxSize()) {
             when (shownStep) {
-                SheetStep.ITEM -> {
-                    // Category — connected toggle-button group (fixed chrome).
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        listOf(ItemKind.WEAPON, ItemKind.ARMOR, ItemKind.WAND, ItemKind.RING, ItemKind.TRINKET, ItemKind.ARTIFACT)
-                            .forEach { entry ->
-                                ToggleButton(
-                                    checked = kind.family == entry,
-                                    onCheckedChange = { checked ->
-                                        if (checked && kind.family != entry) {
-                                            val first = searchableItems(entry).first()
-                                            kind = entry
-                                            selectedItem = first
-                                            if (!entry.supportsStacks) {
-                                                stackCount = 1
-                                                stackTotal = null
-                                                copyDepth = null
-                                            }
-                                            if (entry.requiresNamedItem) {
-                                                upgradeMatch = UpgradeMatch.ANY
-                                                upgrade = 0
-                                                source = null
-                                                requireUncursed = false
-                                            }
-                                            tierMatch = TierMatch.ANY
-                                            tier = 2
-                                            resetEffects()
-                                            clampUpgrade(
-                                                upgradeMatch,
-                                                SearchLimits.maximumUpgrade(entry, first, TierMatch.ANY, 2),
-                                            )
-                                        }
-                                    },
-                                    colors = ToggleButtonDefaults.toggleButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    ),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                                ) {
-                                    Text(entry.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (!kind.requiresNamedItem) FilterChip(
-                            selected = selectedItem == null,
-                            onClick = { selectedItem = null },
-                            label = { Text("Any ${kind.label.lowercase(Locale.ROOT)}", maxLines = 1, softWrap = false) },
-                        )
-                        if (kind == ItemKind.WAND && onAddResin != null) {
-                            FilterChip(selected = false, onClick = onAddResin, label = { Text("Arcane Resin") })
-                        }
-                        if (kind.family == ItemKind.WEAPON) {
-                            listOf(
-                                ItemKind.WEAPON to "All",
-                                ItemKind.MELEE_WEAPON to "Melee",
-                                ItemKind.THROWN_WEAPON to "Thrown",
-                            ).forEach { (weaponKind, label) ->
-                                FilterChip(
-                                    selected = kind == weaponKind,
-                                    onClick = {
-                                        if (kind != weaponKind) {
-                                            val kept = selectedItem?.takeIf(weaponKind::accepts)
-                                            val chosen = kept
-                                                ?: searchableItems(weaponKind).first()
-                                            kind = weaponKind
-                                            selectedItem = chosen
-                                            clampUpgrade(
-                                                upgradeMatch,
-                                                SearchLimits.maximumUpgrade(weaponKind, chosen, tierMatch, tier),
-                                            )
-                                        }
-                                    },
-                                    label = { Text(label, maxLines = 1, softWrap = false) },
-                                )
-                            }
-                        }
-                    }
-
-                    // Item picker — the only scrollable region on this step.
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(92.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(searchableItems(kind), key = { it.id }) { item ->
-                            ItemTile(
-                                item = item,
-                                selected = selectedItem?.id == item.id,
-                                onClick = {
-                                    selectedItem = item
-                                    tierMatch = TierMatch.ANY
-                                    clampUpgrade(
-                                        upgradeMatch,
-                                        SearchLimits.maximumUpgrade(kind, item, TierMatch.ANY, tier),
-                                    )
-                                },
-                            )
-                        }
-                    }
-
-                    val nextInteraction = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = { step = SheetStep.DETAILS },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp)
-                            .padding(top = 10.dp)
-                            .height(56.dp)
-                            .pressScale(nextInteraction, pressed = 0.95f),
-                        shapes = ButtonDefaults.shapes(),
-                        interactionSource = nextInteraction,
-                    ) {
-                        Text("Next", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.width(8.dp))
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
-                    }
-                }
+                SheetStep.ITEM -> ItemStep(form, edited::change, onPickResin, onNext = { step = SheetStep.DETAILS })
 
                 SheetStep.DETAILS -> {
                     // Details — a single scrollable column.
@@ -459,573 +228,15 @@ fun RequirementSheet(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp),
                     ) {
-                        if (kind == ItemKind.TRINKET) {
-                            Row(Modifier.fillMaxWidth().toggleable(
-                                value = trinketTransmutations > 0, role = Role.Switch,
-                                onValueChange = { trinketTransmutations = if (it) 1 else 0; if (it) selectTrinket = false },
-                            ), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Allow transmutations", Modifier.weight(1f))
-                                Switch(checked = trinketTransmutations > 0, onCheckedChange = null)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            if (trinketTransmutations > 0) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Maximum transmutations", Modifier.weight(1f))
-                                    Stepper(trinketTransmutations, 1..13, { "At most $it" }, { trinketTransmutations = it })
-                                }
-                                Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.",
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        if (kind == ItemKind.ARTIFACT) {
-                            Row(Modifier.fillMaxWidth().toggleable(
-                                value = artifactTransmutations > 0, role = Role.Switch,
-                                onValueChange = { artifactTransmutations = if (it) 1 else 0; if (it) selectTrinket = false },
-                            ), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Allow transmutations", Modifier.weight(1f))
-                                Switch(checked = artifactTransmutations > 0, onCheckedChange = null)
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            if (artifactTransmutations > 0) {
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Maximum transmutations", Modifier.weight(1f))
-                                    Stepper(artifactTransmutations, 1..10, { "At most $it" }, { artifactTransmutations = it })
-                                }
-                                Text("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.",
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        if (kind == ItemKind.TRINKET && !blanket && trinketTransmutations == 0) {
-                            Row(
-                                Modifier.fillMaxWidth().toggleable(
-                                    value = selectTrinket,
-                                    role = Role.Switch,
-                                    onValueChange = { selectTrinket = it },
-                                ),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("Choose matching trinket at +3", modifier = Modifier.weight(1f))
-                                Spacer(Modifier.width(12.dp))
-                                Switch(checked = selectTrinket, onCheckedChange = null)
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-
-                        if (selectedItem == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)) {
-                            Text("Tier", style = MaterialTheme.typography.titleSmall)
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TierMatch.entries.forEach { match ->
-                                    FilterChip(
-                                        selected = tierMatch == match,
-                                        onClick = {
-                                            tierMatch = match
-                                            if (match in setOf(TierMatch.AT_LEAST, TierMatch.AT_MOST)) {
-                                                tier = tier.coerceIn(SearchLimits.BOUNDED_TIERS.first, SearchLimits.BOUNDED_TIERS.last)
-                                            }
-                                            tierMenuExpanded = false
-                                            clampUpgrade(
-                                                upgradeMatch,
-                                                SearchLimits.maximumUpgrade(kind, selectedItem, match, tier),
-                                            )
-                                        },
-                                        label = { Text(match.label) },
-                                    )
-                                }
-                            }
-                            if (tierMatch == TierMatch.EXACT) {
-                                Column(Modifier.padding(vertical = 4.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Exact tier", style = MaterialTheme.typography.labelLarge)
-                                        Text(
-                                            "Tier $tier",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                    Slider(
-                                        value = tier.toFloat(),
-                                        onValueChange = {
-                                            tier = it.roundToInt()
-                                            clampUpgrade(
-                                                upgradeMatch,
-                                                SearchLimits.maximumUpgrade(kind, selectedItem, tierMatch, tier),
-                                            )
-                                        },
-                                        valueRange = SearchLimits.EXACT_TIERS.first.toFloat()..
-                                            SearchLimits.EXACT_TIERS.last.toFloat(),
-                                        steps = SearchLimits.EXACT_TIERS.count() - 2,
-                                    )
-                                }
-                            } else if (tierMatch in setOf(TierMatch.AT_LEAST, TierMatch.AT_MOST)) {
-                                ExposedDropdownMenuBox(
-                                    expanded = tierMenuExpanded,
-                                    onExpandedChange = { tierMenuExpanded = it },
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                ) {
-                                    OutlinedTextField(
-                                        value = if (tierMatch == TierMatch.AT_LEAST) {
-                                            "Tier $tier or higher"
-                                        } else {
-                                            "Tier $tier or lower"
-                                        },
-                                        onValueChange = { },
-                                        readOnly = true,
-                                        singleLine = true,
-                                        label = {
-                                            Text(if (tierMatch == TierMatch.AT_LEAST) "Minimum tier" else "Maximum tier")
-                                        },
-                                        trailingIcon = {
-                                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = tierMenuExpanded)
-                                        },
-                                        modifier = Modifier
-                                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                                            .fillMaxWidth(),
-                                    )
-                                    ExposedDropdownMenu(
-                                        expanded = tierMenuExpanded,
-                                        onDismissRequest = { tierMenuExpanded = false },
-                                    ) {
-                                        SearchLimits.BOUNDED_TIERS.forEach { option ->
-                                            DropdownMenuItem(
-                                                text = { Text("Tier $option") },
-                                                onClick = {
-                                                    tier = option
-                                                    tierMenuExpanded = false
-                                                    clampUpgrade(
-                                                        upgradeMatch,
-                                                        SearchLimits.maximumUpgrade(kind, selectedItem, tierMatch, option),
-                                                    )
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.height(18.dp))
-                        }
-
-                        if (!kind.requiresNamedItem) {
-                            Text("Upgrade", style = MaterialTheme.typography.titleSmall)
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                UpgradeMatch.entries.forEach { match ->
-                                    ToggleButton(
-                                        checked = upgradeMatch == match,
-                                        onCheckedChange = { checked ->
-                                            if (checked) {
-                                                upgradeMatch = match
-                                                clampUpgrade(match, upgradeCeiling)
-                                                upgradeMenuExpanded = false
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ToggleButtonDefaults.toggleButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
-                                    ) {
-                                        Text(match.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                            if (upgradeMatch == UpgradeMatch.EXACT) {
-                                Spacer(Modifier.height(8.dp))
-                                Column {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Level", style = MaterialTheme.typography.labelLarge)
-                                        Text(
-                                            "+$upgrade",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                    Slider(
-                                        value = upgrade.toFloat(),
-                                        onValueChange = { upgrade = it.roundToInt() },
-                                        valueRange = 1f..upgradeCeiling.toFloat(),
-                                        steps = upgradeCeiling - 2,
-                                    )
-                                }
-                            } else if (upgradeMatch == UpgradeMatch.AT_LEAST) {
-                                Spacer(Modifier.height(8.dp))
-                                // A slider needs three stops to beat a dropdown, and
-                                // since v4.0.0 raised the ceilings every family has
-                                // them (+1..+4 for weapons, +1..+3 for the rest).
-                                if (upgradeCeiling - 1 >= 3) {
-                                    Column {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                        ) {
-                                            Text("At least", style = MaterialTheme.typography.labelLarge)
-                                            Text(
-                                                "+$upgrade or higher",
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = MaterialTheme.colorScheme.primary,
-                                            )
-                                        }
-                                        Slider(
-                                            value = upgrade.toFloat(),
-                                            onValueChange = { upgrade = it.roundToInt() },
-                                            valueRange = 1f..(upgradeCeiling - 1).toFloat(),
-                                            steps = upgradeCeiling - 3,
-                                        )
-                                    }
-                                } else {
-                                    ExposedDropdownMenuBox(
-                                        expanded = upgradeMenuExpanded,
-                                        onExpandedChange = { upgradeMenuExpanded = it },
-                                    ) {
-                                        OutlinedTextField(
-                                            value = "+$upgrade or higher",
-                                            onValueChange = { },
-                                            readOnly = true,
-                                            singleLine = true,
-                                            label = { Text("Minimum upgrade") },
-                                            trailingIcon = {
-                                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = upgradeMenuExpanded)
-                                            },
-                                            modifier = Modifier
-                                                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                                                .fillMaxWidth(),
-                                        )
-                                        ExposedDropdownMenu(
-                                            expanded = upgradeMenuExpanded,
-                                            onDismissRequest = { upgradeMenuExpanded = false },
-                                        ) {
-                                            (1..<upgradeCeiling).forEach { option ->
-                                                DropdownMenuItem(
-                                                    text = { Text("+$option or higher") },
-                                                    onClick = {
-                                                        upgrade = option
-                                                        upgradeMenuExpanded = false
-                                                    },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        val modifierLabel = kind.modifierLabel
-                        if (modifierLabel != null) {
-                            Spacer(Modifier.height(18.dp))
-                            Text(modifierLabel, style = MaterialTheme.typography.titleSmall)
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                EffectMode.entries.forEach { mode ->
-                                    ToggleButton(
-                                        checked = effectMode == mode,
-                                        onCheckedChange = { checked -> if (checked) effectMode = mode },
-                                        modifier = Modifier.weight(1f),
-                                        colors = ToggleButtonDefaults.toggleButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                        ),
-                                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
-                                    ) {
-                                        Text(
-                                            if (mode == EffectMode.ANY_ENCHANTMENT) "Any ${modifierLabel.lowercase()}" else mode.label,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                }
-                            }
-                            if (effectMode == EffectMode.SPECIFIC) {
-                                Spacer(Modifier.height(8.dp))
-                                EffectGrid(
-                                    heading = if (kind.family == ItemKind.WEAPON) "ENCHANTMENTS" else "GLYPHS",
-                                    names = ItemCatalog.enchantmentsFor(kind),
-                                    selected = selectedEffects,
-                                    headingColor = MaterialTheme.colorScheme.primary,
-                                    onToggle = { name, checked ->
-                                        selectedEffects = if (checked) selectedEffects + name else selectedEffects - name
-                                    },
-                                )
-                                // Curses are hidden (and deselected) while the item must be uncursed.
-                                if (!requireUncursed) {
-                                    Spacer(Modifier.height(6.dp))
-                                    EffectGrid(
-                                        heading = "CURSES",
-                                        names = ItemCatalog.cursesFor(kind),
-                                        selected = selectedEffects,
-                                        headingColor = MaterialTheme.colorScheme.error,
-                                        onToggle = { name, checked ->
-                                            selectedEffects = if (checked) selectedEffects + name else selectedEffects - name
-                                        },
-                                    )
-                                }
-                                if (selectedEffects.isEmpty()) {
-                                    Text(
-                                        "Nothing picked yet — any ${modifierLabel.lowercase()} is accepted until you do.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-
-                        if (kind != ItemKind.TRINKET) {
-                            Spacer(Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .toggleable(
-                                        value = requireUncursed,
-                                        role = Role.Checkbox,
-                                        onValueChange = { checked ->
-                                            if (checked) {
-                                                selectedEffects = selectedEffects - ItemCatalog.cursesFor(kind).toSet()
-                                            }
-                                            requireUncursed = checked
-                                        },
-                                    ),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(checked = requireUncursed, onCheckedChange = null)
-                                Text("Require uncursed", style = MaterialTheme.typography.bodyMedium)
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-                            ExposedDropdownMenuBox(
-                                expanded = sourceMenuExpanded,
-                                onExpandedChange = { sourceMenuExpanded = it },
-                            ) {
-                                OutlinedTextField(
-                                    value = source?.label ?: "Any source",
-                                    onValueChange = { },
-                                    readOnly = true,
-                                    singleLine = true,
-                                    shape = MaterialTheme.shapes.medium,
-                                    label = { Text("Source") },
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded)
-                                    },
-                                    modifier = Modifier
-                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                                        .fillMaxWidth(),
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = sourceMenuExpanded,
-                                    onDismissRequest = { sourceMenuExpanded = false },
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Any source") },
-                                        onClick = {
-                                            source = null
-                                            sourceMenuExpanded = false
-                                        },
-                                    )
-                                    ScoutItemSource.entries.forEach { option ->
-                                        DropdownMenuItem(
-                                            text = { Text(option.label) },
-                                            onClick = {
-                                                source = option
-                                                sourceMenuExpanded = false
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(Modifier.height(18.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text("Floor limit", style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    maximumDepth?.let { "≤ floor $it" } ?: "Search limit",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                            // Position 0 means "no limit"; the rest index into FLOOR_LIMIT_OPTIONS so
-                            // empty boss floors (5, 10, 15) are not offered. Off-list stored values
-                            // snap to the nearest option below via floorLimitIndex.
-                            Slider(
-                                value = (maximumDepth?.let { depth -> floorLimitIndex(depth) + 1 } ?: 0).toFloat(),
-                                onValueChange = {
-                                    val index = it.roundToInt().coerceIn(0, FLOOR_LIMIT_OPTIONS.size)
-                                    maximumDepth = if (index == 0) null else FLOOR_LIMIT_OPTIONS[index - 1]
-                                },
-                                valueRange = 0f..FLOOR_LIMIT_OPTIONS.size.toFloat(),
-                                steps = FLOOR_LIMIT_OPTIONS.size - 1,
-                                modifier = Modifier.semantics {
-                                    stateDescription = maximumDepth?.let { "Floor $it" } ?: "No limit"
-                                },
-                            )
-                        }
-
-                        if (!blanket && kind == ItemKind.WAND) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().toggleable(
-                                    value = excludeResin, role = Role.Checkbox,
-                                    onValueChange = { excludeResin = it },
-                                ),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Checkbox(checked = excludeResin, onCheckedChange = null)
-                                Text("Exclude from Auto resin", style = MaterialTheme.typography.bodyMedium)
-                            }
-                            Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-
-                        if (!blanket && !inAlternativeGroup && kind.supportsStacks) {
-                            Spacer(Modifier.height(18.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text("How many", style = MaterialTheme.typography.titleSmall)
-                                Spacer(Modifier.weight(1f))
-                                Stepper(
-                                    value = stackCount,
-                                    range = 1..SearchLimits.STACK_MAX,
-                                    label = { "×$it" },
-                                    onChange = { count ->
-                                        stackCount = count
-                                        // A shrinking stack cannot keep a total its items
-                                        // can no longer reach.
-                                        stackTotal = stackTotal?.coerceAtMost(levelCapacityFor(count))
-                                    },
-                                )
-                            }
-                            if (stackCount > 1 && stackTotal == null) {
-                                Spacer(Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            "Limit the extra copies to a floor",
-                                            style = MaterialTheme.typography.titleSmall,
-                                        )
-                                        Text(
-                                            "A floor limit is where an item lies, not what it is, " +
-                                                "so the copies keep their own.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    Switch(
-                                        checked = copyDepth != null,
-                                        onCheckedChange = { on -> copyDepth = if (on) 4 else null },
-                                    )
-                                }
-                                copyDepth?.let { depth ->
-                                    Spacer(Modifier.height(6.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text(
-                                            "Copies within first",
-                                            style = MaterialTheme.typography.labelLarge,
-                                        )
-                                        Text(
-                                            "$depth floor${if (depth == 1) "" else "s"}",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                    Slider(
-                                        value = floorLimitIndex(depth).toFloat(),
-                                        onValueChange = {
-                                            val index = it.roundToInt().coerceIn(0, FLOOR_LIMIT_OPTIONS.size - 1)
-                                            copyDepth = FLOOR_LIMIT_OPTIONS[index]
-                                        },
-                                        valueRange = 0f..(FLOOR_LIMIT_OPTIONS.size - 1).toFloat(),
-                                        steps = FLOOR_LIMIT_OPTIONS.size - 2,
-                                        modifier = Modifier.semantics {
-                                            stateDescription = "Copies within floor $depth"
-                                        },
-                                    )
-                                }
-                            }
-                            // A combined level is meaningful for rings alone,
-                            // whose effects scale with their level.
-                            if (stackCount > 1 && selectedItem != null && kind.family == ItemKind.RING) {
-                                val total = stackTotal
-                                Spacer(Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text("Combined level", style = MaterialTheme.typography.titleSmall)
-                                        Text(
-                                            "Each item counts its upgrade plus one, and spare " +
-                                                "items may go unused.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    Switch(
-                                        checked = total != null,
-                                        onCheckedChange = { on ->
-                                            stackTotal = if (on) levelCapacity.coerceAtLeast(1) else null
-                                        },
-                                    )
-                                }
-                                if (total != null) {
-                                    val clamped = total.coerceIn(1, maxOf(1, levelCapacity))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                    ) {
-                                        Text("Levels together", style = MaterialTheme.typography.labelLarge)
-                                        Text(
-                                            "≥ $clamped of $levelCapacity",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.primary,
-                                        )
-                                    }
-                                    val sliderMaximum = maxOf(2, levelCapacity)
-                                    Slider(
-                                        value = clamped.toFloat(),
-                                        onValueChange = { stackTotal = it.roundToInt() },
-                                        valueRange = 1f..sliderMaximum.toFloat(),
-                                        steps = sliderMaximum - 2,
-                                        modifier = Modifier.semantics {
-                                            stateDescription = "Combined level at least $clamped"
-                                        },
-                                    )
-                                }
-                            }
-                        }
+                        DetailControls(form, edited::change)
                         Spacer(Modifier.height(14.dp))
                     }
 
                     Column(Modifier.padding(horizontal = 20.dp)) {
-                        RequirementPreview(draft = draft)
+                        RequirementPreview(form, edited.notice)
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (editing != null && onRemove != null) {
+                            if (!form.adding && onRemove != null) {
                                 OutlinedButton(
                                     onClick = onRemove,
                                     modifier = Modifier.height(52.dp),
@@ -1037,7 +248,7 @@ fun RequirementSheet(
                                 ) {
                                     Icon(
                                         Icons.Filled.Delete,
-                                        contentDescription = if (inAlternativeGroup) {
+                                        contentDescription = if (form.inCluster) {
                                             "Remove alternative"
                                         } else {
                                             "Remove requirement"
@@ -1055,43 +266,24 @@ fun RequirementSheet(
                             }
                             val saveInteraction = remember { MutableInteractionSource() }
                             Button(
-                                onClick = {
-                                    draft.getOrNull()?.let {
-                                        // Only a stack of a concrete ring counts
-                                        // levels; an edit away from that drops
-                                        // the total it can no longer say.
-                                        val total = if (blanket || inAlternativeGroup || selectedItem == null || kind.family != ItemKind.RING) {
-                                            null
-                                        } else {
-                                            stackTotal
-                                        }
-                                        // A cluster's stack is the cluster's, and
-                                        // a combined level leaves no lone copies.
-                                        val copies = if (inAlternativeGroup || stackCount < 2 || total != null) {
-                                            null
-                                        } else {
-                                            copyDepth
-                                        }
-                                        onSave(it, if (!blanket && kind.supportsStacks) stackCount else 1, total, copies)
-                                    }
-                                },
-                                enabled = draft.isSuccess,
+                                onClick = { edited.save(rows, nextKey, onSaved) },
+                                enabled = form.canSave,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(52.dp)
                                     .pressScale(saveInteraction, pressed = 0.95f)
-                                    .shakeOnChange(draft.exceptionOrNull()?.message),
+                                    .shakeOnChange(form.errors.firstOrNull()),
                                 shapes = ButtonDefaults.shapes(),
                                 interactionSource = saveInteraction,
                             ) {
                                 Icon(
-                                    if (editing == null) Icons.Filled.Add else Icons.Filled.Check,
+                                    if (form.adding) Icons.Filled.Add else Icons.Filled.Check,
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Text(
-                                    if (editing == null) "Add" else "Save",
+                                    if (form.adding) "Add" else "Save",
                                     style = MaterialTheme.typography.titleMedium,
                                 )
                             }
@@ -1106,30 +298,480 @@ fun RequirementSheet(
 }
 
 /**
- * The items the picker offers for [kind]. Tier-1 equipment is starting gear
- * that never spawns in the dungeon, and tipped darts are guaranteed shop
- * stock anyone can tip by hand, so neither is worth searching for — scout
- * views still show both.
+ * An open sheet as the user edits it: every control moved goes to the
+ * requirement editor, and the sheet it answers replaces [sheet]. A save the
+ * editor refuses comes back the same way, with its reasons in the form.
  */
-private fun searchableItems(kind: ItemKind): List<CatalogItem> =
-    ItemCatalog.forKind(kind).filter { it.tier != 1 && !it.isTippedDart }
+@Stable
+internal class EditedSheet(opened: EditorSheet) {
+    var sheet by mutableStateOf(opened)
+        private set
 
-private fun normalizedUpgrade(value: Int, match: UpgradeMatch, ceiling: Int): Int = if (ceiling == 0) 0 else when (match) {
-    UpgradeMatch.ANY -> 0
-    UpgradeMatch.EXACT -> value.coerceIn(1, ceiling)
-    UpgradeMatch.AT_LEAST -> value.coerceIn(1, ceiling - 1)
+    /** Why the editor could not answer the last request; null once it does. */
+    var notice by mutableStateOf<String?>(null)
+        private set
+
+    fun change(change: SheetChange) {
+        runCatching { RequirementEditor.change(sheet.draft, change) }
+            .onSuccess {
+                sheet = it
+                notice = null
+            }
+            .onFailure { notice = it.message ?: "The requirement editor could not answer." }
+    }
+
+    /** Saves onto [rows]; [onSaved] gets what was stored, while a refused draft stays open. */
+    fun save(rows: List<ItemRequirement>, nextKey: Long?, onSaved: (SheetSave.Saved) -> Unit) {
+        runCatching { RequirementEditor.save(sheet.draft, rows, nextKey) }
+            .onSuccess { result ->
+                notice = null
+                when (result) {
+                    is SheetSave.Saved -> onSaved(result)
+                    is SheetSave.Refused -> sheet = result.sheet
+                }
+            }
+            .onFailure { notice = it.message ?: "The requirement could not be saved." }
+    }
+
+    companion object {
+        val Saver = listSaver<EditedSheet, String>(
+            save = { listOf(it.sheet.draft, it.sheet.formJson) },
+            restore = { (draft, form) -> EditedSheet(EditorSheet(draft, form)) },
+        )
+    }
+}
+
+/** [opened] as the user edits it, kept in saved state as the editor's draft and form. */
+@Composable
+internal fun rememberEditedSheet(opened: EditorSheet): EditedSheet =
+    rememberSaveable(opened.draft, saver = EditedSheet.Saver) { EditedSheet(opened) }
+
+/** The item step: the category, the wildcard and weapon type, and the item grid. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ColumnScope.ItemStep(
+    form: SheetForm,
+    onChange: (SheetChange) -> Unit,
+    onPickResin: (() -> Unit)?,
+    onNext: () -> Unit,
+) {
+    // Category — connected toggle-button group (fixed chrome).
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        form.category.options.forEach { option ->
+            ToggleButton(
+                checked = option.value == form.category.value,
+                onCheckedChange = { checked -> if (checked) onChange(SheetChange.category(option.value)) },
+                colors = ToggleButtonDefaults.toggleButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(option.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+
+    // The wildcard and Arcane Resin lead the item picker's options; the
+    // items themselves are the grid's.
+    val (choices, named) = remember(form.item.options) {
+        form.item.options.partition { it.value == null || it.value == SheetChange.ARCANE_RESIN }
+    }
+    val tiles = remember(named) {
+        named.mapNotNull { option -> option.value?.let(ItemCatalog::findById)?.let { option to it } }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        choices.forEach { option ->
+            if (option.value == SheetChange.ARCANE_RESIN) {
+                // The query's resin is edited on a sheet of its own.
+                if (onPickResin != null) FilterChip(selected = false, onClick = onPickResin, label = { Text(option.label) })
+            } else {
+                FilterChip(
+                    selected = form.item.value == null,
+                    onClick = { onChange(SheetChange.item(null)) },
+                    label = { Text(option.label, maxLines = 1, softWrap = false) },
+                )
+            }
+        }
+        if (form.weaponType.visible) {
+            form.weaponType.options.forEach { option ->
+                FilterChip(
+                    selected = option.value == form.weaponType.value,
+                    onClick = { onChange(SheetChange.weaponType(option.value)) },
+                    label = { Text(option.label, maxLines = 1, softWrap = false) },
+                )
+            }
+        }
+    }
+
+    // Item picker — the only scrollable region on this step.
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(92.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(tiles, key = { (_, item) -> item.id }) { (option, item) ->
+            ItemTile(
+                item = item,
+                label = option.label,
+                selected = option.value == form.item.value,
+                onClick = { onChange(SheetChange.item(option.value)) },
+            )
+        }
+    }
+
+    val nextInteraction = remember { MutableInteractionSource() }
+    Button(
+        onClick = onNext,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(top = 10.dp)
+            .height(56.dp)
+            .pressScale(nextInteraction, pressed = 0.95f),
+        shapes = ButtonDefaults.shapes(),
+        interactionSource = nextInteraction,
+    ) {
+        Text("Next", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** The details step's controls, each drawn only while the form shows it. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
+    val transmutations = form.transmutations
+    if (transmutations.visible) {
+        SwitchRow(transmutations.label, transmutations.enabled, { onChange(SheetChange.transmutationsEnabled(it)) })
+        Spacer(Modifier.height(12.dp))
+        if (transmutations.enabled) {
+            // The stepper reads its own value ("At most 3") under the switch that names it.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Stepper(transmutations.value, transmutations.valueLabel, transmutations.min..transmutations.max) {
+                    onChange(SheetChange.transmutations(it))
+                }
+            }
+        }
+        if (transmutations.captionVisible) HelpText(transmutations.caption)
+    }
+    if (form.selectTrinket.visible) {
+        SwitchRow(form.selectTrinket.label, form.selectTrinket.value, { onChange(SheetChange.selectTrinket(it)) })
+        Spacer(Modifier.height(8.dp))
+        HelpText(form.selectTrinket.caption)
+    }
+
+    val tier = form.tier
+    if (tier.visible) {
+        Text("Tier", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            tier.modes.forEach { mode ->
+                FilterChip(
+                    selected = tier.mode == mode.value,
+                    onClick = { onChange(SheetChange.tierMode(mode.value)) },
+                    label = { Text(mode.label) },
+                )
+            }
+        }
+        if (tier.valueVisible) {
+            Column(Modifier.padding(vertical = 4.dp)) {
+                ValueRow(TIER_SLIDER[tier.mode].orEmpty(), tier.valueLabel)
+                StepSlider(tier.value, tier.min..tier.max, tier.valueLabel) { onChange(SheetChange.tier(it)) }
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+    }
+
+    val upgrade = form.upgrade
+    if (upgrade.visible) {
+        Text("Upgrade", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        ModeButtons(upgrade.modes, upgrade.mode) { onChange(SheetChange.upgradeMode(it)) }
+        if (upgrade.valueVisible) {
+            Spacer(Modifier.height(8.dp))
+            Column {
+                ValueRow(UPGRADE_SLIDER[upgrade.mode].orEmpty(), upgrade.valueLabel)
+                StepSlider(upgrade.value, upgrade.min..upgrade.max, upgrade.valueLabel) { onChange(SheetChange.upgrade(it)) }
+            }
+        }
+    }
+
+    val effect = form.effect
+    if (effect.visible) {
+        Spacer(Modifier.height(18.dp))
+        Text(effect.label, style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(8.dp))
+        ModeButtons(effect.modes, effect.mode) { onChange(SheetChange.effectMode(it)) }
+        if (effect.choicesVisible) {
+            Spacer(Modifier.height(8.dp))
+            effect.groups.forEachIndexed { index, group ->
+                if (index > 0) Spacer(Modifier.height(6.dp))
+                EffectGrid(
+                    heading = group.label.uppercase(Locale.ROOT),
+                    choices = effect.choices.filter { it.group == group.value },
+                    headingColor = if (group.value == "curse") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    onToggle = { onChange(SheetChange.toggleEffect(it)) },
+                )
+            }
+            HelpText(effect.caption)
+        }
+    }
+
+    if (form.uncursed.visible) {
+        Spacer(Modifier.height(10.dp))
+        CheckRow(form.uncursed.label, form.uncursed.value) { onChange(SheetChange.uncursed(it)) }
+        HelpText(form.uncursed.caption)
+    }
+    if (form.source.visible) {
+        Spacer(Modifier.height(10.dp))
+        SourcePicker(form.source, "Source", shape = MaterialTheme.shapes.medium) { onChange(SheetChange.source(it)) }
+    }
+    if (form.floorLimit.visible) {
+        Spacer(Modifier.height(18.dp))
+        FloorLimit(
+            form.floorLimit,
+            onEnabled = { onChange(SheetChange.floorLimitEnabled(it)) },
+            onFloor = { onChange(SheetChange.floorLimit(it)) },
+        )
+    }
+
+    if (form.excludeResin.visible) {
+        CheckRow(form.excludeResin.label, form.excludeResin.value) { onChange(SheetChange.excludeResin(it)) }
+        HelpText(form.excludeResin.caption)
+    }
+
+    val stack = form.stack
+    if (stack.visible) {
+        Spacer(Modifier.height(18.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stack.label, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.weight(1f))
+            Stepper(stack.count, stack.valueLabel, stack.min..stack.max) { onChange(SheetChange.count(it)) }
+        }
+        if (stack.copyDepth.visible) {
+            Spacer(Modifier.height(12.dp))
+            FloorLimit(
+                stack.copyDepth,
+                onEnabled = { onChange(SheetChange.copyDepthEnabled(it)) },
+                onFloor = { onChange(SheetChange.copyDepth(it)) },
+            )
+        }
+        val levels = stack.countLevels
+        if (levels.visible) {
+            Spacer(Modifier.height(12.dp))
+            SwitchRow(
+                levels.label,
+                levels.enabled,
+                { onChange(SheetChange.countLevels(it)) },
+                caption = levels.caption.takeIf { levels.captionVisible },
+                style = MaterialTheme.typography.titleSmall,
+            )
+            if (levels.enabled) {
+                // The whole reading ("≥ 5 across up to 2") under the switch that names it.
+                Text(levels.valueLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                StepSlider(levels.value, levels.min..levels.max, levels.valueLabel) { onChange(SheetChange.total(it)) }
+            }
+        }
+    }
+}
+
+/** A connected row of mode buttons, one per [modes] entry, [selected] checked. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ModeButtons(modes: List<SheetOption<String>>, selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        modes.forEach { mode ->
+            ToggleButton(
+                checked = selected == mode.value,
+                onCheckedChange = { checked -> if (checked) onSelect(mode.value) },
+                modifier = Modifier.weight(1f),
+                colors = ToggleButtonDefaults.toggleButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
+            ) {
+                Text(mode.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A label and, at the far end, a value in the accent colour. */
+@Composable
+private fun ValueRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(value, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+/** A whole row that flips a switch, with an optional [caption] under its label. */
+@Composable
+internal fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    caption: String? = null,
+    style: TextStyle = LocalTextStyle.current,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = style)
+            caption?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+/** A whole row that ticks a check box. */
+@Composable
+private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Checkbox, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = null)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** A control's help text, as the form words it; nothing for a control without one. */
+@Composable
+internal fun HelpText(text: String?) {
+    text ?: return
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**
- * A compact −/+ stepper for the small bounded counts the board deals in. The
- * value rolls up or down like an odometer as it changes.
+ * A slider over [range] at [value]. A drag reports only the whole steps it
+ * crosses, so the editor hears one change per step rather than one per
+ * pointer move; a range of one value has nothing to slide.
+ */
+@Composable
+private fun StepSlider(value: Int, range: IntRange, description: String, onChange: (Int) -> Unit) {
+    if (range.last <= range.first) return
+    Slider(
+        value = value.toFloat(),
+        onValueChange = { moved -> moved.roundToInt().coerceIn(range).takeIf { it != value }?.let(onChange) },
+        valueRange = range.first.toFloat()..range.last.toFloat(),
+        steps = range.last - range.first - 1,
+        modifier = Modifier.semantics { stateDescription = description },
+    )
+}
+
+/** A floor switch, its label in [style], and the slider over the floors the form offers. */
+@Composable
+internal fun FloorLimit(
+    floors: SheetFloors,
+    onEnabled: (Boolean) -> Unit,
+    onFloor: (Int) -> Unit,
+    style: TextStyle = MaterialTheme.typography.titleSmall,
+) {
+    SwitchRow(floors.label, floors.enabled, onEnabled, style = style)
+    if (floors.enabled) {
+        Spacer(Modifier.height(6.dp))
+        Text(floors.valueLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        val index = floors.options.indexOfFirst { it.value == floors.value }.coerceAtLeast(0)
+        StepSlider(index, 0..floors.options.lastIndex, floors.valueLabel) { onFloor(floors.options[it].value) }
+    }
+}
+
+/** A dropdown of the sources the form offers, under [label]. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SourcePicker(
+    source: SheetPicker<String?>,
+    label: String,
+    shape: Shape = OutlinedTextFieldDefaults.shape,
+    onChange: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = source.label.orEmpty(),
+            onValueChange = { },
+            readOnly = true,
+            singleLine = true,
+            shape = shape,
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            source.options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    onClick = {
+                        onChange(option.value)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A compact −/+ stepper for the small bounded counts the board deals in,
+ * showing [label] for [value]. The value rolls up or down like an odometer as
+ * it changes.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun Stepper(
     value: Int,
+    label: String,
     range: IntRange,
-    label: (Int) -> String,
     onChange: (Int) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1141,17 +783,17 @@ internal fun Stepper(
             Text("−", style = MaterialTheme.typography.titleLarge)
         }
         AnimatedContent(
-            targetState = value,
+            targetState = value to label,
             transitionSpec = {
-                val up = targetState > initialState
+                val up = targetState.first > initialState.first
                 (slideInVertically { if (up) it else -it } + fadeIn())
                     .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
                     .using(SizeTransform(clip = false))
             },
             label = "stepper-value",
-        ) { shown ->
+        ) { (_, shown) ->
             Text(
-                label(shown),
+                shown,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -1198,17 +840,16 @@ private fun StepIndicator(step: SheetStep) {
 }
 
 /**
- * Effect names under a small heading, as chips. Each chip carries the colour
- * the effect makes an item glow in the game, pulsing when picked.
+ * Effects under a small heading, as chips. Each chip carries the colour the
+ * effect makes an item glow in the game, pulsing when picked.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EffectGrid(
     heading: String,
-    names: List<String>,
-    selected: Set<String>,
+    choices: List<SheetEffect>,
     headingColor: Color,
-    onToggle: (String, Boolean) -> Unit,
+    onToggle: (String) -> Unit,
 ) {
     Text(
         heading,
@@ -1225,13 +866,13 @@ private fun EffectGrid(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
     ) {
-        names.forEach { name ->
-            val checked = name in selected
-            val glow = ItemGlows.forEffect(name)
+        choices.forEach { choice ->
+            val checked = choice.selected
+            val glow = ItemGlows.forEffect(choice.value)
             FilterChip(
                 selected = checked,
-                onClick = { onToggle(name, !checked) },
-                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                onClick = { onToggle(choice.value) },
+                label = { Text(choice.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 leadingIcon = {
                     val dot = glow?.color ?: MaterialTheme.colorScheme.outline
                     Box(
@@ -1256,11 +897,11 @@ private fun EffectGrid(
 private fun Color.luminanceLow(): Boolean = (red * 0.299f + green * 0.587f + blue * 0.114f) < 0.18f
 
 /**
- * One pickable item. Picking it grows a seal behind its sprite, springs the
- * tile and tints it in the primary colours.
+ * One pickable item, named [label]. Picking it grows a seal behind its
+ * sprite, springs the tile and tints it in the primary colours.
  */
 @Composable
-private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) {
+private fun ItemTile(item: CatalogItem, label: String, selected: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val seal by animateFloatAsState(
         if (selected) 1f else 0f,
@@ -1310,7 +951,7 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
             }
             Spacer(Modifier.height(5.dp))
             Text(
-                item.name,
+                label,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 textAlign = TextAlign.Center,
@@ -1328,12 +969,17 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
     }
 }
 
-/** The row as it will appear in the list, or why it cannot be saved yet. */
+/**
+ * The chip a save would put on the board — its sprite, title, details and
+ * relations — or, while the draft cannot be saved, why not; [notice] is why
+ * the editor could not answer at all.
+ */
 @Composable
-private fun RequirementPreview(draft: Result<ItemRequirement>) {
+private fun RequirementPreview(form: SheetForm, notice: String?) {
+    val preview = form.preview.takeIf { notice == null }
     Surface(
         shape = MaterialTheme.shapes.extraLarge,
-        color = if (draft.isSuccess) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.errorContainer,
+        color = if (preview != null) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.errorContainer,
     ) {
         Row(
             modifier = Modifier
@@ -1341,30 +987,31 @@ private fun RequirementPreview(draft: Result<ItemRequirement>) {
                 .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val requirement = draft.getOrNull()
             SpriteTile(
-                item = requirement?.item,
-                wildcardKind = requirement?.kind,
-                glows = requirement?.effect?.let(ItemGlows::forFilter).orEmpty(),
+                item = preview?.item ?: form.item.value?.let(ItemCatalog::findById),
+                wildcardKind = preview?.kind ?: form.kind,
+                glows = preview?.effect?.takeUnless { it.anyEnchantment }?.let { ItemGlows.forEffects(it.effects) }.orEmpty(),
                 tileSize = 44,
                 // Every change to the draft bounces its preview.
-                modifier = Modifier.popOnChange(requirement, peak = 1.12f),
+                modifier = Modifier.popOnChange(preview, peak = 1.12f),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                if (requirement == null) {
+                if (preview == null) {
                     Text(
-                        draft.exceptionOrNull()?.message ?: "This requirement cannot be saved.",
+                        (listOfNotNull(notice) + form.errors).ifEmpty { listOf(form.title) }.joinToString("\n"),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 } else {
-                    Text(requirement.title, style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        requirement.description.replace(" • ", " · "),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    Text(preview.title, style = MaterialTheme.typography.titleSmall)
+                    (listOf(preview.details.joinToString(" · ")) + preview.relations).filter { it.isNotEmpty() }.forEach {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         }

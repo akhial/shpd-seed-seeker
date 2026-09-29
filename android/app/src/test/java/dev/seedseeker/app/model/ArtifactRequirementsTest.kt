@@ -40,9 +40,9 @@ class ArtifactRequirementsTest {
         assertThrows(IllegalArgumentException::class.java) { artifact().copy(identityGroup = 1) }
         assertThrows(IllegalArgumentException::class.java) { artifact().copy(levelSum = LevelSum(1, 2)) }
         val requirements = listOf(artifact())
-        assertFalse(requirements.canStack(requirements.boardItems().single()))
-        assertEquals(requirements, requirements.setStackCount(requirements.boardItems().single(), 2))
-        assertEquals(2, listOf(artifact(), artifact(2)).boardItems().size)
+        assertEquals(1, RequirementEditor.view(requirements).items.single().chips.single().stack.count)
+        assertNull(RequirementEditor.board(requirements, listOf(BoardEdit.SetCount(1, 2))).rows)
+        assertEquals(2, RequirementEditor.view(listOf(artifact(), artifact(2))).items.size)
     }
 
     @Test fun vaultUpgradeAndFloorLimitsSurviveDocumentsAndShareLinks() {
@@ -50,9 +50,10 @@ class ArtifactRequirementsTest {
             upgrade = 5, upgradeMatch = UpgradeMatch.EXACT,
             source = ScoutItemSource.IMP_REWARD, requireUncursed = true,
         )
-        assertEquals(5, requirement.upgradeCeiling)
-        assertTrue(requirement.description.contains("+5 exactly"))
-        assertTrue(requirement.description.contains("by floor 19"))
+        assertEquals(
+            listOf("exactly +5", "uncursed", "Imp reward", "floors 1–19"),
+            RequirementEditor.view(listOf(requirement)).items.single().chips.single().details,
+        )
         assertThrows(IllegalArgumentException::class.java) { requirement.copy(upgrade = 6) }
         val query = PresetQuery(requirements = listOf(requirement)).normalized()
         assertEquals(query, ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)).normalized())
@@ -62,11 +63,15 @@ class ArtifactRequirementsTest {
     }
 
     @Test fun artifactAlternativesKeepOneSlotAndEachFloorLimit() {
-        val requirements = listOf(artifact(), artifact(2).copy(item = ItemCatalog.artifacts[1], maximumDepth = 9))
-            .joinAlternatives(0, 1)
+        val requirements = RequirementEditor.board(
+            listOf(artifact(), artifact(2).copy(item = ItemCatalog.artifacts[1], maximumDepth = 9)),
+            listOf(BoardEdit.Join(source = 1, target = 2)),
+        ).rows!!
         assertEquals(1, requirements.slotCount())
-        assertNull(requirements.validationProblem())
-        assertFalse(requirements.canStack(requirements.boardItems().single()))
+        // The dragged source moves after its target; each keeps its floor limit.
+        assertEquals(listOf(9, 19), requirements.map { it.maximumDepth })
+        assertTrue(RequirementEditor.view(requirements).problems.isEmpty())
+        assertNull(RequirementEditor.board(requirements, listOf(BoardEdit.SetCount(2, 2))).rows)
         val query = PresetQuery(requirements = requirements).normalized()
         assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)).normalized())
     }

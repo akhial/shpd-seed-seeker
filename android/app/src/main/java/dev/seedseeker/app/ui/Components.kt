@@ -42,10 +42,8 @@ import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.R
 import dev.seedseeker.app.model.CatalogItem
 import dev.seedseeker.app.model.ItemKind
-import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
-import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.model.WandmakerQuest
 import dev.seedseeker.app.ui.theme.RegionCaves
 import dev.seedseeker.app.ui.theme.RegionCity
@@ -376,24 +374,6 @@ fun StatusPill(
         )
     }
 }
-
-/** Condensed constraint list shown under a requirement's title; empty when unconstrained. */
-fun requirementDetailLine(requirement: ItemRequirement): String = buildList {
-    when (requirement.upgradeMatch) {
-        UpgradeMatch.ANY -> Unit
-        UpgradeMatch.EXACT -> add("+${requirement.upgrade}")
-        UpgradeMatch.AT_LEAST -> add("≥+${requirement.upgrade}")
-    }
-    requirement.effectLabel?.let { add(it) }
-    if (requirement.excludeResin) add("excluded from Auto resin")
-    if (requirement.requireUncursed) add("uncursed")
-    if (requirement.selectTrinket) add("choose at +3")
-    if (requirement.trinketTransmutations > 0) add("Transmute ≤${requirement.trinketTransmutations}")
-    if (requirement.artifactTransmutations > 0) add("Transmute ≤${requirement.artifactTransmutations}")
-    requirement.source?.let { add(it.label) }
-    requirement.levelSum?.let { add("Σ≥${it.atLeast}") }
-    requirement.maximumDepth?.let { add("≤ floor $it") }
-}.joinToString(" · ")
 
 /** The scout header's match pill: satisfied slots out of the query's slots. */
 fun scoutMatchText(matchedSlots: Int, totalSlots: Int): String =

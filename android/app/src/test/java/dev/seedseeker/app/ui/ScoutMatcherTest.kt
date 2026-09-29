@@ -10,7 +10,6 @@ import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.ScoutItemSource
-import dev.seedseeker.app.model.SearchLimits
 import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.model.LevelSum
@@ -197,7 +196,8 @@ class ScoutMatcherTest {
             upgradeMatch = UpgradeMatch.ANY,
             levelSum = LevelSum(group = 1, atLeast = atLeast),
         )
-        val capacity = SearchLimits.ringStackCapacity(2)
+        // Two rings reach 8 levels at most: the vault's +4 and a +2 roll.
+        val capacity = 8
         var reachable = 0
         for (total in 1..capacity) {
             val marks = marksFor(anyRing(1, total), anyRing(2, total))

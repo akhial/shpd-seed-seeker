@@ -10,14 +10,17 @@ class TrinketRequirementsTest {
     init { PackagedCatalog.install() }
 
     @Test fun namedTrinketsJoinAnOrGroupAndEncode() {
-        val requirements = ItemCatalog.trinkets.take(2).mapIndexed { index, item ->
-            ItemRequirement(key = index.toLong(), item = item, upgrade = 0, upgradeMatch = UpgradeMatch.ANY)
-        }.joinAlternatives(0, 1)
+        val requirements = RequirementEditor.board(
+            ItemCatalog.trinkets.take(2).mapIndexed { index, item ->
+                ItemRequirement(key = index + 1L, item = item, upgrade = 0, upgradeMatch = UpgradeMatch.ANY)
+            },
+            listOf(BoardEdit.Join(source = 1, target = 2)),
+        ).rows!!
         assertEquals(1, requirements.slotCount())
-        assertEquals("Trinket", requirements.first().description)
         // Joining moves the dragged source after the target, just like other categories.
-        assertEquals(listOf("Parchment Scrap", "Rat Skull"), requirements.map { it.title })
-        assertNull(requirements.validationProblem())
+        val board = RequirementEditor.view(requirements)
+        assertEquals(listOf("Parchment Scrap", "Rat Skull"), board.items.single().chips.map { it.name })
+        assertTrue(board.problems.isEmpty())
         val document = ResultsExport.encodeQuery(SearchRequest(requirements))
         assertTrue(document.toString().contains("any_of"))
         assertTrue(document.toString().contains("rat_skull"))
@@ -35,7 +38,6 @@ class TrinketRequirementsTest {
         val preset = ResultsExport.decodeQuery(document)
         assertTrue(DeepLink.decode(DeepLink.encodeLink(preset)).requirements.single().selectTrinket)
         assertTrue(ResultsExport.decode(ResultsExport.encode(preset, emptyList(), "test")).query.requirements.single().selectTrinket)
-        assertEquals("Trinket", selected.description)
         val plain = ResultsExport.encodeQuery(SearchRequest(listOf(selected.copy(selectTrinket = false))))
         assertFalse(plain.toString().contains("select_trinket"))
         assertFalse(ResultsExport.decodeQuery(plain).requirements.single().selectTrinket)
