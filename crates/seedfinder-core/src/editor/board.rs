@@ -854,7 +854,9 @@ pub enum Edit {
     Join { source: u64, target: u64 },
     /// Takes one item of a cluster member out on its own: a bare copy of
     /// it, while the member stays in the cluster one item fewer — or the
-    /// member itself when it has no copies ([`lift`]).
+    /// member itself when it has no copies ([`lift`]). The item lands where
+    /// saving it anew would: last in its section, folding into an earlier
+    /// alike lone chip as a new plain repeat does.
     Detach { key: u64 },
     /// Deletes a chip with its whole stack: a cluster member with its own
     /// copies, or a lone chip's whole entry — the rows the board draws
@@ -1672,12 +1674,12 @@ fn shed(
 ///
 /// A chip with copies stays where it is, with its constraints and one item
 /// fewer ([`shed`], as [`Edit::RemoveOne`] leaves it), and the item is a
-/// bare copy of it ([`carried_copy`]), a row right after the chip: the key
-/// of the copy the chip shed, or a new one when that copy stays with alike
-/// members that share it. A chip without copies is the item: it leaves its
-/// cluster, stack and combined level, whose rest is capped at what it can
-/// still reach. Refuses when the rest of a member's stack needs a label
-/// and none is free.
+/// bare copy of it ([`carried_copy`]), a row right after the chip until the
+/// caller places it: the key of the copy the chip shed, or a new one when
+/// that copy stays with alike members that share it. A chip without copies
+/// is the item: it leaves its cluster, stack and combined level, whose rest
+/// is capped at what it can still reach. Refuses when the rest of a
+/// member's stack needs a label and none is free.
 fn lift(
     mut rows: Vec<Row>,
     key: u64,
@@ -1720,7 +1722,11 @@ fn lift(
 }
 
 /// Takes one item of a cluster member out on its own ([`lift`]): a bare
-/// copy, right after the member, or the member itself, in its place.
+/// copy, or the member itself when it has no copies. The item lands where
+/// saving it anew from the sheet would ([`Edit::Save`] without a key): last
+/// in the list, so last in its section, where it folds into the nearest
+/// earlier alike lone chip with room as a new plain repeat does — never
+/// into a chip after it, which would absorb or split that chip's stack.
 fn detach(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outcome {
     let board = Board::new(rows);
     let Some((_, item)) = board.member(rows, key) else {
@@ -1734,7 +1740,10 @@ fn detach(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outco
         return Outcome::unchanged();
     }
     match lift(next, key, &mut Keys::minting(hint), held) {
-        Ok((next, moved)) => Outcome::rows(next, Some(moved)),
+        Ok((next, moved)) => {
+            let at = index_of(&next, moved).expect("the lifted item is a row");
+            Outcome::rows(move_after(next, at, |_| true), Some(moved))
+        }
         Err(refusal) => Outcome::refused(refusal),
     }
 }

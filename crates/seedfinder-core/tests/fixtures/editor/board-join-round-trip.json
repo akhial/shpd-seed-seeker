@@ -1,5 +1,5 @@
 {
-  "about": "The same join, then the joined Disintegration (key 20) detached: it folds back into the chip it came from, and Frost is alone again.",
+  "about": "The same join, then the joined Disintegration (key 20) detached: it lands last, as a new Disintegration would, folds back into the chip it came from, and Frost is alone again — the list exactly as it was, so nothing changed.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -66,7 +66,7 @@
     ]
   },
   "response": {
-    "changed": true,
+    "changed": false,
     "counts": {
       "blanket": 0,
       "ordinary": 6
@@ -595,14 +595,14 @@
         "kind": "wand"
       },
       {
-        "item": "wand_disintegration",
-        "key": 20,
-        "kind": "wand"
-      },
-      {
         "key": 8,
         "kind": "wand",
         "upgrade": 3
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 20,
+        "kind": "wand"
       }
     ]
   }

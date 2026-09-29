@@ -158,7 +158,7 @@ name of the query format (`"locked_chest"`).
 | --- | --- |
 | `{"type": "normalize"}` | Rewrites the list into its canonical encoding, its labels in range among it (see [Labels](#labels)). See [When to normalize](#when-to-normalize). |
 | `{"type": "join", "source": K, "target": K}` | Makes one item of `source` an either/or alternative of `target` (any member of a chip or cluster); the item moves after the cluster's last member. A source with copies stays where it is, with its constraints and one item fewer — as `remove_one` leaves it — and a bare copy of it joins: the chip's item (or its kind, for a wildcard stack) with that copy's floor limit and nothing else — the chip's `lifted` face. A source without copies joins itself. A stacked lone target keeps its stack as a member of the new cluster; a target cluster's members keep theirs, and the item joins as a ×1 member. `focus` names the item that joined. See [Joins](#joins). |
-| `{"type": "detach", "key": K}` | Takes one item of a cluster member out on its own. A member with copies stays in the cluster in its place, with its constraints and one item fewer, and a bare copy of it leaves — the chip's `lifted` face — right after it, folding into an alike lone chip before it; a ×1 member leaves the cluster itself, and a cluster of one dissolves into a chip. `focus` names the item that left (or the chip it folded into). |
+| `{"type": "detach", "key": K}` | Takes one item of a cluster member out on its own. A member with copies stays in the cluster in its place, with its constraints and one item fewer, and a bare copy of it leaves — the chip's `lifted` face; a ×1 member leaves the cluster itself, and a cluster of one dissolves into a chip. The item lands where a `save` of it with no key would: last in its section, folding into the nearest earlier alike lone chip with room as a new plain repeat does, never into a chip after it. `focus` names the item that left (or the chip it folded into). |
 | `{"type": "remove", "key": K}` | Removes the chip with its whole stack: a cluster member with its own copies (a stack it shares with other members stays with them), or a lone chip's whole entry — the rows the board draws under it, never rows a list never normalized would fold into it once normalized. The chip menu's "Remove". |
 | `{"type": "remove_one", "key": K}` | Removes one item of the chip — what a drag onto the remove target sends: a member ×N becomes ×(N−1), a ×1 member leaves its cluster (removed), a lone stack ×N becomes ×(N−1) (a combined level capped at what the rest can reach, or dropped at one ring), and a lone chip without copies is removed. Like `remove`, it takes only what the board draws under the chip. |
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: every member and every hidden copy. |
@@ -276,14 +276,20 @@ labels a source's side needs are the ones `remove_one` needs, as before.
 A **detach** moves one item the same way: Frost out of `{Frost +2 ×2 |
 Disintegration}` gives `{Frost +2 | Disintegration}` and a Wand of Frost,
 the detached copy on the key of the copy it was (a new key when the member
-shared its stack), right after the member. A ×1 member leaves its cluster
-itself, and a cluster of one dissolves into a chip. A detached item folds
-into an alike lone chip before it, so round trips fold back: detaching the
-Ring of Energy from `{Disintegration | Ring of Energy}` next to `Ring of
-Energy +4 ×2` gives `Ring of Energy +4 ×3` and a lone Disintegration, and
-Disintegration ×2 and Frost → join → `{Frost | Disintegration}` and
-Disintegration → detach the joined Disintegration → Frost and
-Disintegration ×2.
+shared its stack). A ×1 member leaves its cluster itself, and a cluster of
+one dissolves into a chip. The item lands exactly where saving it anew from
+the sheet would (a `save` of it with no key): last in its section, where it
+folds into the nearest earlier alike lone chip with room, as a new plain
+repeat does, and `focus` names the chip it landed in. It never absorbs or
+splits a chip after it: beside a later `Wand of Frost ×3`, the Frost out of
+`{Frost +2 ×2 | Disintegration}` is a chip of its own after the ×3, which
+keeps its stack. The board after a detach is the board after a
+`remove_one` of that member and that save. Round trips still fold back:
+detaching the Ring of Energy from `{Disintegration | Ring of Energy}` next
+to `Ring of Energy +4 ×2` gives `Ring of Energy +4 ×3` and a lone
+Disintegration, and Disintegration ×2 and Frost → join → `{Frost |
+Disintegration}` and Disintegration → detach the joined Disintegration →
+Frost and Disintegration ×2.
 
 ### No-op and refused edits
 
@@ -681,7 +687,7 @@ decided once.
 | Joining across categories | Allowed, with or without stacks: every copy keeps its own chip's kind (#190's refusal is lifted); leftover labels on chips without copies are dropped, and no row is deleted but the copies of member stacks the join makes alike, which merge under one label. |
 | Joining a stack | One item moves (drag, pick mode, menu and accessibility alike): a bare copy — the chip's item or kind, with the floor limit of the copy `remove_one` would take, and nothing else — while the chip stays where it is with its requirements, one item fewer; a chip without copies moves whole. A stacked lone target keeps its stack as a member; a target cluster's members keep theirs, and the item joins as ×1. See [Joins](#joins). |
 | A combined level losing a ring to a join | A plain ring joins; the chip keeps counting, capped at what its rest can still reach, or stops when one ring is left. A counting target keeps its count as a member's stack and drops its Σ. |
-| Detach, and a member dragged out of a group | One item moves: a bare copy, while the member stays in the group in its place with its requirements, one item fewer; a ×1 member leaves itself, and a group of one dissolves into a chip. |
+| Detach, and a member dragged out of a group | One item moves: a bare copy, while the member stays in the group in its place with its requirements, one item fewer; a ×1 member leaves itself, and a group of one dissolves into a chip. The item lands where saving it anew would — last in its section, folding into the nearest earlier alike lone chip — never absorbing or splitting a chip after it. |
 | The moving chip | Draws the chip's `lifted` face (the bare copy a drag carries), else its own, without badges; the origin draws its own face with `remaining_badges`; announcements name the lifted face. Ring of Energy +4 ×3 lifts `Ring of Energy`, and only the origin reads `+4`. |
 | Remove | The remove target takes one item (`remove_one`); the chip menu's "Remove" takes the chip with its whole stack (`remove`). Both take only what the board draws under the chip, even on a list never normalized. |
 | A member stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
@@ -774,10 +780,10 @@ its round trip — the reported list and its round trip, onto a stacked
 chip, a stacked cluster and a combined level, a combined level losing a
 ring, a member moving one item, across categories, a hand-written stack,
 refused for want of a label), detaches (a member alone, a bare copy of a
-member's stack, with and without constraints), the lifted faces of a list
-never normalized, removals (one member, a whole stack, one item of a
-member's stack and of a lone combined level, the bin on a lone chip of a
-list never normalized),
+member's stack, with and without constraints, one landing after a later
+alike chip), the lifted faces of a list never normalized, removals (one
+member, a whole stack, one item of a member's stack and of a lone combined
+level, the bin on a lone chip of a list never normalized),
 copy floors, combined levels (their copies' floors kept both ways and
 given to new copies), a member stepped down to ×1, saves (new and
 unchanged), problems, key repair, label compaction and labels moved into

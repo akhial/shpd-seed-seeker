@@ -273,7 +273,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-round-trip",
-        "The same join, then the joined Disintegration (key 20) detached: it folds back into the chip it came from, and Frost is alone again.",
+        "The same join, then the joined Disintegration (key 20) detached: it lands last, as a new Disintegration would, folds back into the chip it came from, and Frost is alone again — the list exactly as it was, so nothing changed.",
         Board,
         &json!({
             "rows": repro(),
@@ -369,7 +369,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-detach-one-copy",
-        "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
+        "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and lands last, where saving it anew would; the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
         Board,
         &json!({
             "rows": [
@@ -413,7 +413,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-detach-bare-copy",
-        "Frost +2 out of {Frost +2 ×2 | Disintegration}: a bare Wand of Frost leaves — the chip's lifted face — and the member keeps its +2 in the group at ×1: {Frost +2 | Disintegration} and Frost.",
+        "Frost +2 out of {Frost +2 ×2 | Disintegration}: a bare Wand of Frost leaves — the chip's lifted face — and lands last; the member keeps its +2 in the group at ×1: {Frost +2 | Disintegration} and Frost.",
         Board,
         &json!({
             "rows": [
@@ -449,6 +449,22 @@ fn board_fixtures(fixtures: &mut Fixtures) {
                 {"key": 3, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
             ],
             "edits": [{"type": "remove_one", "key": 1}],
+        }),
+    );
+    fixtures.add(
+        "board-detach-lands-last",
+        "Frost +2 out of {Frost +2 ×2 | Disintegration} beside a later Wand of Frost ×3: the bare Frost lands last, as saving it anew would, so the ×3 chip keeps its stack and the Frost is a chip of its own after it, which focus names.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "upgrade": 2, "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+                {"key": 5, "kind": "wand", "item": "wand_frost"},
+                {"key": 6, "kind": "wand", "item": "wand_frost"},
+                {"key": 7, "kind": "wand", "item": "wand_frost"},
+            ],
+            "edits": [{"type": "detach", "key": 1}],
         }),
     );
     fixtures.add(

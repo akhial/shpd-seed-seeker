@@ -1,5 +1,5 @@
 {
-  "about": "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
+  "about": "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and lands last, where saving it anew would; the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -229,14 +229,14 @@
         "kind": "wand"
       },
       {
-        "item": "wand_frost",
-        "key": 3,
-        "kind": "wand"
-      },
-      {
         "alternative_group": 1,
         "item": "wand_disintegration",
         "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_frost",
+        "key": 3,
         "kind": "wand"
       }
     ]

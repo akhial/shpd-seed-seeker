@@ -1908,10 +1908,11 @@ fn a_drag_carries_the_item_its_lifted_face_shows() {
     // every join its chip offers, the lone chip after a detach where it
     // folds into no other chip — and a chip without one moves itself: every
     // join lands the chip, and a detach lands it or folds it into an alike
-    // chip.
+    // chip. A detach leaves the board a removal of that item then a save of
+    // it anew leaves, faces, badges and the chip it lands in alike.
     let mut rng = Rng::new(0x0011_f7ed_face);
     let (mut joins, mut whole, mut rewritten) = (0, 0, 0);
-    let mut detaches = 0;
+    let (mut detaches, mut anew_compared) = (0, 0);
     for case in 0..1024 {
         let mut rows = mixed_rows(&mut rng);
         if case % 2 == 1 {
@@ -1979,11 +1980,30 @@ fn a_drag_carries_the_item_its_lifted_face_shows() {
                 detaches += 1;
                 assert_eq!(chip_landed.face(), carried, "detached: {context}");
             }
+            let index = rows.iter().position(|row| row.key == chip.key).unwrap();
+            let saved = Edit::Save {
+                key: None,
+                requirement: lifted(&rows, chip.key).unwrap_or(rows[index].requirement),
+                count: 1,
+                total: None,
+                copy_depth: None,
+            };
+            let anew = apply(&rows, None, &[Edit::RemoveOne { key: chip.key }, saved]);
+            let saved_in = landed(&anew).expect("the saved item shows");
+            anew_compared += 1;
+            let after = view(&result.rows);
+            assert_eq!(faces(&after), faces(&view(&anew.rows)), "anew: {context}");
+            assert_eq!(
+                (chip_landed.face(), &chip_landed.badges),
+                (saved_in.face(), &saved_in.badges),
+                "anew: {context}"
+            );
         }
     }
     assert!(joins > 10_000, "{joins} joins compared");
     assert!(whole > 5000, "{whole} whole chips joined");
     assert!(detaches > 150, "{detaches} detaches compared");
+    assert!(anew_compared > 200, "{anew_compared} detaches saved anew");
     assert!(rewritten > 100, "{rewritten} rewritten chips lifted");
 }
 

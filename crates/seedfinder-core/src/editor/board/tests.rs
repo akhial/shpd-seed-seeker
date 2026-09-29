@@ -890,8 +890,9 @@ fn ejecting_a_member_from_a_stacked_cluster_strips_its_label() {
             Edit::SetCount { key: 1, count: 2 },
         ],
     );
-    // A bare copy of the Spear leaves, on the key of the copy it was; the
-    // Spear stays in the cluster at ×1, its label gone with its copy.
+    // A bare copy of the Spear leaves, on the key of the copy it was, and
+    // lands last; the Spear stays in the cluster at ×1, its label gone with
+    // its copy.
     let result = run(&base, &[Edit::Detach { key: 1 }]);
     assert_eq!(result.focus, Some(3));
     let spear = result.rows[index_of(&result.rows, 1).unwrap()].requirement;
@@ -901,8 +902,8 @@ fn ejecting_a_member_from_a_stacked_cluster_strips_its_label() {
         shape(&result.rows),
         [
             (1, Some(1), None, None),
-            (3, None, None, None),
             (2, Some(1), None, None),
+            (3, None, None, None),
         ]
     );
     assert_eq!(counts(&result.rows), [1, 1, 1]);
@@ -927,7 +928,9 @@ fn ejecting_a_member_from_a_stacked_cluster_strips_its_label() {
         (loose.alternative_group, loose.identity_group),
         (None, None)
     );
-    assert_eq!(counts(&wands), [1, 2]);
+    // Fireblast lands last, after the wand stack.
+    assert_eq!(keys(&wands), [1, 3, 2]);
+    assert_eq!(counts(&wands), [2, 1]);
     assert_eq!(validate(&wands), Ok(()));
 }
 
@@ -2405,9 +2408,11 @@ fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back
     assert_eq!(counts(&result.rows), [1, 1, 3, 1, 1, 1, 1]);
     assert_eq!(validate(&result.rows), Ok(()));
 
+    // Detached, it lands last, as a new Disintegration would, and folds
+    // back into the stack it came from.
     let detached = run(&result.rows, &[Edit::Detach { key: 20 }]);
     assert_eq!(detached.focus, Some(1));
-    assert_eq!(keys(&detached.rows), [1, 2, 3, 4, 5, 6, 7, 20, 8]);
+    assert_eq!(keys(&detached.rows), [1, 2, 3, 4, 5, 6, 7, 8, 20]);
     assert!(
         detached
             .rows
@@ -2499,12 +2504,12 @@ fn the_reported_ring_joins_as_a_bare_copy_and_folds_back() {
         detached.rows,
         [
             member(exact(named(1, ItemId::WandFrost), 2), 1, None),
-            named(3, ItemId::WandFrost),
             member(named(2, ItemId::WandDisintegration), 1, None),
+            named(3, ItemId::WandFrost),
         ]
     );
     let removed = edited(&frost, &[Edit::RemoveOne { key: 1 }]);
-    assert_eq!(removed, [detached.rows[0], detached.rows[2]]);
+    assert_eq!(removed, detached.rows[..2]);
 }
 
 #[test]
@@ -2870,8 +2875,8 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
         detached.rows,
         [
             member(named(1, ItemId::WandFrost), 1, None),
-            named(3, ItemId::WandFrost),
             member(named(2, ItemId::WandDisintegration), 1, None),
+            named(3, ItemId::WandFrost),
         ]
     );
     assert_eq!(counts(&detached.rows), [1, 1, 1]);
@@ -2887,7 +2892,7 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
     ];
     let detached = edited(&upgraded, &[Edit::Detach { key: 1 }]);
     assert_eq!(
-        detached[..2],
+        [detached[0], detached[2]],
         [
             member(exact(named(1, ItemId::WandFrost), 2), 1, None),
             floor(named(3, ItemId::WandFrost), 9),
@@ -2909,8 +2914,8 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
         [
             member(named(1, ItemId::WandFrost), 1, Some(1)),
             member(named(2, ItemId::WandDisintegration), 1, None),
-            named(4, ItemId::WandDisintegration),
             bare_wand(3, 1),
+            named(4, ItemId::WandDisintegration),
         ]
     );
     assert_eq!(counts(&detached.rows), [2, 1, 1]);
@@ -2922,10 +2927,10 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
         [
             (1, Some(1), Some(1), None),
             (2, Some(1), Some(2), None),
-            (6, None, None, None),
             (3, None, Some(1), None),
             (4, None, Some(1), None),
             (5, None, Some(2), None),
+            (6, None, None, None),
         ]
     );
     assert_eq!(counts(&detached), [3, 2, 1]);
@@ -3169,6 +3174,65 @@ fn a_removal_on_a_list_never_normalized_takes_what_the_board_draws() {
         edited(&rows, &[Edit::Remove { key: 1 }]),
         [exact(mace(3), 1), rows[3]]
     );
+}
+
+/// A detached item lands where saving it anew would: last in its section,
+/// folding into the nearest earlier alike lone chip with room, never into a
+/// chip after it.
+#[test]
+fn a_detached_item_lands_where_saving_it_anew_would() {
+    let frost = |key: u64| named(key, ItemId::WandFrost);
+    let rows = [
+        member(exact(frost(1), 2), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, None),
+        bare_wand(3, 1),
+        frost(5),
+        frost(6),
+        frost(7),
+    ];
+    assert_eq!(counts(&rows), [2, 1, 3]);
+    let detached = run(&rows, &[Edit::Detach { key: 1 }]);
+    // The Frost ×3 after the group keeps its stack, and the bare Frost
+    // lands after it as a chip of its own, which the focus names.
+    assert_eq!(detached.focus, Some(3));
+    assert_eq!(
+        detached.rows,
+        [
+            member(exact(frost(1), 2), 1, None),
+            member(named(2, ItemId::WandDisintegration), 1, None),
+            frost(5),
+            frost(6),
+            frost(7),
+            frost(3),
+        ]
+    );
+    assert_eq!(counts(&detached.rows), [1, 1, 3, 1]);
+    assert_eq!(entry(&detached.rows, 5).count(), 3);
+    let anew = run(
+        &rows,
+        &[
+            Edit::RemoveOne { key: 1 },
+            saved(frost(0).requirement, 1, None, None),
+        ],
+    );
+    assert_eq!(anew.focus, Some(8));
+    assert_eq!(counts(&anew.rows), counts(&detached.rows));
+
+    // A ring member without copies leaves itself, and folds into the Ring
+    // of Energy +4 ×2 after its group as a new ring would.
+    let energy = |key: u64| named(key, ItemId::RingEnergy);
+    let rings = [
+        member(named(1, ItemId::WandDisintegration), 1, None),
+        member(energy(2), 1, None),
+        exact(energy(3), 4),
+        energy(4),
+        named(8, ItemId::WandLightning),
+    ];
+    assert_eq!(counts(&rings), [1, 1, 2, 1]);
+    let detached = run(&rings, &[Edit::Detach { key: 2 }]);
+    assert_eq!(detached.focus, Some(3));
+    assert_eq!(keys(&detached.rows), [1, 3, 4, 8, 2]);
+    assert_eq!(counts(&detached.rows), [1, 3, 1]);
 }
 
 /// What a canonical list asks for, entry by entry, blind to where rows sit
