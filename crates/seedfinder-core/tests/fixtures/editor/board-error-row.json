@@ -1,0 +1,14 @@
+{
+  "about": "A row without a key cannot be named, so the request fails.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "error": "row 1: key must be a whole number"
+  }
+}

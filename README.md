@@ -141,6 +141,9 @@ See [daily-run scouting](docs/daily-runs.md) for engine and API details.
 
 See the [search query format](docs/search-query-format.md) for the JSON
 reference, Ring of Wealth farming floor filters, and blanket requirements.
+Every app edits requirements with the same board and sheet, whose rules live
+in the shared core; the [requirement editor](docs/requirement-editor.md)
+documents that contract.
 
 ## Benchmarks<a id="benchmarks"></a>
 

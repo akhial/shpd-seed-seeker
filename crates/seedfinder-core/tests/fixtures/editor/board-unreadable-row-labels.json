@@ -1,0 +1,510 @@
+{
+  "about": "The stack labels unreadable rows hold are never taken: Wand of Disintegration cannot join Frost ×2, which would need one as a member stack, and its chip refuses it with no_free_group.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_frost",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 3,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "item": "ring_of_wonders",
+        "key": 4,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 2,
+        "item": "ring_of_wonders",
+        "key": 5,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 3,
+        "item": "ring_of_wonders",
+        "key": 6,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 4,
+        "item": "ring_of_wonders",
+        "key": 7,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 6
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_frost",
+            "join": [
+              3
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": {
+              "description": "Wand of Frost, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_frost",
+              "kind": "wand",
+              "name": "Wand of Frost",
+              "tags": [],
+              "title": "Wand of Frost",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Wand of Frost",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_disintegration",
+            "join": [],
+            "key": 3,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
+              }
+            ],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Wand of Disintegration",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Unknown requirement",
+            "details": [],
+            "effect": null,
+            "family": null,
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 4,
+            "kind": null,
+            "lifted": null,
+            "name": "Unknown requirement",
+            "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 1,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Unknown requirement",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r4",
+        "label": null,
+        "members": [
+          4
+        ],
+        "name": "Unknown requirement",
+        "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'."
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Unknown requirement",
+            "details": [],
+            "effect": null,
+            "family": null,
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 5,
+            "kind": null,
+            "lifted": null,
+            "name": "Unknown requirement",
+            "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 1,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Unknown requirement",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r5",
+        "label": null,
+        "members": [
+          5
+        ],
+        "name": "Unknown requirement",
+        "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'."
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Unknown requirement",
+            "details": [],
+            "effect": null,
+            "family": null,
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 6,
+            "kind": null,
+            "lifted": null,
+            "name": "Unknown requirement",
+            "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 1,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Unknown requirement",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r6",
+        "label": null,
+        "members": [
+          6
+        ],
+        "name": "Unknown requirement",
+        "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'."
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Unknown requirement",
+            "details": [],
+            "effect": null,
+            "family": null,
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 7,
+            "kind": null,
+            "lifted": null,
+            "name": "Unknown requirement",
+            "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 1,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Unknown requirement",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r7",
+        "label": null,
+        "members": [
+          7
+        ],
+        "name": "Unknown requirement",
+        "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'."
+      }
+    ],
+    "next_key": 8,
+    "problems": [
+      {
+        "keys": [
+          4
+        ],
+        "message": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          5
+        ],
+        "message": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          6
+        ],
+        "message": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          7
+        ],
+        "message": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
+        "scope": "row"
+      }
+    ],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_frost",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 3,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "item": "ring_of_wonders",
+        "key": 4,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 2,
+        "item": "ring_of_wonders",
+        "key": 5,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 3,
+        "item": "ring_of_wonders",
+        "key": 6,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 4,
+        "item": "ring_of_wonders",
+        "key": 7,
+        "kind": "ring"
+      }
+    ]
+  }
+}

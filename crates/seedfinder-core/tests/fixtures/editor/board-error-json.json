@@ -1,0 +1,8 @@
+{
+  "about": "A request that is not JSON.",
+  "envelope": "requirement_board",
+  "request": "{\"rows\": [",
+  "response": {
+    "error": "invalid request: EOF while parsing a list at line 1 column 10"
+  }
+}

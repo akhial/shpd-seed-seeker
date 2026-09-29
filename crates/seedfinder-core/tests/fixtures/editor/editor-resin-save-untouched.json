@@ -1,0 +1,31 @@
+{
+  "about": "The resin chip saved untouched leaves the query's resin as it is (resin null), floor 5 included, which the floor slider shows as 4.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"query_resin\":{\"amount\":4,\"filter\":{\"include_mage_wand\":true,\"max_depth\":5,\"source\":\"locked_chest\",\"uncursed\":true}},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":4.0,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":4,\"source\":\"locked_chest\",\"uncursed\":true},\"resin_picked\":true,\"rows\":[{\"item\":\"wand_frost\",\"key\":1,\"kind\":\"wand\"}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "op": "save",
+    "rows": [
+      {
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": false,
+      "focus": null,
+      "next_key": 2,
+      "rekeyed": [],
+      "resin": null,
+      "rows": [
+        {
+          "item": "wand_frost",
+          "key": 1,
+          "kind": "wand"
+        }
+      ]
+    }
+  }
+}

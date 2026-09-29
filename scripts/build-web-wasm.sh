@@ -5,6 +5,7 @@ repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
 wasm_package="$repo_root/web/src/engine/pkg"
+editor_package="$repo_root/web/src/engine/editor-pkg"
 runtime_source="$repo_root/android/app/src/main/assets/third_party/shattered-pixel-dungeon"
 runtime_destination="$repo_root/web/public/third_party/shattered-pixel-dungeon"
 
@@ -14,6 +15,15 @@ wasm-pack build crates/seedfinder-wasm \
     --release \
     --out-dir "$wasm_package" \
     --out-name seedfinder
+
+# The requirement editor alone: small enough to load before first render,
+# while the engine module above stays lazy.
+mkdir -p "$editor_package"
+wasm-pack build crates/seedfinder-editor-wasm \
+    --target web \
+    --release \
+    --out-dir "$editor_package" \
+    --out-name seedfinder_editor
 
 mkdir -p "$runtime_destination" "$repo_root/web/src/generated" "$repo_root/web/public/licenses"
 for asset in \
@@ -34,6 +44,7 @@ cp "$repo_root/NOTICE" "$repo_root/web/public/licenses/NOTICE.txt"
 python3 "$repo_root/scripts/generate-sprite-bounds.py"
 
 echo "Built browser WASM package in $wasm_package"
+echo "Built browser requirement-editor WASM package in $editor_package"
 echo "Copied Shattered Pixel Dungeon runtime assets to $runtime_destination"
 echo "Copied generated catalog and license texts into web/"
 echo "Generated sprite bounds into web/src/generated/sprite-bounds.json"

@@ -47,6 +47,7 @@ pgo/*.profraw
 /web/node_modules/
 /web/dist/
 /web/src/engine/pkg/
+/web/src/engine/editor-pkg/
 /web/src/generated/
 /web/public/third_party/
 /web/public/licenses/

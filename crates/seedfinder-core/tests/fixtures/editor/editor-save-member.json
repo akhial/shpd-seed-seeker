@@ -1,0 +1,62 @@
+{
+  "about": "The member saved at ×3: Frost's own stack grows by a copy, and Disintegration stays ×1.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":3,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":true,\"key\":1,\"offer_resin\":false,\"origin\":{\"key\":1,\"type\":\"row\"},\"query_resin\":null,\"requirement\":{\"alternative_group\":1,\"item\":\"wand_frost\",\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"alternative_group\":1,\"identity_group\":1,\"item\":\"wand_frost\",\"key\":1,\"kind\":\"wand\"},{\"alternative_group\":1,\"item\":\"wand_disintegration\",\"key\":2,\"kind\":\"wand\"},{\"identity_group\":1,\"key\":3,\"kind\":\"wand\"}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "op": "save",
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": true,
+      "focus": 1,
+      "next_key": 5,
+      "rekeyed": [],
+      "resin": null,
+      "rows": [
+        {
+          "alternative_group": 1,
+          "identity_group": 1,
+          "item": "wand_frost",
+          "key": 1,
+          "kind": "wand"
+        },
+        {
+          "alternative_group": 1,
+          "item": "wand_disintegration",
+          "key": 2,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "key": 3,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "key": 4,
+          "kind": "wand"
+        }
+      ]
+    }
+  }
+}

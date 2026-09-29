@@ -121,6 +121,7 @@ fn assign_trinket(
 }
 
 impl QueryPlan {
+    #[allow(clippy::too_many_lines)] // One ordered pass over every structural reason.
     pub(super) fn impossibility_reason(
         &self,
         query: &SearchQuery,
@@ -154,10 +155,13 @@ impl QueryPlan {
         }
         // Each dead slot has no remaining ordinary or quest source. Diagnose
         // the same source policies used to build it, including per-item caps.
-        for (members, slot) in query.slots().iter().zip(&self.slots) {
-            if slot
-                .iter()
-                .any(|p| p.open_deadline.is_some() || p.quests != 0)
+        for (index, (members, slot)) in query.slots().iter().zip(&self.slots).enumerate() {
+            // A member stack's copy is waived when another member fills its
+            // group, so a copy that can never be found does not doom the query.
+            if self.waivable(index)
+                || slot
+                    .iter()
+                    .any(|p| p.open_deadline.is_some() || p.quests != 0)
             {
                 continue;
             }
@@ -204,8 +208,10 @@ impl QueryPlan {
             let needed = self
                 .slots
                 .iter()
-                .filter(|slot| {
-                    !slot[0].requirement.blanket
+                .enumerate()
+                .filter(|&(index, slot)| {
+                    !self.waivable(index)
+                        && !slot[0].requirement.blanket
                         && slot.iter().all(|p| p.open_deadline.is_none())
                         && slot.iter().fold(0, |mask, p| mask | p.quests) & !subset == 0
                 })

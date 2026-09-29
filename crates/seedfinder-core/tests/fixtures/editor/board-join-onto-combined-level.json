@@ -1,0 +1,235 @@
+{
+  "about": "A Ring of Might dropped on a Ring of Energy ×3 counting levels: the Energy stack keeps its count as a member's stack and drops the combined level, which cannot travel into a cluster.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 4,
+        "target": 1,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 4,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [
+              2,
+              3
+            ],
+            "description": "Ring of Energy, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": true,
+            "item": "ring_energy",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Ring of Might"
+              },
+              {
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Ring of Energy",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Ring of Might, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": true,
+            "item": "ring_might",
+            "join": [],
+            "key": 4,
+            "kind": "ring",
+            "lifted": null,
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Ring of Energy"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [
+          2,
+          3
+        ],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          1,
+          4
+        ],
+        "name": "Ring of Energy or Ring of Might",
+        "problem": null
+      }
+    ],
+    "next_key": 5,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring"
+      },
+      {
+        "alternative_group": 1,
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  }
+}

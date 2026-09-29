@@ -1,0 +1,288 @@
+{
+  "about": "A list never normalized, drawn as written: Mace +1 alone beside a hand-written Mace ×2 (an anchor and a bare copy under a stack label). The edits run on the canonical rows, where that stack is two plain repeats of the Mace +1, so Mace +1 lifts a bare Mace although its copies are empty, and Mace ×2 moves itself (lifted null).",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "item": "mace",
+        "key": 3,
+        "kind": "melee_weapon",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 1,
+        "item": "mace",
+        "key": 1,
+        "kind": "melee_weapon"
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "weapon"
+      },
+      {
+        "item": "wand_frost",
+        "key": 9,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 3
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Mace, exactly +1",
+            "details": [
+              "exactly +1"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": false,
+            "item": "mace",
+            "join": [
+              1,
+              9
+            ],
+            "key": 3,
+            "kind": "melee_weapon",
+            "lifted": {
+              "description": "Mace, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "weapon",
+              "item": "mace",
+              "kind": "melee_weapon",
+              "name": "Mace",
+              "tags": [],
+              "title": "Mace",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Mace",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+1",
+                "tooltip": null
+              }
+            ],
+            "title": "Mace",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Mace",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Mace, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": false,
+            "item": "mace",
+            "join": [
+              3,
+              9
+            ],
+            "key": 1,
+            "kind": "melee_weapon",
+            "lifted": null,
+            "name": "Mace",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Mace",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Mace",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_frost",
+            "join": [
+              3,
+              1
+            ],
+            "key": 9,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r9",
+        "label": null,
+        "members": [
+          9
+        ],
+        "name": "Wand of Frost",
+        "problem": null
+      }
+    ],
+    "next_key": 10,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "mace",
+        "key": 3,
+        "kind": "melee_weapon",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 1,
+        "item": "mace",
+        "key": 1,
+        "kind": "melee_weapon"
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "weapon"
+      },
+      {
+        "item": "wand_frost",
+        "key": 9,
+        "kind": "wand"
+      }
+    ]
+  }
+}
