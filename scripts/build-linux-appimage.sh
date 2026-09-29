@@ -11,21 +11,24 @@ if [ -n "${APPIMAGE_GTK_PREFIX:-}" ]; then
     export LD_LIBRARY_PATH="$APPIMAGE_GTK_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
+# Pin release tags as well as checksums: upstream replaces continuous assets,
+# which would make an unchanged release build fail checksum verification.
 linuxdeploy_version=1-alpha-20251107-1
-appimagetool_version=continuous
+appimagetool_version=1.9.1
+runtime_version=20251108
 
 case "$(uname -m)" in
     x86_64)
         appimage_arch=x86_64
         linuxdeploy_sha256=c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
-        appimagetool_sha256=a6d71e2b6cd66f8e8d16c37ad164658985e0cf5fcaa950c90a482890cb9d13e0
-        runtime_sha256=1cc49bcf1e2ccd593c379adb17c9f85a36d619088296504de95b1d06215aebbf
+        appimagetool_sha256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+        runtime_sha256=2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
         ;;
     aarch64)
         appimage_arch=aarch64
         linuxdeploy_sha256=620095110d693282b8ebeb244a95b5e911cf8f65f76c88b4b47d16ae6346fcff
-        appimagetool_sha256=1b00524ba8c6b678dc15ef88a5c25ec24def36cdfc7e3abb32ddcd068e8007fe
-        runtime_sha256=7d5d772b7c32f0c84caf0a452a3072a5709027d7eac5856feb89a7a7a8881372
+        appimagetool_sha256=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
+        runtime_sha256=00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
         ;;
     *)
         echo "Unsupported AppImage architecture: $(uname -m)" >&2
@@ -91,7 +94,7 @@ download_tool \
     "$appimagetool_sha256" \
     "$appimagetool"
 download_tool \
-    "https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-$appimage_arch" \
+    "https://github.com/AppImage/type2-runtime/releases/download/$runtime_version/runtime-$appimage_arch" \
     "$runtime_sha256" \
     "$runtime"
 
