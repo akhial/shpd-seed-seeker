@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn the_typed_editor_gives_the_golden_board_answers_through_the_app_codec() {
         let replayed = fixtures("requirement_board");
-        assert_eq!(replayed.len(), 43);
+        assert_eq!(replayed.len(), 46);
         for Fixture {
             name,
             request,
