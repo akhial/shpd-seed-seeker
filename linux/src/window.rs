@@ -12,7 +12,7 @@ use gtk::{gdk, gio, glib};
 
 use shpd_seedfinder_core::deep_link;
 use shpd_seedfinder_core::editor::{Draft, ResinOutcome, SaveResult};
-use shpd_seedfinder_core::results_export;
+use shpd_seedfinder_core::{json_query, results_export};
 use shpd_seedfinder_session::MAX_RESULTS;
 
 use crate::config::APP_NAME;
@@ -524,6 +524,28 @@ pub fn present(app: &adw::Application) {
     });
     window.add_action(&copy_link_action);
 
+    // The query as its JSON document, which the CLI reads and Import from
+    // Clipboard accepts back.
+    let copy_search_action = gio::SimpleAction::new("copy-search", None);
+    copy_search_action.connect_activate({
+        let state = Rc::clone(&state);
+        let toasts = toasts.clone();
+        let window = window.clone();
+        move |_, _| {
+            let document = state.borrow().to_query().and_then(|query| {
+                results_export::encode_query_document(&json_query::encode(&query).to_string())
+            });
+            match document {
+                Ok(document) => {
+                    window.clipboard().set_text(&document);
+                    toasts.add_toast(adw::Toast::new("Search copied"));
+                }
+                Err(message) => toasts.add_toast(adw::Toast::new(&message)),
+            }
+        }
+    });
+    window.add_action(&copy_search_action);
+
     // Receives seedseeker:// URIs from the application's `open` handler and
     // loads the carried query into the editor.
     let open_link_action = gio::SimpleAction::new("open-share-link", Some(glib::VariantTy::STRING));
@@ -617,6 +639,12 @@ pub fn present(app: &adw::Application) {
                 return;
             }
             match results_export::decode(text) {
+                // A copied search restores the query alone, as a link does.
+                Ok(imported) if imported.bare_query => {
+                    *state.borrow_mut() = AppState::load(&imported.query);
+                    refresh_all();
+                    toasts.add_toast(adw::Toast::new("Search loaded"));
+                }
                 Ok(imported) => {
                     let (kept, dropped) =
                         results_export::dedupe_and_cap(&imported.seeds, MAX_RESULTS);
@@ -762,6 +790,7 @@ fn build_menu() -> gio::Menu {
     query_section.append(Some("_Presets…"), Some("win.presets"));
     query_section.append(Some("_Challenges…"), Some("win.challenges"));
     query_section.append(Some("Copy _Link"), Some("win.copy-link"));
+    query_section.append(Some("Copy _Search"), Some("win.copy-search"));
     menu.append_section(None, &query_section);
     let results_section = gio::Menu::new();
     results_section.append(Some("_Import Results…"), Some("win.import-results"));

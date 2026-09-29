@@ -142,7 +142,7 @@ class ExpressiveShowcaseTest {
         onDeletePreset = {}, onEditResin = {}, onRemoveResin = {}, onAdd = {}, onEdit = {},
         onBoardChange = {}, validationMessage = validation, onSearch = {}, onCancel = {},
         canExportResults = true, canClearResults = true, importNotice = null, onExportResults = {},
-        onImportResults = {}, onImportClipboard = {}, onClearResults = {}, onShareQuery = {}, onScoutSeed = {},
+        onImportResults = {}, onImportClipboard = {}, onClearResults = {}, onShareQuery = {}, onCopyQuery = { true }, onScoutSeed = {},
         bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
     )
 

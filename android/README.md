@@ -71,6 +71,8 @@ In the Finder's **More options** menu, **Import results…** opens a JSON file a
 **Import from clipboard** reads copied JSON in the same results-export format.
 Both restore the saved query and add its seeds to the pool, using the same
 validation, deduplication, and import limits. Stop any running search before importing.
+**Copy search** puts the current query on the clipboard as JSON; importing that
+text loads the query alone, like opening a shared link.
 
 An unchanged query resumes its previous scan; an edited query starts a fresh
 traversal after checking the full pool. Each saved seed retains its source

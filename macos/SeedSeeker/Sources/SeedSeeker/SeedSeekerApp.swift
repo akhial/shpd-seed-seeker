@@ -85,8 +85,9 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var transferError: String?
     @State private var pendingLink: URL?
-    @State private var linkCopied = false
-    @State private var linkCopiedReset: Task<Void, Never>?
+    /// Which copy action last succeeded, for the toolbar's brief checkmark.
+    @State private var copied: CopiedQuery?
+    @State private var copiedReset: Task<Void, Never>?
 
     /// Transient search notes shown in the window-bottom status bar rather
     /// than inside the results list.
@@ -228,7 +229,7 @@ private struct ContentView: View {
     }
 
     /// The results' file actions, in the window toolbar: import, export,
-    /// clear, and a link to the query that made them.
+    /// clear, and copies of the query being edited (a link, or its JSON).
     @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
         ToolbarActionBubble {
             Menu {
@@ -240,7 +241,7 @@ private struct ContentView: View {
             // Toolbar labels default to icon-only, which left the
             // glyphs looking uncentred inside their glass capsules.
             .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
-            .help("Import results and their query from a file or clipboard")
+            .help("Import results and their query, or a copied search, from a file or clipboard")
             .disabled(controller.isRunning)
             Button {
                 beginExport()
@@ -261,14 +262,19 @@ private struct ContentView: View {
             .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
             .help("Clear the results, so the next search starts from scratch")
             .disabled(!controller.canClearResults)
-            Button {
-                copyQueryLink()
+            // Clicking copies the link; the menu adds the query as JSON, which
+            // the CLI reads and Import › From Clipboard accepts back.
+            Menu {
+                Button("Copy Link", systemImage: "link") { copyQueryLink() }
+                Button("Copy Search as JSON", systemImage: "curlybraces") { copySearch() }
             } label: {
-                Label("Copy Link",
-                      systemImage: linkCopied ? "checkmark" : "link")
+                Label(copied == .search ? "Copied" : "Copy Link",
+                      systemImage: copied == nil ? "link" : "checkmark")
+            } primaryAction: {
+                copyQueryLink()
             }
             .labelStyle(ToolbarActionLabelStyle())
-            .help("Copy a shareable link to the current query")
+            .help("Copy a shareable link to the current query, or the query as JSON")
             .disabled(controller.isRunning)
         }
     }
@@ -397,21 +403,31 @@ private struct ContentView: View {
     /// Encodes the query as currently edited (unlike export, which snapshots
     /// the query behind the results) and puts the web link on the pasteboard.
     private func copyQueryLink() {
+        copyQuery(.link) { try DeepLink.encodeLink(for: $0) }
+    }
+
+    /// Puts the query as currently edited on the pasteboard as its JSON
+    /// document.
+    private func copySearch() {
+        copyQuery(.search) { try ResultsExport.queryDocument(for: $0) }
+    }
+
+    private func copyQuery(_ kind: CopiedQuery, as encode: (SavedQuery) throws -> String) {
         do {
-            let link = try DeepLink.encodeLink(for: SavedQuery(
+            let text = try encode(SavedQuery(
                 requirements: requirements, maximumDepth: maximumDepth,
                 requireBlacksmith: requireBlacksmith,
                 excludeBlacksmithRewards: excludeBlacksmithRewards,
                 wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements))
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(link, forType: .string)
+            NSPasteboard.general.setString(text, forType: .string)
             // Brief checkmark in the toolbar icon as the "copied" feedback.
-            linkCopied = true
-            linkCopiedReset?.cancel()
-            linkCopiedReset = Task {
+            copied = kind
+            copiedReset?.cancel()
+            copiedReset = Task {
                 try? await Task.sleep(for: .seconds(1.5))
                 guard !Task.isCancelled else { return }
-                linkCopied = false
+                copied = nil
             }
         } catch {
             // A list the shared core finds a problem with says which, in its
@@ -419,7 +435,8 @@ private struct ContentView: View {
             let resin = BoardResin(amount: arcaneResin, auto: arcaneResinAuto, filter: arcaneResinFilter)
             transferError = RequirementBoard.of(requirements, resin: resin).problems.first?.message
                 ?? (error as? LocalizedError)?.errorDescription
-                ?? "The current query could not be turned into a link."
+                ?? (kind == .link ? "The current query could not be turned into a link."
+                    : "The current query could not be copied.")
         }
     }
 
@@ -467,6 +484,8 @@ private struct ContentView: View {
                     return
                 }
                 apply(imported.query)
+                // A copied search restores the query alone, as a link does.
+                if imported.bareQuery { return }
                 controller.loadImported(seeds: imported.seeds, dropped: imported.dropped,
                                        query: imported.query, trinkets: imported.trinkets)
                 let engineVersion = EngineInfo.shared.shpdVersion
@@ -1976,6 +1995,9 @@ private struct RequirementEditor: View {
 /// ends hard against the inset, so the same value leaves it visibly
 /// left-heavy; `trailingEllipsis: false` trims the leading side by the
 /// ellipsis's optical width to even the two gaps back out.
+/// The two ways the toolbar copies the query being edited.
+private enum CopiedQuery { case link, search }
+
 private struct ToolbarActionLabelStyle: LabelStyle {
     /// Room a trailing ellipsis contributes on the right, which a title
     /// without one has to reclaim from the leading inset instead.

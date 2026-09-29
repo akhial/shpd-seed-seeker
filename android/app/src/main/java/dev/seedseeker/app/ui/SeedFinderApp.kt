@@ -2,6 +2,7 @@
 package dev.seedseeker.app.ui
 
 import android.Manifest
+import android.content.ClipData
 import android.os.Build
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
@@ -85,6 +86,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.toClipEntry
 import dev.seedseeker.app.BuildConfig
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.engine.EngineInfo
@@ -349,6 +351,13 @@ internal fun SeedFinderApp(
                 wandmakerQuest = imported.query.wandmakerQuest
                 challenges = imported.query.challenges
                 preferences.edit().putInt(CHALLENGES_KEY, challenges).apply()
+                // A copied search restores the query alone, as a shared link does.
+                if (imported.bareQuery) {
+                    controller.clearDisplayedResults()
+                    importNotice = "Loaded search from $source"
+                    destination = Destination.FINDER
+                    return@onSuccess
+                }
                 // The engine already deduplicated and capped the list and
                 // reported what that removed.
                 val kept = imported.seeds
@@ -827,21 +836,7 @@ internal fun SeedFinderApp(
                         return@share
                     }
                     runCatching {
-                        DeepLink.encodeLink(
-                            PresetQuery(
-                                requirements = requirements,
-                                autoApplyTrinket = autoApplyTrinket,
-                                arcaneResin = arcaneResin,
-                                arcaneResinFilter = arcaneResinFilter,
-                                floorRequirements = floorRequirements,
-                                arcaneResinAuto = arcaneResinAuto,
-                                maximumDepth = maximumDepth,
-                                requireBlacksmith = requireBlacksmith,
-                                excludeBlacksmithRewards = excludeBlacksmithRewards,
-                                wandmakerQuest = wandmakerQuest,
-                                challenges = challenges,
-                            ),
-                        )
+                        DeepLink.encodeLink(currentQuery)
                     }.onSuccess { link ->
                         val send = Intent(Intent.ACTION_SEND)
                             .setType("text/plain")
@@ -850,6 +845,20 @@ internal fun SeedFinderApp(
                     }.onFailure { failure ->
                         linkError = failure.message ?: "This search could not be shared."
                     }
+                },
+                onCopyQuery = copy@{
+                    (floorRequirements.floorValidationProblem(maximumDepth) ?: boardProblem)?.let {
+                        linkError = it
+                        return@copy false
+                    }
+                    runCatching { ResultsExport.queryDocument(currentQuery) }
+                        .onSuccess { text ->
+                            scope.launch {
+                                clipboard.setClipEntry(ClipData.newPlainText("Search", text).toClipEntry())
+                            }
+                        }.onFailure { failure ->
+                            linkError = failure.message ?: "This search could not be copied."
+                        }.isSuccess
                 },
                 onScoutSeed = ::scoutSeed,
                 bottomBar = navBar,

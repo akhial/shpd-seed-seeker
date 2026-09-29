@@ -34,6 +34,8 @@ object ResultsExport {
         val dropped: Int,
         val shpdVersion: String?,
         val trinkets: List<String?> = emptyList(),
+        /** A pasted query document rather than a results file: no seeds. */
+        val bareQuery: Boolean = false,
     )
 
     private val challengeMasks by lazy {
@@ -63,8 +65,18 @@ object ResultsExport {
             dropped = document.getInt("dropped"),
             shpdVersion = document.opt("shpd_version") as? String,
             trinkets = List(seeds.length()) { document.optJSONArray("trinkets")?.opt(it) as? String },
+            bareQuery = document.optBoolean("bare_query"),
         )
     }
+
+    /**
+     * The query as the pretty-printed JSON document "Copy search" puts on the
+     * clipboard: the file the CLI reads, and one [decode] accepts back.
+     *
+     * @throws IllegalArgumentException with the codec's message.
+     */
+    fun queryDocument(query: PresetQuery): String =
+        String(JniBindings.queryDocument(encodeQuery(query).toString().toByteArray()), Charsets.UTF_8)
 
     /** The query half of the document; [DeepLink] and the engine transport share it with the Rust codec. */
     internal fun encodeQuery(query: PresetQuery) = JSONObject().apply {

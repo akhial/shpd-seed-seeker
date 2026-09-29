@@ -187,11 +187,21 @@ fun FinderScreen(
     onImportClipboard: () -> Unit,
     onClearResults: () -> Unit,
     onShareQuery: () -> Unit,
+    /** Copies the query's JSON document; false when it could not be copied. */
+    onCopyQuery: () -> Boolean,
     onScoutSeed: (String) -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
     var showPresets by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
+    // Copy search confirms in place on the menu button, as seed copies do.
+    var searchCopied by remember { mutableStateOf(false) }
+    LaunchedEffect(searchCopied) {
+        if (searchCopied) {
+            delay(1600)
+            searchCopied = false
+        }
+    }
     // One page at a time: what is asked for, or what was found. Nothing here is
     // chosen by hand first — starting a search turns to the results it will
     // fill, a new query (edited, from a preset, or from a shared link) turns
@@ -265,7 +275,13 @@ fun FinderScreen(
                     }
                     Box {
                         IconButton(onClick = { showOverflowMenu = true }, shapes = IconButtonDefaults.shapes()) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                            AnimatedContent(targetState = searchCopied, label = "search-copied") { done ->
+                                if (done) {
+                                    Icon(Icons.Filled.Check, contentDescription = "Search copied", tint = MaterialTheme.colorScheme.primary)
+                                } else {
+                                    Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+                                }
+                            }
                         }
                         DropdownMenu(
                             expanded = showOverflowMenu,
@@ -287,6 +303,14 @@ fun FinderScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     onShareQuery()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Copy search") },
+                                enabled = requirements.isNotEmpty() || floorRequirements.isNotEmpty() || hasResin,
+                                onClick = {
+                                    showOverflowMenu = false
+                                    searchCopied = onCopyQuery()
                                 },
                             )
                             DropdownMenuItem(

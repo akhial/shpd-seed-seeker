@@ -646,6 +646,28 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_resultsEncode<
     }
 }
 
+/// Rewrites a UTF-8 canonical JSON query document as the pretty-printed
+/// document a "Copy search" action puts on the clipboard; `resultsDecode`
+/// reads it back with `"bare_query": true`. Invalid queries throw with the
+/// codec's own message.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryDocument<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    query: JByteArray<'local>,
+) -> JByteArray<'local> {
+    let Some(query) = utf8_argument(&mut env, &query, "query document") else {
+        return JByteArray::default();
+    };
+    match results_export::encode_query_document(&query) {
+        Ok(contents) => utf8_response(&mut env, &contents, "query document"),
+        Err(error) => {
+            throw_illegal_argument(&mut env, error);
+            JByteArray::default()
+        }
+    }
+}
+
 /// Decodes any accepted share-link form (full web link, custom-scheme link,
 /// or bare code) back into the canonical JSON query document, both UTF-8
 /// bytes. Failures throw with the codec's own message.
@@ -672,10 +694,11 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_shareDecode<'l
 
 /// Decodes UTF-8 results-file text into the UTF-8 JSON document `{"query":
 /// <canonical query document>, "seeds": [...], "dropped": <number>,
-/// "app_version": ..., "shpd_version": ...}`. The seeds are already
-/// deduplicated and capped at the shared result limit, `dropped` counts the
-/// exported entries that step removed, and input above the engine's 2 MiB
-/// import cap is rejected. Failures throw with the codec's own message.
+/// "bare_query": <bool>, "app_version": ..., "shpd_version": ...}`. The seeds
+/// are already deduplicated and capped at the shared result limit, `dropped`
+/// counts the exported entries that step removed, `bare_query` marks a pasted
+/// query document (no seeds), and input above the engine's 2 MiB import cap
+/// is rejected. Failures throw with the codec's own message.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_resultsDecode<'local>(
     mut env: JNIEnv<'local>,

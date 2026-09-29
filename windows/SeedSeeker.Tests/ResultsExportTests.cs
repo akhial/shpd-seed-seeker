@@ -69,6 +69,19 @@ public sealed class ResultsExportTests
     }
 
     [Fact]
+    public void ACopiedSearchImportsBackAsTheQueryAlone()
+    {
+        var query = ResultsExport.Decode(Fixture("results-export-v1.json")).Query;
+        var copied = ResultsExport.EncodeCopiedQuery(query);
+        Assert.Contains("\n  \"requirements\": [", copied);
+        var imported = ResultsExport.Decode(copied);
+        Assert.True(imported.BareQuery);
+        Assert.Empty(imported.Seeds);
+        Assert.Equal(ResultsExport.EncodeQueryDocument(query), ResultsExport.EncodeQueryDocument(imported.Query));
+        Assert.False(ResultsExport.Decode(Fixture("results-export-v1.json")).BareQuery);
+    }
+
+    [Fact]
     public void WeaponCategoriesAndEffectsSurviveTheRoundTrip()
     {
         var query = ResultsExport.Decode(Fixture("results-export-v1-weapon-categories.json")).Query;

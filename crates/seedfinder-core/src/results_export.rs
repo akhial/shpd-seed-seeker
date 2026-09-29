@@ -15,6 +15,9 @@
 //! - Readers ignore unknown envelope and per-result fields, including the
 //!   `format_version` number releases up to 0.7.0 wrote, so files exported
 //!   before this build keep importing unchanged.
+//! - A bare query document (no `format`, a `requirements` list) imports as
+//!   the query alone, so a search copied with [`encode_query_document`] can
+//!   be pasted back into any app.
 //! - The embedded query reuses the [`crate::json_query`] document format and
 //!   is validated strictly: unknown query fields, items, effects, or
 //!   challenges fail the import instead of silently changing its meaning.
@@ -61,6 +64,9 @@ pub struct ResultsFile {
     /// Exact choices in exported order. Missing legacy choices resolve from
     /// the file's query once at import; explicit null means No Trinket.
     pub recipes: Vec<SeedRecipe>,
+    /// The input was a bare query document rather than a results file, so it
+    /// carries no seeds and importers restore the query alone.
+    pub bare_query: bool,
 }
 
 /// Encodes a validated query and its result seeds as a pretty-printed results
@@ -103,27 +109,42 @@ pub fn encode_recipes(query: &SearchQuery, recipes: &[SeedRecipe], app_version: 
     serde_json::to_string_pretty(&document).unwrap_or_default()
 }
 
-/// Decodes and validates a results document.
+/// Decodes and validates a results document, or a bare query document as
+/// written by [`encode_query_document`], which yields no seeds and sets
+/// [`ResultsFile::bare_query`].
 ///
 /// # Errors
 ///
 /// Returns a human-readable message for input above [`MAX_FILE_BYTES`], for
-/// files that are not Seed Seeker results documents, and for files that
-/// contain an invalid query or seed code.
+/// files that are neither Seed Seeker results documents nor query documents,
+/// and for files that contain an invalid query or seed code.
 pub fn decode(contents: &str) -> Result<ResultsFile, String> {
     if contents.len() > MAX_FILE_BYTES {
         return Err(
             "this file is too large to be a Seed Seeker results file (2 MiB limit)".to_owned(),
         );
     }
-    let document: Value = serde_json::from_str(contents)
-        .map_err(|error| format!("this is not a Seed Seeker results file: {error}"))?;
+    let document: Value =
+        serde_json::from_str(contents).map_err(|error| format!("{NOT_IMPORTABLE}: {error}"))?;
     let document = document
         .as_object()
-        .ok_or("this is not a Seed Seeker results file: expected a JSON object")?;
+        .ok_or_else(|| format!("{NOT_IMPORTABLE}: expected a JSON object"))?;
+    if !document.contains_key("format") && document.contains_key("requirements") {
+        let query = json_query::decode(contents)
+            .map_err(|error| format!("this search query is not usable: {error}"))?;
+        check_editor_groups(&query)?;
+        return Ok(ResultsFile {
+            app_version: None,
+            shpd_version: None,
+            query,
+            seeds: Vec::new(),
+            recipes: Vec::new(),
+            bare_query: true,
+        });
+    }
     if document.get("format").and_then(Value::as_str) != Some(FILE_FORMAT) {
         return Err(format!(
-            "this is not a Seed Seeker results file: missing \"format\": \"{FILE_FORMAT}\""
+            "{NOT_IMPORTABLE}: missing \"format\": \"{FILE_FORMAT}\""
         ));
     }
     let query_value = document
@@ -132,30 +153,7 @@ pub fn decode(contents: &str) -> Result<ResultsFile, String> {
         .ok_or("this results file is missing its \"query\" object")?;
     let query = json_query::decode(&query_value.to_string())
         .map_err(|error| format!("the query in this results file is not usable: {error}"))?;
-    for (index, requirement) in query.requirements.iter().enumerate() {
-        // The results format restricts same-item and combined-level groups
-        // to what every app's editor can express (A..D), even though the
-        // engine allows more.
-        if requirement
-            .identity_group
-            .is_some_and(|group| group > MAX_IDENTITY_GROUP)
-        {
-            return Err(format!(
-                "requirement {}: same-item group must be between 1 and {MAX_IDENTITY_GROUP} (A..D)",
-                index + 1
-            ));
-        }
-        if requirement
-            .level_sum
-            .is_some_and(|sum| sum.group > MAX_LEVEL_SUM_GROUP)
-        {
-            return Err(format!(
-                "requirement {}: combined level group must be between 1 and \
-                 {MAX_LEVEL_SUM_GROUP} (A..D)",
-                index + 1
-            ));
-        }
-    }
+    check_editor_groups(&query)?;
     let results = document
         .get("results")
         .and_then(Value::as_array)
@@ -183,7 +181,52 @@ pub fn decode(contents: &str) -> Result<ResultsFile, String> {
         query,
         seeds,
         recipes,
+        bare_query: false,
     })
+}
+
+const NOT_IMPORTABLE: &str = "this is not a Seed Seeker results file or search query";
+
+/// Rejects same-item and combined-level groups beyond what every app's
+/// editor can express (A..D), even though the engine allows more, so an
+/// imported or copied query loads the same way everywhere.
+fn check_editor_groups(query: &SearchQuery) -> Result<(), String> {
+    for (index, requirement) in query.requirements.iter().enumerate() {
+        if requirement
+            .identity_group
+            .is_some_and(|group| group > MAX_IDENTITY_GROUP)
+        {
+            return Err(format!(
+                "requirement {}: same-item group must be between 1 and {MAX_IDENTITY_GROUP} (A..D)",
+                index + 1
+            ));
+        }
+        if requirement
+            .level_sum
+            .is_some_and(|sum| sum.group > MAX_LEVEL_SUM_GROUP)
+        {
+            return Err(format!(
+                "requirement {}: combined level group must be between 1 and \
+                 {MAX_LEVEL_SUM_GROUP} (A..D)",
+                index + 1
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Rewrites a query document as the pretty-printed canonical document a
+/// "Copy search" action puts on the clipboard: the file the CLI reads with
+/// `--items`, and one every app's results import accepts back ([`decode`]).
+///
+/// # Errors
+///
+/// Returns a human-readable message for an invalid query, or one whose
+/// groups the editors cannot express.
+pub fn encode_query_document(query_json: &str) -> Result<String, String> {
+    let query = json_query::decode(query_json)?;
+    check_editor_groups(&query)?;
+    Ok(serde_json::to_string_pretty(&json_query::encode(&query)).unwrap_or_default())
 }
 
 /// Deduplicates seeds (keeping the first occurrence) and caps the list at
@@ -282,15 +325,18 @@ fn request_seed(index: usize, entry: &Value) -> Result<DungeonSeed, String> {
 }
 
 /// Decodes results-file text into the bridge document `{"query": <canonical
-/// query document>, "seeds": [...], "dropped": <number>, "app_version": ...,
-/// "shpd_version": ...}`. The seeds are already deduplicated and capped at
-/// [`MAX_RESULTS`], so every platform restores the identical list, and
-/// `dropped` counts the exported entries that step removed.
+/// query document>, "seeds": [...], "dropped": <number>, "bare_query": <bool>,
+/// "app_version": ..., "shpd_version": ...}`. The seeds are already
+/// deduplicated and capped at [`MAX_RESULTS`], so every platform restores the
+/// identical list, and `dropped` counts the exported entries that step
+/// removed. `bare_query` marks a pasted query document: importers apply its
+/// query the way they open a share link and keep their results list.
 ///
 /// # Errors
 ///
 /// Returns [`decode`]'s message: input above [`MAX_FILE_BYTES`], a file that
-/// is not a results file, or an invalid query or seed code.
+/// is neither a results file nor a query document, or an invalid query or
+/// seed code.
 pub fn decode_document(contents: &str) -> Result<String, String> {
     let file = decode(contents)?;
     let (seeds, dropped) = dedupe_and_cap(&file.seeds, MAX_RESULTS);
@@ -303,6 +349,7 @@ pub fn decode_document(contents: &str) -> Result<String, String> {
         "seeds": seeds.iter().copied().map(DungeonSeed::to_code).collect::<Vec<_>>(),
         "trinkets": seeds.iter().map(|seed| choices[&seed.value()].map(|id| item(id).stable_id)).collect::<Vec<_>>(),
         "dropped": dropped,
+        "bare_query": file.bare_query,
         "app_version": file.app_version,
         "shpd_version": file.shpd_version,
     })
@@ -360,8 +407,9 @@ mod tests {
 
     use super::{
         MAX_FILE_BYTES, MAX_RESULTS, decode, decode_document, dedupe_and_cap, encode,
-        encode_document, is_canonical_code,
+        encode_document, encode_query_document, is_canonical_code,
     };
+    use crate::json_query;
 
     fn sample_query() -> SearchQuery {
         SearchQuery {
@@ -556,6 +604,50 @@ mod tests {
             );
             let decoded = decode(&contents).unwrap_or_else(|error| panic!("{version}: {error}"));
             assert_eq!(decoded.seeds, seeds(&["AAA-AAA-AAB"]));
+        }
+    }
+
+    #[test]
+    fn bare_query_documents_import_as_the_query_alone() {
+        let copied = encode_query_document(
+            r#"{"requirements":[{"item":"wand_fireblast","upgrade":{"at_least":3}}]}"#,
+        )
+        .unwrap();
+        // Pretty-printed canonical form: the kind is spelled out.
+        assert!(copied.contains("\n  \"requirements\": ["), "{copied}");
+        assert!(copied.contains("\"kind\": \"wand\""), "{copied}");
+        let decoded = decode(&copied).unwrap();
+        assert!(decoded.bare_query);
+        assert!(decoded.seeds.is_empty());
+        assert_eq!(decoded.query, json_query::decode(&copied).unwrap());
+        let bridge: Value = serde_json::from_str(&decode_document(&copied).unwrap()).unwrap();
+        assert_eq!(bridge["bare_query"], json!(true));
+        assert_eq!(bridge["seeds"], json!([]));
+
+        let file = encode(&decoded.query, &[], "test");
+        assert!(!decode(&file).unwrap().bare_query);
+    }
+
+    #[test]
+    fn bare_query_documents_are_validated_like_embedded_ones() {
+        for (contents, needle) in [
+            (
+                r#"{"requirements":[{"item":"item_from_the_future"}]}"#,
+                "item_from_the_future",
+            ),
+            (
+                r#"{"requirements":[{"item":"sword"}],"wished_luck":7}"#,
+                "wished_luck",
+            ),
+            (r#"{"requirements":[]}"#, "search query is not usable"),
+            (
+                r#"{"requirements":[{"item":"sword","identity_group":5},{"kind":"weapon","identity_group":5}]}"#,
+                "A..D",
+            ),
+        ] {
+            let error = decode(contents).unwrap_err();
+            assert!(error.contains(needle), "{contents}: {error}");
+            assert!(encode_query_document(contents).is_err(), "{contents}");
         }
     }
 

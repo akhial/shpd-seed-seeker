@@ -26,6 +26,7 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial int seedfinder_share_decode(byte[] text, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_query_impossibility_reason(byte[] text, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_encode(byte[] request, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_query_document(byte[] queryJson, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_decode(byte[] contents, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_engine_info(out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_requirement_board(byte[] request, nuint length, out nint packet, out nuint outputLength);
@@ -395,6 +396,14 @@ public sealed class NativeEngine
             ? Encoding.UTF8.GetString(CopyAndFree(ptr, len)) : null;
     }
 
+    /// <summary>The pretty-printed query document "Copy search" puts on the clipboard, or null when the engine rejects the query.</summary>
+    public static string? TryFormatQueryDocument(string queryJson)
+    {
+        var bytes = Encoding.UTF8.GetBytes(queryJson);
+        return Native.seedfinder_query_document(bytes, (nuint)bytes.Length, out var ptr, out var len) == 0
+            ? Encoding.UTF8.GetString(CopyAndFree(ptr, len)) : null;
+    }
+
     /// <summary>The canonical JSON query document carried by share-link text (web link, seedseeker:// link, or bare code), or null when there is none.</summary>
     public static string? TryDecodeShareText(string text)
     {
@@ -417,10 +426,11 @@ public sealed class NativeEngine
     }
 
     /// <summary>
-    /// The UTF-8 JSON <c>{"query", "seeds", "dropped", "app_version",
-    /// "shpd_version"}</c> a results file carries — seeds already deduplicated
-    /// and capped by the engine — or null when the text is not an importable
-    /// results file.
+    /// The UTF-8 JSON <c>{"query", "seeds", "dropped", "bare_query",
+    /// "app_version", "shpd_version"}</c> a results file carries — seeds
+    /// already deduplicated and capped by the engine; a pasted query document
+    /// decodes with <c>bare_query</c> set and no seeds — or null when the text
+    /// is not importable.
     /// </summary>
     public static string? TryDecodeResultsFile(string contents)
     {

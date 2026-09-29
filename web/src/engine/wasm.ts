@@ -2,6 +2,7 @@ import init, {
   analyze_query,
   decode_results_file,
   decode_share_text,
+  encode_query_document,
   encode_results_file,
   encode_share_link,
   engine_info,
@@ -51,6 +52,15 @@ export async function encodeShareLink(queryJson: string): Promise<string> {
   return encode_share_link(queryJson);
 }
 
+/**
+ * Rewrites a canonical query document as the pretty-printed JSON "Copy search"
+ * puts on the clipboard. The results import reads it back as a bare query.
+ */
+export async function encodeQueryDocument(queryJson: string): Promise<string> {
+  await initEngine();
+  return encode_query_document(queryJson);
+}
+
 /** Decodes share-link text (full link or bare code) into the canonical query document. */
 export async function decodeShareText(text: string): Promise<string> {
   await initEngine();
@@ -83,10 +93,11 @@ export function encodeResultsFileText(requestJson: string): string {
 
 /**
  * The engine's results-file decoder, answering
- * `{"query", "seeds", "dropped", "app_version", "shpd_version"}` as JSON. The
- * seeds arrive deduplicated and capped, and the 2 MiB import limit, the
- * envelope rules and the query validation are all the engine's. Throws with
- * the codec's own message for an unusable file.
+ * `{"query", "seeds", "dropped", "bare_query", "app_version", "shpd_version"}`
+ * as JSON. The seeds arrive deduplicated and capped, and the 2 MiB import
+ * limit, the envelope rules and the query validation are all the engine's.
+ * A bare query document decodes with `bare_query` set and no seeds. Throws
+ * with the codec's own message for an unusable file.
  *
  * Synchronous. Callers must have awaited
  * `initEngine()`.

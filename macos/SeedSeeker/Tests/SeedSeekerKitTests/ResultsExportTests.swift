@@ -210,9 +210,22 @@ final class ResultsExportTests: XCTestCase {
         for file in files {
             XCTAssertThrowsError(try ResultsExport.decode(file), String(file.prefix(80))) { error in
                 XCTAssertEqual((error as? ResultsExportError)?.message,
-                               "This is not a Seed Seeker results file this version can import.")
+                               "This is not a Seed Seeker results file or search this version can import.")
             }
         }
+    }
+
+    func testACopiedSearchImportsBackAsTheQueryAlone() throws {
+        let query = try loadedQuery()
+        let copied = try ResultsExport.queryDocument(for: query)
+        XCTAssertTrue(copied.contains("\n  \"requirements\": ["), copied)
+        let imported = try ResultsExport.decode(copied)
+        XCTAssertTrue(imported.bareQuery)
+        XCTAssertEqual(imported.seeds, [])
+        XCTAssertEqual(imported.query.requirements.count, query.requirements.count)
+        XCTAssertEqual(imported.query.maximumDepth, query.maximumDepth)
+        XCTAssertFalse(try ResultsExport.decode(Self.version1Fixture).bareQuery)
+        XCTAssertThrowsError(try ResultsExport.queryDocument(for: SavedQuery()))
     }
 
     func testAWandmakerQuestRoundTrips() throws {

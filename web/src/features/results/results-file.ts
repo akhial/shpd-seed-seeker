@@ -43,6 +43,8 @@ export interface DecodedResultsFile {
   trinkets: (string | null)[];
   /** Exported entries the engine's dedupe-and-cap removed. */
   dropped: number;
+  /** A pasted query document rather than a results file: it has no seeds. */
+  bareQuery: boolean;
 }
 
 interface DecodedDocument {
@@ -50,12 +52,14 @@ interface DecodedDocument {
   seeds: string[];
   trinkets: (string | null)[];
   dropped: number;
+  bare_query: boolean;
   app_version: string | null;
   shpd_version: string | null;
 }
 
 /**
- * Decodes a results-export document through the engine codec: the size limit,
+ * Decodes a results-export document, or a bare query document copied with
+ * "Copy search", through the engine codec: the size limit,
  * the envelope rules (unknown fields from future releases are ignored), the
  * query validation, the seed-code form, and dedupe-and-cap are all its.
  *
@@ -71,5 +75,6 @@ export function decodeResultsFile(text: string): DecodedResultsFile {
     seeds: decoded.seeds,
     trinkets: decoded.trinkets,
     dropped: decoded.dropped,
+    bareQuery: decoded.bare_query,
   };
 }
