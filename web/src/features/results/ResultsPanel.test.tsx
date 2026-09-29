@@ -8,7 +8,7 @@ import { decodeResultsFile } from "./results-file";
 import { searchStore } from "../search/coordinator";
 import { initialCoordinatorState } from "../search/coordinator-state";
 import { queryStore } from "../../app/store";
-import init from "../../engine/pkg/seedfinder.js";
+import init, { encode_query_document } from "../../engine/pkg/seedfinder.js";
 import { ResultsPanel } from "./ResultsPanel";
 
 let root: Root;
@@ -46,7 +46,9 @@ afterEach(async () => {
 });
 
 function pasteButton() {
-  return host.querySelector<HTMLButtonElement>('[aria-label="Import results from clipboard"]')!;
+  return host.querySelector<HTMLButtonElement>(
+    '[aria-label="Import results or a search from the clipboard"]',
+  )!;
 }
 async function paste() {
   await act(async () => pasteButton().click());
@@ -78,6 +80,19 @@ it("still imports from a JSON file through the same path", async () => {
   expect(readText).not.toHaveBeenCalled();
 });
 
+it("loads a copied search into the editor and keeps the results list", async () => {
+  await paste();
+  const results = searchStore.state;
+  const copied = encode_query_document(
+    JSON.stringify({ requirements: [{ item: "wand_fireblast", upgrade: { at_least: 3 } }] }),
+  );
+  readText.mockResolvedValueOnce(copied);
+  await paste();
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  expect(toQueryDocument(queryStore.state)).toEqual(decodeResultsFile(copied).queryDocument);
+  expect(searchStore.state).toBe(results);
+});
+
 it.each([
   ["empty", "  \n", "The clipboard has no text"],
   ["invalid", "{broken", ""],
@@ -101,7 +116,8 @@ it("explains a denied clipboard read and keeps file import available", async () 
   await paste();
   expect(host.querySelector('[role="alert"]')?.textContent).toContain("Allow clipboard access");
   expect(
-    host.querySelector<HTMLButtonElement>('[aria-label="Import results from a file"]')?.disabled,
+    host.querySelector<HTMLButtonElement>('[aria-label="Import results or a search from a file"]')
+      ?.disabled,
   ).toBe(false);
   expect(searchStore.state.state).toBe("idle");
 });
@@ -117,7 +133,8 @@ it.each(["running", "stopping"] as const)("disables imports while %s", async (st
   await act(async () => searchStore.setState((current) => ({ ...current, state })));
   expect(pasteButton().disabled).toBe(true);
   expect(
-    host.querySelector<HTMLButtonElement>('[aria-label="Import results from a file"]')?.disabled,
+    host.querySelector<HTMLButtonElement>('[aria-label="Import results or a search from a file"]')
+      ?.disabled,
   ).toBe(true);
   expect(readText).not.toHaveBeenCalled();
 });

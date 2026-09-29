@@ -19,6 +19,7 @@ import {
 import { clearResults, loadImportedResults, searchStore } from "../search/coordinator";
 import { canClearResults, RESULT_CAP } from "../search/coordinator-state";
 import { queryStore } from "../../app/store";
+import { normalizedQuery } from "../query/requirements/board";
 import { itemArt } from "../../shared/sprites/sprites";
 import type { AnalysisResult } from "../../engine/types";
 import { Sprite } from "../../shared/ui/primitives";
@@ -156,6 +157,14 @@ export function ResultsPanel({
       if (["running", "stopping"].includes(searchStore.state.state)) {
         throw new Error("A search is running — stop it before importing results.");
       }
+      setFileError(undefined);
+      setFileInfo(undefined);
+      // A copied search restores the query alone, as a share link does, and
+      // leaves the results list to the search that produced it.
+      if (decoded.bareQuery) {
+        queryStore.setState(() => normalizedQuery(decoded.query));
+        return;
+      }
       queryStore.setState(() => decoded.query);
       loadImportedResults(
         decoded.seeds.map((code, index) => ({
@@ -165,7 +174,6 @@ export function ResultsPanel({
         decoded.queryDocument,
         decoded.dropped,
       );
-      setFileError(undefined);
       setFileInfo(
         decoded.shpdVersion !== undefined &&
           shpdVersion !== undefined &&
@@ -217,8 +225,8 @@ export function ResultsPanel({
           <button
             type="button"
             className="d1-io-btn"
-            title="Import results from a file"
-            aria-label="Import results from a file"
+            title="Import results or a search from a file"
+            aria-label="Import results or a search from a file"
             disabled={running}
             onClick={() => fileInput.current?.click()}
           >
@@ -228,8 +236,8 @@ export function ResultsPanel({
           <button
             type="button"
             className="d1-io-btn"
-            title="Import results from clipboard"
-            aria-label="Import results from clipboard"
+            title="Import results or a search from the clipboard"
+            aria-label="Import results or a search from the clipboard"
             disabled={running}
             onClick={() => void importClipboard()}
           >

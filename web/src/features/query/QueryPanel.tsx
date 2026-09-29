@@ -6,6 +6,7 @@ import { probabilityLabel } from "../../shared/format";
 import {
   CheckIcon,
   CommandIcon,
+  CopyIcon,
   InfoIcon,
   LinkIcon,
   ReturnIcon,
@@ -24,7 +25,7 @@ import {
   workerCountStore,
 } from "../../app/store";
 import type { Preset } from "../../app/store";
-import { encodeShareLink } from "../../engine/wasm";
+import { encodeQueryDocument, encodeShareLink } from "../../engine/wasm";
 import { WANDMAKER_QUESTS } from "../../engine/types";
 import type {
   AnalysisResult,
@@ -94,7 +95,7 @@ export function QueryPanel({
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [editorFailure, setEditorFailure] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ key: number } | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "search" | null>(null);
   const [blanketHelpOpen, setBlanketHelpOpen] = useState(false);
 
   // A save lands on a chip, possibly a new one at the end of a long board.
@@ -112,12 +113,15 @@ export function QueryPanel({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [blanketHelpOpen]);
 
-  const shareQuery = () => {
-    void encodeShareLink(toQueryJson(query))
-      .then((link) => navigator.clipboard.writeText(link))
+  // Share copies a link; Copy copies the query document itself, which the
+  // CLI reads and every app's results import accepts back.
+  const copyQuery = (kind: "link" | "search") => {
+    const json = toQueryJson(query);
+    void (kind === "link" ? encodeShareLink(json) : encodeQueryDocument(json))
+      .then((text) => navigator.clipboard.writeText(text))
       .then(() => {
-        setLinkCopied(true);
-        window.setTimeout(() => setLinkCopied(false), 1_200);
+        setCopied(kind);
+        window.setTimeout(() => setCopied((current) => (current === kind ? null : current)), 1_200);
       })
       .catch(() => undefined);
   };
@@ -232,13 +236,24 @@ export function QueryPanel({
           <button
             type="button"
             className="d1-io-btn"
+            title="Copy this search as JSON"
+            aria-label="Copy this search as JSON"
+            disabled={!engineReady || !validation.valid}
+            onClick={() => copyQuery("search")}
+          >
+            {copied === "search" ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+            {copied === "search" ? "Copied" : "Copy"}
+          </button>
+          <button
+            type="button"
+            className="d1-io-btn"
             title="Copy a shareable link to this search"
             aria-label="Copy a shareable link to this search"
             disabled={!engineReady || !validation.valid}
-            onClick={shareQuery}
+            onClick={() => copyQuery("link")}
           >
-            {linkCopied ? <CheckIcon size={13} /> : <LinkIcon size={13} />}
-            {linkCopied ? "Copied" : "Share"}
+            {copied === "link" ? <CheckIcon size={13} /> : <LinkIcon size={13} />}
+            {copied === "link" ? "Copied" : "Share"}
           </button>
         </span>
       </div>
