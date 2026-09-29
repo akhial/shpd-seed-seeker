@@ -556,6 +556,9 @@ object JniBindings {
     // cap itself, and reports what it dropped.
     @JvmStatic external fun resultsEncode(request: ByteArray): ByteArray
     @JvmStatic external fun resultsDecode(contents: ByteArray): ByteArray
+    // The pretty-printed query document "Copy search" puts on the clipboard;
+    // `resultsDecode` reads it back with "bare_query": true.
+    @JvmStatic external fun queryDocument(query: ByteArray): ByteArray
 
     // Requirement editor (docs/requirement-editor.md): UTF-8 JSON in, UTF-8
     // JSON out. A request the editor cannot read is answered `{"error": …}`;

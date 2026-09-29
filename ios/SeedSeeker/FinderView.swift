@@ -95,6 +95,8 @@ struct FinderView: View {
                 Menu {
                     Button("Share search…", systemImage: "square.and.arrow.up", action: model.share)
                         .disabled(model.query.slotCount == 0)
+                    Button("Copy search", systemImage: "doc.on.doc", action: model.copySearch)
+                        .disabled(model.query.slotCount == 0)
                     Button("Import results…", systemImage: "square.and.arrow.down") { model.showingImporter = true }
                         .disabled(controller.isRunning)
                     Button("Import from clipboard", systemImage: "doc.on.clipboard") { model.sheet = .clipboardImport }
@@ -106,7 +108,14 @@ struct FinderView: View {
                     }.disabled(!controller.canClearResults)
                     Divider()
                     Button("About and licenses", systemImage: "info.circle") { model.sheet = .about }
-                } label: { Label("More options", systemImage: "ellipsis") }
+                } label: {
+                    // Copy search confirms in place, as the app's copy buttons do.
+                    Label(model.searchCopied ? "Search copied" : "More options",
+                          systemImage: model.searchCopied ? "checkmark" : "ellipsis")
+                        .contentTransition(.symbolEffect(.replace))
+                        .animation(reduceMotion ? nil : .snappy, value: model.searchCopied)
+                }
+                .sensoryFeedback(.success, trigger: model.searchCopied) { _, copied in copied }
             }
             .matchedTransitionSource(id: "more-finder", in: sheetZoom)
         }

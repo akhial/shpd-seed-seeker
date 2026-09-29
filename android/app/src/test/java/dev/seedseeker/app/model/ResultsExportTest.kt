@@ -6,6 +6,7 @@ import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.engine.EngineInfo
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,6 +78,20 @@ class ResultsExportTest {
             loadedQuery.requirements.map { it.copy(key = 0) },
             imported.query.requirements.map { it.copy(key = 0) },
         )
+    }
+
+    @Test
+    fun aCopiedSearchImportsBackAsTheQueryAlone() {
+        val copied = ResultsExport.queryDocument(loadedQuery)
+        assertTrue(copied, copied.contains("\n  \"requirements\": ["))
+        val imported = ResultsExport.decode(copied)
+        assertTrue(imported.bareQuery)
+        assertEquals(emptyList<String>(), imported.seeds)
+        assertEquals(
+            loadedQuery.requirements.map { it.copy(key = 0) },
+            imported.query.requirements.map { it.copy(key = 0) },
+        )
+        assertFalse(ResultsExport.decode(version1Fixture).bareQuery)
     }
 
     @Test

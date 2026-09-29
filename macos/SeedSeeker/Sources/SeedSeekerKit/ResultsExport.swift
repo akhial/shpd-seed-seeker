@@ -29,9 +29,14 @@ public enum ResultsExport {
         public let dropped: Int
         /// The upstream game version the file declares, if any.
         public let shpdVersion: String?
-        public init(query: SavedQuery, seeds: [String], dropped: Int, shpdVersion: String?, trinkets: [String?] = []) {
+        /// A pasted query document rather than a results file: importers
+        /// apply its query the way they open a share link, and keep their
+        /// results.
+        public let bareQuery: Bool
+        public init(query: SavedQuery, seeds: [String], dropped: Int, shpdVersion: String?, trinkets: [String?] = [], bareQuery: Bool = false) {
             self.query = query; self.seeds = seeds
             self.dropped = dropped; self.shpdVersion = shpdVersion; self.trinkets = trinkets
+            self.bareQuery = bareQuery
         }
     }
 
@@ -83,7 +88,7 @@ public enum ResultsExport {
                 }
             }
         } catch SeedFinderEngineError.invalidArgument {
-            throw ResultsExportError("This is not a Seed Seeker results file this version can import.")
+            throw ResultsExportError("This is not a Seed Seeker results file or search this version can import.")
         } catch {
             throw ResultsExportError("The native engine failed while reading the results file.")
         }
@@ -95,7 +100,30 @@ public enum ResultsExport {
         return Imported(query: try decodeQuery(queryValue), seeds: seeds,
                         dropped: intField(document, "dropped") ?? 0,
                         shpdVersion: document["shpd_version"] as? String,
-                        trinkets: (document["trinkets"] as? [Any] ?? []).map { $0 as? String })
+                        trinkets: (document["trinkets"] as? [Any] ?? []).map { $0 as? String },
+                        bareQuery: boolField(document, "bare_query"))
+    }
+
+    /// The query as the pretty-printed JSON document "Copy Search" puts on
+    /// the pasteboard: the file the CLI reads, and one `decode` accepts back.
+    public static func queryDocument(for query: SavedQuery) throws -> String {
+        let document = try JSONSerialization.data(withJSONObject: encodeQuery(query))
+        let packet: Data
+        do {
+            packet = try enginePacket { out, length in
+                document.withUnsafeBytes { bytes in
+                    seedfinder_query_document(
+                        bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, out, length)
+                }
+            }
+        } catch SeedFinderEngineError.invalidArgument {
+            throw ResultsExportError("The current search cannot be copied. "
+                + "It needs at least one valid requirement.")
+        }
+        guard let text = String(data: packet, encoding: .utf8), !text.isEmpty else {
+            throw ResultsExportError("The native engine returned an invalid query document.")
+        }
+        return text
     }
 
     // MARK: Document mapping

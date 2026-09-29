@@ -57,6 +57,9 @@ final class AppModel {
     var alertTitle = "Results transfer"
     var alertMessage: String?
     var sharedLink: SharePayload?
+    /// Briefly true after "Copy search", so the menu confirms in place.
+    var searchCopied = false
+    private var searchCopiedReset: Task<Void, Never>?
     var exportDocument: ResultsDocument?
     var showingImporter = false
     private let defaults: UserDefaults
@@ -107,6 +110,23 @@ final class AppModel {
             // A list the shared core finds a problem with says which, in its
             // words; anything else keeps the share's own wording.
             showError(query.board.problems.first?.message ?? AndroidCopy.shareError(error), title: "Shared search")
+        }
+    }
+
+    /// Copies the query as its JSON document, which the CLI reads and
+    /// "Import from clipboard" accepts back.
+    func copySearch() {
+        do {
+            UIPasteboard.general.string = try ResultsExport.queryDocument(for: query)
+            searchCopied = true
+            searchCopiedReset?.cancel()
+            searchCopiedReset = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.4))
+                guard !Task.isCancelled else { return }
+                searchCopied = false
+            }
+        } catch {
+            showError(query.board.problems.first?.message ?? "This search could not be copied.", title: "Copy search")
         }
     }
 
@@ -168,6 +188,13 @@ final class AppModel {
                 showError("Stop the search before importing results."); return
             }
             query = imported.query.loadedForBoard()
+            // A copied search restores the query alone, as a shared link does.
+            if imported.bareQuery {
+                controller.clearDisplayedResults()
+                importNotice = "Loaded search from \(source)"
+                tab = .finder
+                return
+            }
             controller.loadImported(seeds: imported.seeds, dropped: imported.dropped,
                                     query: imported.query, trinkets: imported.trinkets)
             var notice = "Imported \(imported.seeds.count) seed\(imported.seeds.count == 1 ? "" : "s") from \(source)"
