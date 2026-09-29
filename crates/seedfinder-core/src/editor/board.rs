@@ -946,9 +946,9 @@ pub struct EditResult {
     /// Every key repair made before the edits ran, as `(old, new)`.
     pub rekeyed: Vec<(u64, u64)>,
     /// The row the platform should follow — scroll to, highlight, announce:
-    /// the joined source, the detached row, the anchor of the entry an edit
-    /// reshaped or a save landed in — as the last edit that applied left
-    /// it. A save names its entry even when it stored what was already
+    /// the item a join or detach moved (or the chip it folded into), the
+    /// anchor of the entry an edit reshaped or a save landed in — as the
+    /// last edit that applied left it. A save names its entry even when it stored what was already
     /// there, so a closing sheet can return to its chip; `None` after a
     /// removal and when no edit applied.
     pub focus: Option<u64>,

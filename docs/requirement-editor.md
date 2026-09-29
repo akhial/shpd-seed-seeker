@@ -368,7 +368,7 @@ normalized as any edit's rows are, which may merge alike stacks.
 | --- | --- |
 | `rows` | The list after the edits. |
 | `changed` | Whether the rows differ from the request's (a key repair or a label compaction counts). |
-| `focus` | The row to follow — scroll to, highlight, announce: the joined source, the detached row, the chip an edit reshaped or a save landed in (the chip a saved plain repeat folded into), as the last edit that applied left it. A save names its chip even when it stored what was already there (`changed: false`), so a closing sheet can return to it. `null` after a removal (`remove`, `remove_item`, a `remove_one` that took the chip itself) and when no edit applied. Always a visible row. |
+| `focus` | The row to follow — scroll to, highlight, announce: the item a join or detach moved (or the chip it folded into), the chip an edit reshaped or a save landed in (the chip a saved plain repeat folded into), as the last edit that applied left it. A save names its chip even when it stored what was already there (`changed: false`), so a closing sheet can return to it. `null` after a removal (`remove`, `remove_item`, a `remove_one` that took the chip itself) and when no edit applied. Always a visible row. |
 | `refused` | `{"reason", "message"}` of a refused edit, else `null`. |
 | `items` | The board's entries in list order, both sections together; split them by `blanket`. |
 | `counts` | How many entries each section shows (clusters and stacks count once). |
