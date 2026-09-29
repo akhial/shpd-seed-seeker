@@ -257,6 +257,11 @@ internal fun SeedFinderApp(
     val lastFinishedRun = search.lastRun
     val refinePhase = controller.refinePhase
     val isSearching = controller.isSearching || !controller.ready
+    // The effects below that wait for disk loading key on this composition's
+    // value, not a live read: loading can finish between a composition and
+    // its effects, and an effect launched while this was false would then see
+    // the rest of that composition (isSearching above) still saying "busy".
+    val controllerReady = controller.ready
     val searchError = search.error
     val snackbarHostState = remember { SnackbarHostState() }
     var scoutInput by remember { mutableStateOf("") }
@@ -277,8 +282,8 @@ internal fun SeedFinderApp(
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     // Restore the board once per activity after disk loading, including a pending refine's query.
-    LaunchedEffect(controller.ready) {
-        if (!controller.ready) return@LaunchedEffect
+    LaunchedEffect(controllerReady) {
+        if (!controllerReady) return@LaunchedEffect
         val query = controller.snapshot.pending?.request?.toPresetQuery() ?: controller.snapshot.query
         if (query != null) {
             requirements = load(query.requirements)
@@ -401,13 +406,15 @@ internal fun SeedFinderApp(
         }
     }
 
-    LaunchedEffect(sharedLink, controller.ready) {
-        if (!controller.ready) return@LaunchedEffect
+    // Declared after the board restore above, so in the first ready
+    // composition a link cold-starting the app replaces the restored query.
+    LaunchedEffect(sharedLink, controllerReady) {
+        if (!controllerReady) return@LaunchedEffect
         val text = sharedLink?.text ?: return@LaunchedEffect
         // App Links deliver every URL on the host; only ones that carry a
         // share code touch the query.
         val code = DeepLink.extractCode(text) ?: return@LaunchedEffect
-        if (isSearching) {
+        if (controller.isSearching) {
             linkError = "Stop the search before opening a shared search."
             return@LaunchedEffect
         }
