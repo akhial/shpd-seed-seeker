@@ -44,23 +44,6 @@ const lookup = new Map(items.map((item) => [item.id, item]));
 export const kindFamily = (kind: RequirementKind): ItemCategory =>
   kind === "melee_weapon" || kind === "thrown_weapon" ? "weapon" : kind;
 
-/** Weapon class a narrowed requirement kind selects, if any. */
-export const kindWeaponClass = (kind: RequirementKind): WeaponClass | undefined =>
-  kind === "melee_weapon" ? "melee" : kind === "thrown_weapon" ? "thrown" : undefined;
-
-/**
- * Tipped darts are guaranteed shop stock and can be tipped by hand, so no one
- * searches for them; they stay out of the pickers but render in scout views.
- */
-const isTippedDart = (item: CatalogItem): boolean => item.id.endsWith("_dart");
-
-/** Catalog items selectable under one requirement kind. */
-export const itemsForKind = (kind: RequirementKind): CatalogItem[] => {
-  const weaponClass = kindWeaponClass(kind);
-  const family = itemsByCategory[kindFamily(kind)];
-  const selectable = family.filter((item) => !isTippedDart(item));
-  return weaponClass ? selectable.filter((item) => item.class === weaponClass) : selectable;
-};
 export const getItem = (id: string): CatalogItem | undefined => lookup.get(id);
 /** Matches the game's transferUpgrade then visiblyUpgraded rounding. */
 export const displayedUpgrade = (id: string, upgrade: number): number => {
@@ -72,7 +55,6 @@ export const displayedUpgrade = (id: string, upgrade: number): number => {
         : 10;
   return Math.round((Math.round((upgrade * cap) / 10) * 10) / cap);
 };
-export const displayItemName = (id: string): string => getItem(id)?.name ?? id.replaceAll("_", " ");
 
 // The effect tables are generated from the game itself; a catalog without
 // them is a broken build, not something to paper over with a stale copy.

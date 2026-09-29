@@ -38,6 +38,7 @@ describe("share link codes", () => {
   const query = (...patch: Partial<QueryState>[]): QueryState =>
     Object.assign({ ...defaultQueryState() }, ...patch);
   const base = {
+    key: 1,
     tier: { mode: "any" as const, value: 3 },
     upgrade: { mode: "any" as const, value: 1 },
     uncursed: false,
@@ -65,7 +66,7 @@ describe("share link codes", () => {
           kind: "weapon",
           effect: ["Blazing", "Venomous", "Eldritch", "Vorpal", "Crystal"],
         },
-        { ...base, kind: "weapon", effect: ["Pressurized", "Wondrous"] },
+        { ...base, key: 2, kind: "weapon", effect: ["Pressurized", "Wondrous"] },
       ],
     });
     expect(JSON.parse(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(

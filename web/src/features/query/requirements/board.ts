@@ -1,0 +1,129 @@
+import { requirementBoard } from "../../../engine/editor";
+import type { EditorAnswer } from "../../../engine/editor";
+import type {
+  BoardEdit,
+  BoardRefusal,
+  BoardResponse,
+  QueryState,
+  RequirementState,
+} from "../../../engine/types";
+import { requirementFromRow, requirementToRow, resinCondition } from "../query";
+
+/**
+ * The requirement board as the shared core draws it (docs/requirement-editor.md):
+ * every rule behind the chips, clusters and stacks, every word on them, and
+ * every edit a gesture makes live in the core. This module only moves the
+ * query's requirements in and out of the `requirement_board` envelope.
+ */
+
+/** The part of the query the board draws. */
+export type BoardQuery = Pick<QueryState, "requirements" | "arcaneResin" | "arcaneResinFilter">;
+
+/**
+ * One past every key the editor has answered with. Sent with each request so
+ * a new row never takes the key of one removed earlier, which board state
+ * (an open stepper, a pick) may still hold.
+ */
+let nextKey = 1;
+
+/** The `next_key` to send with a request that may add rows. */
+export const nextKeyHint = (): number => nextKey;
+
+/** Notes an answer's `next_key`, so later requests keep counting from it. */
+export const noteNextKey = (key: number): void => {
+  nextKey = Math.max(nextKey, key);
+};
+
+function ask(query: BoardQuery, edits: BoardEdit[] = []): EditorAnswer<BoardResponse> {
+  const answer = requirementBoard({
+    rows: query.requirements.map(requirementToRow),
+    next_key: nextKey,
+    edits,
+    resin: resinCondition(query),
+  });
+  if (answer.ok) noteNextKey(answer.value.next_key);
+  return answer;
+}
+
+let drawn: { query: BoardQuery; answer: EditorAnswer<BoardResponse> } | undefined;
+
+const sameBoard = (left: BoardQuery, right: BoardQuery): boolean =>
+  left.requirements === right.requirements &&
+  left.arcaneResin === right.arcaneResin &&
+  left.arcaneResinFilter === right.arcaneResinFilter;
+
+const boardFields = ({ requirements, arcaneResin, arcaneResinFilter }: BoardQuery): BoardQuery => ({
+  requirements,
+  arcaneResin,
+  arcaneResinFilter,
+});
+
+/**
+ * The board of a query. The envelope runs once per change of the
+ * requirements or the resin, however many readers (both board sections, the
+ * header counts, the Start and Share gate) ask for it in between.
+ *
+ * The board draws a list as it is. Only a share link is normalized when it
+ * comes in (`normalizedQuery`); a list the web restores must keep matching
+ * a stored copy of itself (docs/requirement-editor.md, "When to normalize"):
+ * the saved query resumes its search, and an applied preset or imported
+ * results file must keep matching the preset's fingerprint or the results'
+ * own query. Every fold, edit and save accepts any encoding, the problems
+ * still gate Start and Share, and the first real edit normalizes the list.
+ */
+export function requirementBoardOf(query: BoardQuery): EditorAnswer<BoardResponse> {
+  if (drawn && sameBoard(drawn.query, query)) return drawn.answer;
+  const answer = ask(query);
+  drawn = { query: boardFields(query), answer };
+  return answer;
+}
+
+/** What a board edit did. */
+export interface BoardOutcome {
+  /** The requirements after the edit: the query's own list when nothing changed. */
+  requirements: RequirementState[];
+  changed: boolean;
+  /** Why the edit was refused, to say to the user. */
+  refused: BoardRefusal | null;
+  /** Keys the core renumbered, `[old, new]`, for state that holds keys. */
+  rekeyed: [number, number][];
+}
+
+/**
+ * Applies board edits in order. The rows are adopted only when the edits
+ * changed something, so a no-op keeps the query's identity: an unchanged
+ * query resumes a cancelled search and still matches its preset.
+ */
+export function editBoard(query: BoardQuery, edits: BoardEdit[]): EditorAnswer<BoardOutcome> {
+  const answer = ask(query, edits);
+  if (!answer.ok) return answer;
+  const { changed, refused, rekeyed, rows } = answer.value;
+  if (!changed)
+    return { ok: true, value: { requirements: query.requirements, changed, refused, rekeyed } };
+  let requirements: RequirementState[];
+  try {
+    requirements = rows.map(requirementFromRow);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+  // The answer already draws the edited rows, so the next render reuses it.
+  drawn = { query: { ...boardFields(query), requirements }, answer };
+  return { ok: true, value: { requirements, changed, refused, rekeyed } };
+}
+
+/**
+ * A query imported from a share link, its requirements in the editor's
+ * canonical encoding, as the contract asks of an imported list. The query
+ * comes back as it was when nothing needed rewriting, or when the editor
+ * cannot read it — the board then says why.
+ */
+export function normalizedQuery<Query extends BoardQuery>(query: Query): Query {
+  const answer = editBoard(query, [{ type: "normalize" }]);
+  return answer.ok && answer.value.changed
+    ? { ...query, requirements: answer.value.requirements }
+    : query;
+}
+
+/** A key as the core renumbered it, or the key itself. */
+export const rekey = (key: number, rekeyed: readonly [number, number][]): number =>
+  rekeyed.find(([old]) => old === key)?.[1] ?? key;

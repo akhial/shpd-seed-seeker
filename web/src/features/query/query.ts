@@ -1,11 +1,8 @@
-import { floorRequirementErrors, floorsFromDocument } from "../../shared/game/floor-requirements";
+import { floorsFromDocument } from "../../shared/game/floor-requirements";
 import {
   effectNamesForCategory,
   enchantmentNamesForCategory,
   getItem,
-  isCurseForCategory,
-  kindFamily,
-  kindWeaponClass,
   sources,
 } from "../../shared/game/catalog";
 import { ANY_ENCHANTMENT, WANDMAKER_QUESTS } from "../../engine/types";
@@ -16,7 +13,9 @@ import type {
   QueryState,
   RequirementDocument,
   RequirementEntryDocument,
+  RequirementRow,
   RequirementState,
+  ResinCondition,
   TierFilter,
   UpgradeFilter,
   WandmakerQuest,
@@ -30,147 +29,8 @@ import type {
 /** Deepest floor a search may cover. */
 export const MAX_DEPTH = 24;
 
-/** Tiers an "exactly tier N" requirement may name (tier 1 is starting gear). */
-export const EXACT_TIER_MIN = 2;
-export const EXACT_TIER_MAX = 5;
-
-/** Tiers an "at least / at most tier N" requirement may name; the ends of the
- * exact range would be redundant with "any" or "exactly". */
-export const BOUNDED_TIER_MIN = 3;
-export const BOUNDED_TIER_MAX = 4;
-
-/** Highest same-item group number (groups run 1..this, shown as A..D). */
-export const IDENTITY_GROUP_MAX = 4;
-
-/** Highest combined-level group number (groups run 1..this). */
-export const LEVEL_SUM_GROUP_MAX = 4;
-
-/** The most items a stack may ask for, its anchor included. */
-export const STACK_MAX = 3;
-
 /** First-deck transmutations after all four catalyst offers have been consumed. */
 export const TRINKET_TRANSMUTATION_MAX = 13;
-
-/** The highest upgrade a search may name for an item family. v4.0.0's Imp
- * vault sets the ceilings: its final-room options reach +5 on a weapon or
- * thrown weapon, +4 on armor, wands and rings. */
-export const MAX_UPGRADE_DEFAULT = 4;
-export const MAX_UPGRADE_RING = 4;
-export const MAX_UPGRADE_WEAPON = 5;
-
-/** The highest upgrade every ring but one can carry in a single world: ring
- * drops roll +0…+2, and the only source beyond that — the Imp vault's
- * final-room prize — appears once per run. */
-export const MAX_UPGRADE_RING_STANDARD = 2;
-
-/** The highest combined level `count` rings can reach together: one ring at
- * the vault ceiling, every other at the standard roll, each counting its
- * upgrade plus one. */
-export const ringStackCapacity = (count: number): number =>
-  MAX_UPGRADE_RING + 1 + (count - 1) * (MAX_UPGRADE_RING_STANDARD + 1);
-export const maxUpgradeFor = (family: string | undefined): number =>
-  family === "trinket"
-    ? 0
-    : family === "artifact"
-      ? 5
-      : family === "weapon"
-        ? MAX_UPGRADE_WEAPON
-        : family === "ring"
-          ? MAX_UPGRADE_RING
-          : MAX_UPGRADE_DEFAULT;
-
-/** The highest upgrade the generator puts on any item, whatever its tier. */
-export const MAX_UPGRADE_ANY_TIER = 4;
-
-/** The one weapon tier levelled past {@link MAX_UPGRADE_ANY_TIER}, a
- * v4.0.0-BETA-3 quirk: the Imp's vault lays out one tier-4 and one tier-5
- * weapon and rolls the tier-4 one at +3…+5 while the tier-5 one stops at +4.
- * So a +5 exists only on a tier-4 weapon, melee or thrown. When upstream
- * levels the two ranges this and its callers go away and every family caps
- * at {@link MAX_UPGRADE_ANY_TIER}. */
-export const EXTRA_UPGRADE_TIER = 4;
-
-/** Whether a requirement can still land on {@link EXTRA_UPGRADE_TIER}. */
-const reachesExtraUpgradeTier = (requirement: Pick<RequirementState, "item" | "tier">): boolean => {
-  if (requirement.item) return getItem(requirement.item)?.tier === EXTRA_UPGRADE_TIER;
-  const { mode, value } = requirement.tier;
-  return mode === "exact"
-    ? value === EXTRA_UPGRADE_TIER
-    : mode === "at_least"
-      ? value <= EXTRA_UPGRADE_TIER
-      : mode === "at_most"
-        ? value >= EXTRA_UPGRADE_TIER
-        : true;
-};
-
-/** The highest upgrade one requirement may name, its tier filter included. */
-export const maxUpgradeOf = (
-  requirement: Pick<RequirementState, "kind" | "item" | "tier">,
-): number => {
-  if (requirementFamily(requirement) === "artifact") return 5;
-  const ceiling = maxUpgradeFor(requirementFamily(requirement));
-  return ceiling > MAX_UPGRADE_ANY_TIER && !reachesExtraUpgradeTier(requirement)
-    ? MAX_UPGRADE_ANY_TIER
-    : ceiling;
-};
-
-/** The requirement with its upgrade pulled back under {@link maxUpgradeOf},
- * for edits — a narrowed tier, a named item — that lower the ceiling. */
-export const clampUpgrade = (requirement: RequirementState): RequirementState => {
-  if (requirement.upgrade.mode === "any") return requirement;
-  const maximum = maxUpgradeOf(requirement);
-  const ceiling = Math.max(1, requirement.upgrade.mode === "at_least" ? maximum - 1 : maximum);
-  return requirement.upgrade.value <= ceiling
-    ? requirement
-    : { ...requirement, upgrade: { ...requirement.upgrade, value: ceiling } };
-};
-
-/** The broad family a requirement belongs to, from its kind or its item. */
-export const requirementFamily = (
-  requirement: Pick<RequirementState, "kind" | "item">,
-): string | undefined =>
-  requirement.kind
-    ? kindFamily(requirement.kind)
-    : requirement.item
-      ? getItem(requirement.item)?.type
-      : undefined;
-
-/**
- * The most *levels* — upgrade plus one — one requirement can contribute to a
- * combined-level total: an exact upgrade counts as itself, anything else as
- * the family cap.
- */
-export const maxLevelOf = (requirement: RequirementState): number =>
-  (requirement.upgrade.mode === "exact" ? requirement.upgrade.value : maxUpgradeOf(requirement)) +
-  1;
-
-/** The highest combined level a group's members can reach together: each
- * one's own ceiling, bounded by what a world generates —
- * {@link ringStackCapacity}. */
-export const levelSumCapacity = (members: RequirementState[]): number =>
-  Math.min(
-    members.reduce((total, member) => total + maxLevelOf(member), 0),
-    ringStackCapacity(members.length),
-  );
-
-/**
- * Whether a requirement constrains anything beyond its category: a stack's
- * extra copies are exactly the unconstrained requirements. A per-item floor
- * limit is a placement bound, not an item property, and does not count.
- */
-export const isBareRequirement = (requirement: RequirementState): boolean =>
-  requirement.item === undefined &&
-  (requirement.kind === undefined || kindFamily(requirement.kind) === requirement.kind) &&
-  requirement.tier.mode === "any" &&
-  requirement.upgrade.mode === "any" &&
-  requirement.effect === undefined &&
-  !requirement.uncursed &&
-  !requirement.excludeResin &&
-  requirement.source === undefined;
-
-/** True when the effect filter is the "some non-curse effect" shorthand. */
-export const isAnyEnchantment = (effect: EffectFilter | undefined): boolean =>
-  effect === ANY_ENCHANTMENT;
 
 /** The explicit effect names a filter accepts (the shorthand expands to the family's enchantments). */
 export const effectNamesOf = (
@@ -238,10 +98,6 @@ export function querySlots(requirements: readonly RequirementState[]): QuerySlot
   return slots;
 }
 
-/** The number of slots a requirement list fills, counting each alternative group once. */
-export const slotCount = (requirements: readonly RequirementState[]): number =>
-  querySlots(requirements).length;
-
 /** The last floor the Blacksmith's quest can sit on: a run whose floor limit
  * reaches it always meets him, so "require Blacksmith" only matters below it. */
 export const BLACKSMITH_LAST_FLOOR = 14;
@@ -278,13 +134,6 @@ export const nearestOptionIndex = (options: readonly number[], value: number): n
 export const defaultTier = (): TierFilter => ({ mode: "any", value: 3 });
 export const defaultUpgrade = (): UpgradeFilter => ({ mode: "any", value: 1 });
 
-export const emptyRequirement = (kind?: RequirementState["kind"]): RequirementState => ({
-  kind,
-  tier: defaultTier(),
-  upgrade: defaultUpgrade(),
-  uncursed: false,
-});
-
 export const defaultQueryState = (): QueryState => ({
   autoApplyTrinket: true,
   requirements: [],
@@ -294,7 +143,8 @@ export const defaultQueryState = (): QueryState => ({
   challenges: [],
 });
 
-function requirementToDocument(requirement: RequirementState): RequirementDocument {
+/** The requirement as one entry of a query document, without its key or either/or label. */
+export function requirementToDocument(requirement: RequirementState): RequirementDocument {
   const output: RequirementDocument = {};
   // The category is always written, derived from the item when the editor
   // state has none: the engine's start decision compares kinds for equality,
@@ -436,6 +286,7 @@ function levelSumFromDocument(value: unknown): RequirementState["levelSum"] {
 
 function requirementFromDocument(
   value: RequirementDocument,
+  key: number,
   alternativeGroup?: number,
 ): RequirementState {
   const raw = value as Record<string, unknown>;
@@ -444,6 +295,7 @@ function requirementFromDocument(
   // the kind the start decision needs.
   const kind = value.kind ?? (value.item ? getItem(value.item)?.type : undefined);
   const requirement: RequirementState = {
+    key,
     kind,
     item: value.item,
     tier: tierFromDocument(raw.tier),
@@ -497,7 +349,10 @@ function requirementFromDocument(
   return requirement;
 }
 
-/** Flattens the entries: any_of groups get fresh sequential group ids in document order. */
+/**
+ * Flattens the entries: any_of groups get fresh sequential group ids in
+ * document order, and the rows are keyed 1…n for the requirement editor.
+ */
 function requirementsFromDocument(entries: RequirementEntryDocument[]): RequirementState[] {
   const requirements: RequirementState[] = [];
   let nextGroup = 0;
@@ -509,13 +364,79 @@ function requirementsFromDocument(entries: RequirementEntryDocument[]): Requirem
       nextGroup += 1;
       for (const member of members) {
         if (!isRecord(member) || "any_of" in member) throw new Error("any_of groups cannot nest");
-        requirements.push(requirementFromDocument(member as RequirementDocument, nextGroup));
+        requirements.push(
+          requirementFromDocument(
+            member as RequirementDocument,
+            requirements.length + 1,
+            nextGroup,
+          ),
+        );
       }
       continue;
     }
-    requirements.push(requirementFromDocument(entry as RequirementDocument));
+    requirements.push(
+      requirementFromDocument(entry as RequirementDocument, requirements.length + 1),
+    );
   }
   return requirements;
+}
+
+/** The requirement as a row of the requirement editor: its document entry, key and either/or label. */
+export function requirementToRow(requirement: RequirementState): RequirementRow {
+  return {
+    ...requirementToDocument(requirement),
+    key: requirement.key,
+    ...(requirement.alternativeGroup !== undefined
+      ? { alternative_group: requirement.alternativeGroup }
+      : {}),
+  };
+}
+
+/** Reads a row the requirement editor answered with back into editor state. */
+export function requirementFromRow(row: RequirementRow): RequirementState {
+  return requirementFromDocument(row, row.key, row.alternative_group);
+}
+
+/** A resin donor filter, or none when it asks for nothing beyond uncursed donors. */
+const withoutDefaultFilter = (filter: ArcaneResinFilter): ArcaneResinFilter | undefined =>
+  !filter.uncursed || filter.maxDepth !== undefined || filter.source || filter.includeMageWand
+    ? filter
+    : undefined;
+
+/** The query's Arcane Resin condition as the requirement editor reads it, or `null` without one. */
+export function resinCondition(
+  query: Pick<QueryState, "arcaneResin" | "arcaneResinFilter">,
+): ResinCondition | null {
+  const amount = query.arcaneResin;
+  if (!amount || !validArcaneResin(amount)) return null;
+  const filter = query.arcaneResinFilter;
+  return {
+    amount,
+    filter: filter
+      ? {
+          uncursed: filter.uncursed,
+          max_depth: filter.maxDepth ?? null,
+          source: filter.source ?? null,
+          include_mage_wand: filter.includeMageWand ?? false,
+        }
+      : null,
+  };
+}
+
+/** Reads a resin condition the requirement editor answered with back into query state. */
+export function resinFromCondition({
+  amount,
+  filter,
+}: ResinCondition): Pick<QueryState, "arcaneResin" | "arcaneResinFilter"> {
+  return {
+    arcaneResin: amount,
+    arcaneResinFilter: withoutDefaultFilter({
+      uncursed: filter?.uncursed ?? true,
+      ...(filter?.include_mage_wand ? { includeMageWand: true } : {}),
+      ...(filter?.max_depth != null ? { maxDepth: filter.max_depth } : {}),
+      ...(filter?.source ? { source: filter.source } : {}),
+    }),
+  };
 }
 
 /**
@@ -551,13 +472,7 @@ export function fromQueryJson(json: string): QueryState {
     };
     const errors = validateArcaneResinFilter(parsed);
     if (errors.length) throw new Error(errors[0]);
-    if (
-      !parsed.uncursed ||
-      parsed.maxDepth !== undefined ||
-      parsed.source ||
-      parsed.includeMageWand
-    )
-      arcaneResinFilter = parsed;
+    arcaneResinFilter = withoutDefaultFilter(parsed);
   }
   return {
     ...(document.arcane_resin ? { arcaneResin: document.arcane_resin } : {}),
@@ -575,220 +490,16 @@ export function fromQueryJson(json: string): QueryState {
   };
 }
 
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-}
-
-export function validateRequirement(requirement: RequirementState): string[] {
-  const errors: string[] = [];
-  const artifactTransmutations = requirement.artifactTransmutations ?? 0;
-  if (
-    !Number.isInteger(artifactTransmutations) ||
-    artifactTransmutations < 0 ||
-    artifactTransmutations > 10
-  )
-    errors.push("Choose an artifact transmutation count from 0 to 10.");
-  if (artifactTransmutations > 0 && requirementFamily(requirement) !== "artifact")
-    errors.push("Only artifacts can use artifact transmutations.");
-  const transmutations = requirement.trinketTransmutations ?? 0;
-  if (
-    !Number.isInteger(transmutations) ||
-    transmutations < 0 ||
-    transmutations > TRINKET_TRANSMUTATION_MAX
-  )
-    errors.push("Choose a transmutation count from 1 to 13.");
-  if (transmutations > 0 && requirementFamily(requirement) !== "trinket")
-    errors.push("Only trinkets can require transmutations.");
-  if (transmutations > 0 && requirement.selectTrinket)
-    errors.push("Only an initial offer can be chosen at +3.");
-  if (requirement.excludeResin !== undefined && typeof requirement.excludeResin !== "boolean")
-    errors.push("Invalid Auto resin exclusion.");
-  if (
-    requirement.excludeResin &&
-    (requirementFamily(requirement) !== "wand" || requirement.blanket)
-  )
-    errors.push("Only an ordinary wand can exclude Auto resin.");
-  if (
-    requirement.blanket &&
-    (requirement.identityGroup || requirement.levelSum || requirement.selectTrinket)
-  )
-    errors.push(
-      "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
-    );
-  if (requirement.selectTrinket && requirementFamily(requirement) !== "trinket")
-    errors.push("Only a trinket can be selected.");
-  if (requirementFamily(requirement) === "trinket" && !requirement.item)
-    errors.push("Select a trinket.");
-  if (requirementFamily(requirement) === "artifact" && !requirement.item)
-    errors.push("Select an artifact.");
-  const item = requirement.item ? getItem(requirement.item) : undefined;
-  const kind = requirement.kind ?? item?.type;
-  const family = kind ? kindFamily(kind) : undefined;
-  const weaponClass = kind ? kindWeaponClass(kind) : undefined;
-  if (!kind) errors.push("Choose an item category.");
-  if (item && requirement.kind && item.type !== family)
-    errors.push("The item does not belong to this category.");
-  else if (item && weaponClass && item.class !== weaponClass)
-    errors.push(`The item is not a ${weaponClass} weapon.`);
-  if (requirement.tier.mode !== "any") {
-    if (requirement.item || (family !== "weapon" && family !== "armor"))
-      errors.push("Tier filters require a wildcard weapon or armor.");
-    const { mode, value } = requirement.tier;
-    if (mode === "exact" && (value < EXACT_TIER_MIN || value > EXACT_TIER_MAX))
-      errors.push(`Exact tier must be ${EXACT_TIER_MIN} through ${EXACT_TIER_MAX}.`);
-    if (
-      (mode === "at_least" || mode === "at_most") &&
-      (value < BOUNDED_TIER_MIN || value > BOUNDED_TIER_MAX)
-    )
-      errors.push(`Tier bounds must be ${BOUNDED_TIER_MIN} or ${BOUNDED_TIER_MAX}.`);
-  }
-  if (requirement.upgrade.mode !== "any") {
-    const maximum = maxUpgradeOf(requirement);
-    const minimum = requirement.upgrade.mode === "exact" ? 1 : 0;
-    if (requirement.upgrade.value < minimum || requirement.upgrade.value > maximum) {
-      errors.push(
-        maximum < maxUpgradeFor(family)
-          ? `Upgrade must be ${minimum} through +${maximum}; only a tier-${EXTRA_UPGRADE_TIER} weapon reaches +${MAX_UPGRADE_WEAPON}.`
-          : `Upgrade must be ${minimum} through +${maximum}.`,
-      );
-    }
-  }
-  if (
-    requirement.maxDepth !== undefined &&
-    (requirement.maxDepth < 1 || requirement.maxDepth > MAX_DEPTH)
-  )
-    errors.push(`Requirement floor must be 1 through ${MAX_DEPTH}.`);
-  if (requirement.effect !== undefined) {
-    if (family !== "weapon" && family !== "armor")
-      errors.push("Effects require a weapon or armor category.");
-    else if (kind) {
-      const names = effectNamesOf(requirement.effect, kind);
-      const known = effectNamesForCategory(kind);
-      const unknown = names.filter((name) => !known.includes(name));
-      if (unknown.length > 0)
-        errors.push(`The effect ${unknown.join(", ")} does not belong to this category.`);
-      else if (names.length === 0) errors.push("Choose at least one effect.");
-      else if (requirement.uncursed && names.every((name) => isCurseForCategory(kind, name))) {
-        errors.push(
-          names.length === 1
-            ? "An uncursed item cannot have a curse effect."
-            : "An uncursed item cannot have only curse effects.",
-        );
-      }
-    }
-  }
-  if (requirement.levelSum) {
-    const { group, atLeast } = requirement.levelSum;
-    if (group < 1 || group > LEVEL_SUM_GROUP_MAX)
-      errors.push(`A combined-level group must be 1 through ${LEVEL_SUM_GROUP_MAX}.`);
-    if (atLeast < 1) errors.push("A combined level must be at least 1.");
-    if (requirementFamily(requirement) !== "ring")
-      errors.push("Only rings can count levels together.");
-    if (requirement.alternativeGroup !== undefined)
-      errors.push("An either/or alternative cannot count a combined level.");
-  }
-  if (
-    requirement.identityGroup !== undefined &&
-    (requirement.identityGroup < 1 || requirement.identityGroup > IDENTITY_GROUP_MAX)
-  ) {
-    errors.push(`A stack group must be 1 through ${IDENTITY_GROUP_MAX}.`);
-  }
-  return errors;
-}
-
-export function validateQuery(state: QueryState): ValidationResult {
-  const errors: string[] = floorRequirementErrors(state.floorRequirements ?? [], state.maxDepth);
-  if (!state.requirements.length && !state.arcaneResin && !state.floorRequirements?.length)
-    errors.push("Add at least one requirement.");
-  if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
-    errors.push("Arcane Resin must be Auto or a whole number from 0 through 65535.");
-  if (state.arcaneResinFilter) errors.push(...validateArcaneResinFilter(state.arcaneResinFilter));
-  if (
-    state.requirements.length > 0 &&
-    !state.requirements.some((requirement) => !requirement.blanket)
-  )
-    errors.push("Add at least one ordinary requirement.");
-  for (const slot of querySlots(state.requirements)) {
-    if (
-      slot.members.some(
-        (index) =>
-          Boolean(state.requirements[index].blanket) !==
-          Boolean(state.requirements[slot.members[0]].blanket),
-      )
-    )
-      errors.push("An either/or group cannot mix ordinary and blanket requirements.");
-  }
-  if (state.maxDepth < 1 || state.maxDepth > MAX_DEPTH)
-    errors.push(`Maximum floor must be 1 through ${MAX_DEPTH}.`);
-  state.requirements.forEach((requirement, index) => {
-    for (const error of validateRequirement(requirement))
-      errors.push(`Requirement ${index + 1}: ${error}`);
-  });
-  // A stack (identity group) has one anchor unit — a lone requirement or
-  // one alternative group — that may constrain the item it binds to; every
-  // other member is a bare copy of the same category.
-  const identityMembers = new Map<number, number[]>();
-  state.requirements.forEach((requirement, index) => {
-    if (!requirement.identityGroup) return;
-    identityMembers.set(requirement.identityGroup, [
-      ...(identityMembers.get(requirement.identityGroup) ?? []),
-      index,
-    ]);
-  });
-  for (const members of identityMembers.values()) {
-    const families = new Set(members.map((index) => requirementFamily(state.requirements[index])));
-    if (families.size > 1) {
-      errors.push("The copies of a stack must share its category.");
-      continue;
-    }
-    // The constrained members must all live in one unit.
-    const units = new Set(
-      members
-        .filter((index) => !isBareRequirement(state.requirements[index]))
-        .map((index) =>
-          state.requirements[index].alternativeGroup === undefined
-            ? `req:${index}`
-            : `alt:${state.requirements[index].alternativeGroup}`,
-        ),
-    );
-    if (units.size > 1)
-      errors.push("Only one item of a stack can carry constraints; the extra copies are plain.");
-  }
-  // Combined-level groups: one shared, reachable total, counted in levels
-  // (upgrade plus one per item).
-  const sumMembers = new Map<number, RequirementState[]>();
-  for (const requirement of state.requirements) {
-    if (!requirement.levelSum) continue;
-    sumMembers.set(requirement.levelSum.group, [
-      ...(sumMembers.get(requirement.levelSum.group) ?? []),
-      requirement,
-    ]);
-  }
-  for (const members of sumMembers.values()) {
-    const totals = new Set(members.map((member) => member.levelSum?.atLeast));
-    if (totals.size > 1) {
-      errors.push("A stack must share one combined level.");
-      continue;
-    }
-    const needed = members[0].levelSum?.atLeast ?? 0;
-    const capacity = levelSumCapacity(members);
-    if (needed > capacity)
-      errors.push(
-        `A combined level of ${needed} needs more items: these ${members.length} can reach ${capacity}.`,
-      );
-  }
-  return { valid: errors.length === 0, errors };
-}
-
-function validArcaneResin(value: unknown): boolean {
+/** Whether an Arcane Resin amount is Auto or a whole number of resin. */
+export function validArcaneResin(value: unknown): boolean {
   return (
     value === "auto" ||
     (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 65535)
   );
 }
 
-function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
+/** What is wrong with the Arcane Resin donor filter. */
+export function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
   const errors: string[] = [];
   if (typeof filter.uncursed !== "boolean") errors.push("Invalid Arcane Resin uncursed filter.");
   if (filter.includeMageWand !== undefined && typeof filter.includeMageWand !== "boolean")

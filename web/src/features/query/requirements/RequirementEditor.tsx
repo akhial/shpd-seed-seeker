@@ -1,224 +1,143 @@
-import { useEffect, useState } from "react";
-import {
-  armorCurses,
-  armorGlyphs,
-  itemsForKind,
-  kindFamily,
-  sources,
-  weaponCurses,
-  weaponEnchantments,
-} from "../../../shared/game/catalog";
-import {
-  BOUNDED_TIER_MAX,
-  BOUNDED_TIER_MIN,
-  EXACT_TIER_MAX,
-  EXACT_TIER_MIN,
-  FLOOR_LIMIT_OPTIONS,
-  STACK_MAX,
-  TRINKET_TRANSMUTATION_MAX,
-  canonicalEffect,
-  clampUpgrade,
-  effectNamesOf,
-  isAnyEnchantment,
-  maxUpgradeOf,
-  requirementFamily,
-  ringStackCapacity,
-  validateRequirement,
-} from "../query";
-import { ANY_ENCHANTMENT } from "../../../engine/types";
+import { useEffect } from "react";
 import type {
-  ArcaneResinAmount,
-  ArcaneResinFilter,
-  ItemCategory,
+  EditorChange,
+  EditorFloorToggle,
+  EditorOption,
+  EditorSheet,
+  EditorToggle,
   ItemSource,
-  RequirementKind,
-  RequirementState,
+  TierMode,
+  UpgradeMode,
 } from "../../../engine/types";
-import type { StackShape } from "./RequirementBoard";
 import { Field, Segmented, SliderRow, Sprite, Stepper } from "../../../shared/ui/primitives";
-import { requirementArt, requirementTitle } from "./summary";
+import { requirementArt } from "../../../shared/sprites/requirement-art";
 
-const CATEGORY_OPTIONS: { value: ItemCategory; label: string }[] = [
-  { value: "weapon", label: "Weapon" },
-  { value: "armor", label: "Armor" },
-  { value: "wand", label: "Wand" },
-  { value: "ring", label: "Ring" },
-  { value: "trinket", label: "Trinket" },
-  { value: "artifact", label: "Artifact" },
-];
+// The sheet draws the shared core's form (docs/requirement-editor.md): which
+// controls show, what they offer, their ranges, labels, help texts and errors
+// all come from it, and every control the user moves goes back as a change.
+// The dialog's own chrome — titles, the headings above pickers and mode
+// pickers, slider names, button labels — is the app's.
 
-const WEAPON_TYPE_OPTIONS: { value: RequirementKind; label: string }[] = [
-  { value: "weapon", label: "Any" },
-  { value: "melee_weapon", label: "Melee" },
-  { value: "thrown_weapon", label: "Thrown" },
-];
-
-const WILDCARD_LABELS: Record<RequirementKind, string> = {
-  weapon: "Any weapon",
-  melee_weapon: "Any melee weapon",
-  thrown_weapon: "Any thrown weapon",
-  armor: "Any armor",
-  wand: "Any wand",
-  ring: "Any ring",
-  trinket: "Trinket",
-  artifact: "Artifact",
+/** What the tier slider is called in each mode; the core shows it only in a bounded one. */
+const TIER_SLIDER: Record<TierMode, string> = {
+  any: "Tier",
+  exact: "Exact tier",
+  at_least: "Minimum tier",
+  at_most: "Maximum tier",
 };
 
-const TIER_OPTIONS = [
-  { value: "any", label: "Any" },
-  { value: "exact", label: "Exactly" },
-  { value: "at_least", label: "At least" },
-  { value: "at_most", label: "At most" },
-] as const;
+/** What the upgrade slider is called in each mode; the core shows it only in a bounded one. */
+const UPGRADE_SLIDER: Record<UpgradeMode, string> = {
+  any: "Upgrade",
+  exact: "Exactly",
+  at_least: "Minimum upgrade",
+};
 
-const UPGRADE_OPTIONS = [
-  { value: "any", label: "Any" },
-  { value: "exact", label: "Exactly" },
-  { value: "at_least", label: "At least" },
-] as const;
-
-type EffectMode = "any" | "any_enchantment" | "specific";
-const EFFECT_MODE_OPTIONS: { value: EffectMode; label: string }[] = [
-  { value: "any", label: "Any" },
-  { value: "any_enchantment", label: "Any enchantment" },
-  { value: "specific", label: "Specific…" },
-];
-
-/** Every integer from `first` through `last`. */
-const range = (first: number, last: number): number[] =>
-  Array.from({ length: last - first + 1 }, (_, index) => first + index);
-
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-/** Named families always select an identity; trinkets also discard hidden placement filters. */
-export function namedItemEditorRequirement(requirement: RequirementState): RequirementState {
-  if (requirementFamily(requirement) === "artifact") {
-    return {
-      ...requirement,
-      kind: "artifact",
-      item: requirement.item ?? itemsForKind("artifact")[0].id,
-      upgrade: { mode: "any", value: 0 },
-    };
+/** The item picker's options, those under one heading (`Tier 3`) in an optgroup. */
+function ItemOptions({ options }: { options: EditorOption<string | null>[] }) {
+  const runs: { group: string | null; options: EditorOption<string | null>[] }[] = [];
+  for (const option of options) {
+    const last = runs.at(-1);
+    if (option.group !== null && last?.group === option.group) last.options.push(option);
+    else runs.push({ group: option.group, options: [option] });
   }
-  if (requirementFamily(requirement) !== "trinket") return requirement;
-  return {
-    ...requirement,
-    kind: "trinket",
-    item: requirement.item ?? itemsForKind("trinket")[0].id,
-    source: undefined,
-    maxDepth: undefined,
-    tier: { mode: "any", value: 3 },
-    upgrade: { mode: "any", value: 0 },
-    effect: undefined,
-    uncursed: false,
-  };
+  const render = (option: EditorOption<string | null>) => (
+    <option key={option.value ?? ""} value={option.value ?? ""}>
+      {option.label}
+    </option>
+  );
+  return runs.flatMap(({ group, options }) =>
+    group === null
+      ? options.map(render)
+      : [
+          <optgroup key={group} label={group}>
+            {options.map(render)}
+          </optgroup>,
+        ],
+  );
+}
+
+/** A check box, with the help text the core gives it under it whenever it shows. */
+function CheckBox({
+  control,
+  onChange,
+}: {
+  control: EditorToggle;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <label className="d1-check">
+        <input
+          type="checkbox"
+          checked={control.value}
+          onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+        <span>{control.label}</span>
+      </label>
+      {control.caption !== null && <p className="d1-caption">{control.caption}</p>}
+    </>
+  );
+}
+
+/**
+ * A floor switch and its slider, which offers the floors the core lists. The
+ * core's value label says the whole reading ("Within first 4 floors"), so the
+ * slider keeps a fixed name of its own.
+ */
+function FloorLimit({
+  control,
+  name,
+  onEnabled,
+  onFloor,
+}: {
+  control: EditorFloorToggle;
+  name: string;
+  onEnabled: (enabled: boolean) => void;
+  onFloor: (floor: number) => void;
+}) {
+  return (
+    <>
+      <label className="d1-check">
+        <input
+          type="checkbox"
+          checked={control.enabled}
+          onChange={(event) => onEnabled(event.currentTarget.checked)}
+        />
+        <span>{control.label}</span>
+      </label>
+      {control.enabled && (
+        <SliderRow
+          label={control.value_label}
+          ariaLabel={name}
+          values={control.options.map((option) => option.value)}
+          value={control.value}
+          fill
+          onChange={onFloor}
+        />
+      )}
+    </>
+  );
 }
 
 export function RequirementEditor({
-  requirement,
-  isNew,
-  stack,
-  resinAmount,
-  resinFilter,
-  otherRequirements = [],
-  onSaveResin,
+  sheet,
+  notice,
+  onChange,
   onSave,
   onCancel,
 }: {
-  requirement: RequirementState;
-  isNew: boolean;
-  /** The chip's stack shape; a cluster member's belongs to the cluster. */
-  stack: StackShape;
-  resinAmount?: ArcaneResinAmount;
-  resinFilter?: ArcaneResinFilter;
-  otherRequirements?: RequirementState[];
-  onSaveResin?: (amount: ArcaneResinAmount, filter: ArcaneResinFilter) => void;
-  onSave: (
-    requirement: RequirementState,
-    count: number,
-    total: number | undefined,
-    copyDepth: number | undefined,
-  ) => void;
+  /** The open sheet: the core's draft and the form it shows. */
+  sheet: EditorSheet;
+  /** Why the last request failed, when the core could not answer it. */
+  notice?: string;
+  onChange: (change: EditorChange) => void;
+  onSave: () => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState<RequirementState>(() => {
-    const initial = namedItemEditorRequirement(requirement);
-    return { ...initial, tier: { ...initial.tier }, upgrade: { ...initial.upgrade } };
-  });
-  const [count, setCount] = useState(stack.count);
-  const [total, setTotal] = useState(stack.total);
-  const [copyDepth, setCopyDepth] = useState(stack.copyDepth);
-  const [amount, setAmount] = useState(resinAmount === "auto" ? 2 : (resinAmount ?? 2));
-  const [includeMageWand, setIncludeMageWand] = useState(resinFilter?.includeMageWand ?? false);
-  const [autoResin, setAutoResin] = useState(resinAmount === "auto");
-  // "Specific…" with nothing ticked yet is a transient editor state, not a
-  // filter, so it lives outside the draft; saving it means "any".
-  const [choosingEffects, setChoosingEffects] = useState(false);
-
-  // Every draft edit runs through the upgrade ceiling: naming an item or
-  // narrowing the tier can put a +5 out of reach, since only a tier-4 weapon
-  // is ever levelled that far.
-  const reviseDraft = (revise: (current: RequirementState) => RequirementState) =>
-    setDraft((current) => clampUpgrade(revise(current)));
-
-  const kind = draft.kind ?? "weapon";
-  const family = kindFamily(kind);
-  const resin = draft.item === "arcane_resin";
-  const maxUpgrade = maxUpgradeOf(draft);
-  const wildcardGear = !draft.item && (family === "weapon" || family === "armor");
-  const enchantments = family === "weapon" ? weaponEnchantments : armorGlyphs;
-  const curses = family === "weapon" ? weaponCurses : armorCurses;
-  const errors = validateRequirement(draft);
-  if (
-    !draft.blanket &&
-    family === "trinket" &&
-    draft.item &&
-    otherRequirements.some((r) => !r.blanket && r.item === draft.item)
-  )
-    errors.push("This trinket is already required. Each trinket appears only once in the deck.");
-  if (resin && !autoResin && (!Number.isInteger(amount) || amount < 1 || amount > 65535))
-    errors.push("Enter an amount from 1 to 65535.");
-  // A combined level is a property of a concrete stack of two or more —
-  // and of rings only, whose effects scale with their level.
-  const totalable = stack.inCluster
-    ? false
-    : !draft.blanket && draft.item !== undefined && count > 1 && family === "ring";
-  const effectiveTotal = totalable ? total : undefined;
-  const totalCapacity = ringStackCapacity(count);
-  const effectMode: EffectMode = isAnyEnchantment(draft.effect)
-    ? "any_enchantment"
-    : draft.effect !== undefined || choosingEffects
-      ? "specific"
-      : "any";
-  const chosenEffects = effectMode === "specific" ? effectNamesOf(draft.effect, kind) : [];
-
-  const setEffectMode = (mode: EffectMode) => {
-    setChoosingEffects(mode === "specific");
-    reviseDraft((current) => ({
-      ...current,
-      effect:
-        mode === "any"
-          ? undefined
-          : mode === "any_enchantment"
-            ? ANY_ENCHANTMENT
-            : isAnyEnchantment(current.effect)
-              ? undefined
-              : current.effect,
-    }));
-  };
-
-  const toggleEffect = (name: string) => {
-    reviseDraft((current) => {
-      const names = effectNamesOf(
-        isAnyEnchantment(current.effect) ? undefined : current.effect,
-        kind,
-      );
-      const next = names.includes(name)
-        ? names.filter((entry) => entry !== name)
-        : [...names, name];
-      return { ...current, effect: canonicalEffect(next, kind) };
-    });
-  };
+  const { form } = sheet;
+  const isNew = form.mode === "new";
+  const { tier, upgrade, effect, stack, transmutations, resin } = form;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -227,55 +146,6 @@ export function RequirementEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
-
-  const setKind = (nextKind: RequirementKind) => {
-    // Re-clicking the already-selected family must not widen a narrowed
-    // weapon kind or wipe the item, tier, and effect selections.
-    if (kindFamily(nextKind) === family) return;
-    reviseDraft((current) => ({
-      ...current,
-      kind: nextKind,
-      upgrade:
-        nextKind === "trinket" || nextKind === "artifact"
-          ? { mode: "any", value: 0 }
-          : family === "trinket"
-            ? { mode: "any", value: 1 }
-            : current.upgrade,
-      uncursed: nextKind === "trinket" ? false : current.uncursed,
-      excludeResin: nextKind === "wand" ? current.excludeResin : undefined,
-      selectTrinket: nextKind === "trinket" ? current.selectTrinket : undefined,
-      trinketTransmutations: nextKind === "trinket" ? current.trinketTransmutations : undefined,
-      artifactTransmutations: nextKind === "artifact" ? current.artifactTransmutations : undefined,
-      item:
-        nextKind === "trinket" || nextKind === "artifact"
-          ? itemsForKind(nextKind)[0].id
-          : undefined,
-      source: nextKind === "trinket" ? undefined : current.source,
-      maxDepth: nextKind === "trinket" ? undefined : current.maxDepth,
-      tier: { mode: "any", value: 3 },
-      effect: undefined,
-    }));
-    if (nextKind === "trinket" || nextKind === "artifact") {
-      setCount(1);
-      setTotal(undefined);
-      setCopyDepth(undefined);
-    }
-    setChoosingEffects(false);
-  };
-
-  const setTierMode = (mode: (typeof TIER_OPTIONS)[number]["value"]) => {
-    reviseDraft((current) => {
-      let value = current.tier.value;
-      if (mode === "exact") value = clamp(value, EXACT_TIER_MIN, EXACT_TIER_MAX);
-      if (mode === "at_least" || mode === "at_most")
-        value = clamp(value, BOUNDED_TIER_MIN, BOUNDED_TIER_MAX);
-      return { ...current, tier: { mode, value } };
-    });
-  };
-
-  const setUpgradeMode = (mode: (typeof UPGRADE_OPTIONS)[number]["value"]) => {
-    reviseDraft((current) => ({ ...current, upgrade: { ...current.upgrade, mode } }));
-  };
 
   return (
     <div
@@ -289,7 +159,7 @@ export function RequirementEditor({
         role="dialog"
         aria-modal="true"
         aria-label={
-          draft.blanket
+          form.blanket
             ? isNew
               ? "New blanket requirement"
               : "Edit blanket requirement"
@@ -299,10 +169,13 @@ export function RequirementEditor({
         }
       >
         <header className="d1-modal-head">
-          <Sprite art={requirementArt(draft)} size={28} />
+          <Sprite
+            art={requirementArt({ item: form.item.value, kind: form.kind.value })}
+            size={28}
+          />
           <div className="d1-modal-title">
             <h2>
-              {draft.blanket
+              {form.blanket
                 ? isNew
                   ? "New Blanket Requirement"
                   : "Edit Blanket Requirement"
@@ -310,581 +183,325 @@ export function RequirementEditor({
                   ? "New Requirement"
                   : "Edit Requirement"}
             </h2>
-            <p className="d1-mono">{requirementTitle(draft)}</p>
+            <p className="d1-mono">{form.title}</p>
           </div>
         </header>
 
         <div className="d1-modal-body">
           <section className="d1-modal-section">
             <h3>Item</h3>
-            <Segmented
-              value={family}
-              options={CATEGORY_OPTIONS}
-              onChange={setKind}
-              ariaLabel="Category"
-              fill
-            />
-            {family === "weapon" && (
+            {form.category.visible && (
+              <Segmented
+                value={form.category.value}
+                options={form.category.options}
+                onChange={(value) => onChange({ type: "set_category", value })}
+                ariaLabel="Category"
+                fill
+              />
+            )}
+            {form.weapon_type.visible && (
               <Field label="Weapon type" stack>
                 <Segmented
-                  value={kind}
-                  options={WEAPON_TYPE_OPTIONS}
-                  onChange={(nextKind) => {
-                    reviseDraft((current) => {
-                      const keepItem =
-                        current.item !== undefined &&
-                        itemsForKind(nextKind).some((item) => item.id === current.item);
-                      return {
-                        ...current,
-                        kind: nextKind,
-                        item: keepItem ? current.item : undefined,
-                      };
-                    });
-                  }}
+                  value={form.weapon_type.value}
+                  options={form.weapon_type.options}
+                  onChange={(value) => onChange({ type: "set_weapon_type", value })}
                   ariaLabel="Weapon type"
                 />
               </Field>
             )}
-            <Field label={family === "trinket" ? "Trinket" : "Item"}>
-              <select
-                className="d1-select"
-                value={draft.item ?? ""}
-                onChange={(event) => {
-                  const id = event.currentTarget.value || undefined;
-                  if (id === "arcane_resin") {
-                    setCount(1);
-                    setTotal(undefined);
-                    setCopyDepth(undefined);
+            {form.item.visible && (
+              <Field label={form.category.value === "trinket" ? "Trinket" : "Item"}>
+                <select
+                  className="d1-select"
+                  value={form.item.value ?? ""}
+                  onChange={(event) =>
+                    onChange({ type: "set_item", value: event.currentTarget.value || null })
                   }
-                  if (!id) setTotal(undefined);
-                  reviseDraft((current) => ({
-                    ...current,
-                    item: id,
-                    ...(id === "arcane_resin"
-                      ? {
-                          upgrade: { mode: "any" as const, value: 0 },
-                          effect: undefined,
-                          identityGroup: undefined,
-                          alternativeGroup: undefined,
-                          levelSum: undefined,
-                        }
-                      : {}),
-                    tier: id ? { mode: "any", value: current.tier.value } : current.tier,
-                  }));
-                }}
-              >
-                {family !== "trinket" && family !== "artifact" && (
-                  <option value="">{WILDCARD_LABELS[kind]}</option>
-                )}
-                {!draft.blanket && family === "wand" && onSaveResin && (
-                  <option value="arcane_resin">Arcane Resin</option>
-                )}
-                {family === "weapon"
-                  ? range(EXACT_TIER_MIN, EXACT_TIER_MAX).map((tier) => (
-                      <optgroup key={tier} label={`Tier ${tier}`}>
-                        {itemsForKind(kind)
-                          .filter((item) => item.tier === tier)
-                          .map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                      </optgroup>
-                    ))
-                  : itemsForKind(kind)
-                      .filter((item) => item.tier !== 1)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-              </select>
-            </Field>
-            {wildcardGear && (
+                >
+                  <ItemOptions options={form.item.options} />
+                </select>
+              </Field>
+            )}
+            {tier.visible && (
               <>
                 <Field label="Tier" stack>
                   <Segmented
-                    value={draft.tier.mode}
-                    options={[...TIER_OPTIONS]}
-                    onChange={setTierMode}
+                    value={tier.mode}
+                    options={tier.modes}
+                    onChange={(value) => onChange({ type: "set_tier_mode", value })}
                     ariaLabel="Tier predicate"
                   />
                 </Field>
-                {draft.tier.mode === "exact" && (
+                {tier.value_visible && (
                   <SliderRow
-                    label="Exact tier"
-                    valueLabel={`Tier ${draft.tier.value}`}
-                    min={2}
-                    max={5}
-                    value={draft.tier.value}
-                    onChange={(value) =>
-                      reviseDraft((current) => ({ ...current, tier: { ...current.tier, value } }))
-                    }
+                    label={TIER_SLIDER[tier.mode]}
+                    valueLabel={tier.value_label}
+                    min={tier.min}
+                    max={tier.max}
+                    value={tier.value}
+                    onChange={(value) => onChange({ type: "set_tier", value })}
                   />
-                )}
-                {(draft.tier.mode === "at_least" || draft.tier.mode === "at_most") && (
-                  <Field label={draft.tier.mode === "at_least" ? "Minimum tier" : "Maximum tier"}>
-                    <select
-                      className="d1-select"
-                      value={draft.tier.value}
-                      onChange={(event) => {
-                        const value = Number(event.currentTarget.value);
-                        reviseDraft((current) => ({
-                          ...current,
-                          tier: { ...current.tier, value },
-                        }));
-                      }}
-                    >
-                      {range(BOUNDED_TIER_MIN, BOUNDED_TIER_MAX).map((tier) => (
-                        <option key={tier} value={tier}>
-                          {draft.tier.mode === "at_least"
-                            ? `Tier ${tier} or higher`
-                            : `Tier ${tier} or lower`}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
                 )}
               </>
             )}
           </section>
 
-          {family === "trinket" && (
+          {transmutations.visible && (
             <section className="d1-modal-section">
               <label className="d1-check">
                 <input
                   type="checkbox"
-                  checked={!!draft.trinketTransmutations}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    reviseDraft((current) => ({
-                      ...current,
-                      trinketTransmutations: checked ? 1 : undefined,
-                      selectTrinket: checked ? undefined : current.selectTrinket,
-                    }));
-                  }}
+                  checked={transmutations.enabled}
+                  onChange={(event) =>
+                    onChange({
+                      type: "set_transmutations_enabled",
+                      value: event.currentTarget.checked,
+                    })
+                  }
                 />
-                <span>Allow transmutations</span>
+                <span>{transmutations.label}</span>
               </label>
-              {!!draft.trinketTransmutations && (
-                <>
-                  <Field label="Maximum transmutations" stack>
-                    <Stepper
-                      value={draft.trinketTransmutations}
-                      min={1}
-                      max={TRINKET_TRANSMUTATION_MAX}
-                      onChange={(value) =>
-                        reviseDraft((current) => ({ ...current, trinketTransmutations: value }))
-                      }
-                      ariaLabel="Maximum trinket transmutations"
-                      format={(value) => `At most ${value}`}
-                    />
-                  </Field>
-                  <p className="d1-caption">
-                    Matches an initial offer or any of the next {draft.trinketTransmutations}{" "}
-                    {draft.trinketTransmutations === 1 ? "trinket" : "trinkets"}. AutoTrinket can
-                    use a helpful starting trinket while your target waits in the deck. Scroll
-                    availability and effects after transmuting are not simulated.
-                  </p>
-                </>
-              )}
-            </section>
-          )}
-
-          {family === "artifact" && (
-            <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={!!draft.artifactTransmutations}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    reviseDraft((current) => ({
-                      ...current,
-                      artifactTransmutations: checked ? 1 : undefined,
-                      selectTrinket: checked ? undefined : current.selectTrinket,
-                    }));
-                  }}
-                />
-                <span>Allow transmutations</span>
-              </label>
-              {!!draft.artifactTransmutations && (
-                <>
-                  <Field label="Maximum transmutations">
-                    <Stepper
-                      value={draft.artifactTransmutations}
-                      min={1}
-                      max={10}
-                      onChange={(value) =>
-                        reviseDraft((current) => ({ ...current, artifactTransmutations: value }))
-                      }
-                      ariaLabel="Maximum artifact transmutations"
-                      format={(value) => `At most ${value}`}
-                    />
-                  </Field>
-                  <p className="d1-caption">
-                    Includes natural finds, or transforms an obtainable artifact using the remaining
-                    deck at the floor limit. Source and curse filters apply to the starting
-                    artifact. Scroll availability and later generation changes are not simulated.
-                  </p>
-                </>
-              )}
-            </section>
-          )}
-
-          {family === "trinket" && !draft.blanket && !draft.trinketTransmutations && (
-            <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={draft.selectTrinket ?? false}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked;
-                    reviseDraft((current) => ({ ...current, selectTrinket: checked }));
-                  }}
-                />
-                <span>Choose matching trinket at +3</span>
-              </label>
-              <p className="d1-caption">
-                Applies from the next floor after the catalyst can first be brewed. In an OR group,
-                exactly one of its initial-offer alternatives must be offered; multiple matches use
-                No Trinket.
-              </p>
-            </section>
-          )}
-
-          {resin && (
-            <section className="d1-modal-section">
-              <Field label="Minimum resin">
-                <Segmented
-                  value={autoResin ? "auto" : "amount"}
-                  options={[
-                    { value: "amount", label: "Amount" },
-                    { value: "auto", label: "Auto" },
-                  ]}
-                  onChange={(mode) => setAutoResin(mode === "auto")}
-                  ariaLabel="Resin amount mode"
-                />
-              </Field>
-              {autoResin ? (
-                <p className="d1-caption">
-                  Upgrade each kept wand to +3. Excluded wands and extra copies reserved for
-                  reforging need no resin.
-                </p>
-              ) : (
-                <Field label="Amount">
-                  <input
-                    className="d1-input"
-                    type="number"
-                    aria-label="Minimum resin"
-                    min={1}
-                    max={65535}
-                    step={1}
-                    value={Number.isNaN(amount) ? "" : amount}
-                    onChange={(event) => setAmount(event.currentTarget.valueAsNumber)}
+              {transmutations.enabled && (
+                <Field label="Maximum transmutations" stack>
+                  <Stepper
+                    value={transmutations.value}
+                    min={transmutations.min}
+                    max={transmutations.max}
+                    onChange={(value) => onChange({ type: "set_transmutations", value })}
+                    ariaLabel="Maximum transmutations"
+                    format={() => transmutations.value_label}
                   />
                 </Field>
               )}
+              {transmutations.caption_visible && transmutations.caption !== null && (
+                <p className="d1-caption">{transmutations.caption}</p>
+              )}
             </section>
           )}
 
-          {!resin &&
-            effectiveTotal === undefined &&
-            family !== "trinket" &&
-            family !== "artifact" && (
-              <section className="d1-modal-section">
-                <h3>Upgrade level</h3>
-                <Segmented
-                  value={draft.upgrade.mode}
-                  options={[...UPGRADE_OPTIONS]}
-                  onChange={setUpgradeMode}
-                  ariaLabel="Upgrade predicate"
-                  fill
+          {form.select_trinket.visible && (
+            <section className="d1-modal-section">
+              <CheckBox
+                control={form.select_trinket}
+                onChange={(value) => onChange({ type: "set_select_trinket", value })}
+              />
+            </section>
+          )}
+
+          {resin.visible && (
+            <section className="d1-modal-section">
+              {/* The amount field takes the section's label; Auto's meaning
+                  shows in its place. */}
+              <Field label={resin.label} stack>
+                <span className="d1-resin-amount">
+                  <Segmented
+                    value={resin.auto}
+                    options={resin.modes}
+                    onChange={(value) => onChange({ type: "set_resin_auto", value })}
+                    ariaLabel="Resin amount mode"
+                  />
+                  {!resin.auto && (
+                    <input
+                      className="d1-input"
+                      type="number"
+                      aria-label={resin.label}
+                      min={resin.min}
+                      max={resin.max}
+                      step={1}
+                      value={resin.amount ?? ""}
+                      onChange={(event) => {
+                        const amount = event.currentTarget.valueAsNumber;
+                        onChange({
+                          type: "set_resin_amount",
+                          value: Number.isNaN(amount) ? null : amount,
+                        });
+                      }}
+                    />
+                  )}
+                </span>
+              </Field>
+              {resin.auto && <p className="d1-caption">{resin.caption}</p>}
+            </section>
+          )}
+
+          {upgrade.visible && (
+            <section className="d1-modal-section">
+              <h3>Upgrade level</h3>
+              <Segmented
+                value={upgrade.mode}
+                options={upgrade.modes}
+                onChange={(value) => onChange({ type: "set_upgrade_mode", value })}
+                ariaLabel="Upgrade predicate"
+                fill
+              />
+              {upgrade.value_visible && (
+                <SliderRow
+                  label={UPGRADE_SLIDER[upgrade.mode]}
+                  valueLabel={upgrade.value_label}
+                  min={upgrade.min}
+                  max={upgrade.max}
+                  value={upgrade.value}
+                  onChange={(value) => onChange({ type: "set_upgrade", value })}
                 />
-                {draft.upgrade.mode === "exact" && (
-                  <SliderRow
-                    label="Exactly"
-                    valueLabel={`+${draft.upgrade.value}`}
-                    min={1}
-                    max={maxUpgrade}
-                    value={draft.upgrade.value}
-                    onChange={(value) =>
-                      reviseDraft((current) => ({
-                        ...current,
-                        upgrade: { ...current.upgrade, value },
-                      }))
-                    }
-                  />
-                )}
-                {draft.upgrade.mode === "at_least" && (
-                  // Under v4.0.0's ceilings every family spans at least +1…+3
-                  // (weapons +1…+4), enough range to warrant a slider.
-                  <SliderRow
-                    label="Minimum upgrade"
-                    valueLabel={`+${draft.upgrade.value} or higher`}
-                    min={1}
-                    max={maxUpgrade - 1}
-                    value={draft.upgrade.value}
-                    onChange={(value) =>
-                      reviseDraft((current) => ({
-                        ...current,
-                        upgrade: { ...current.upgrade, value },
-                      }))
-                    }
-                  />
-                )}
-              </section>
-            )}
+              )}
+            </section>
+          )}
 
-          {!resin &&
-            !draft.blanket &&
-            !stack.inCluster &&
-            family !== "trinket" &&
-            family !== "artifact" && (
-              <section className="d1-modal-section">
-                <div className="d1-modal-section-head">
-                  <h3>Total item count</h3>
-                  <Stepper
-                    value={count}
-                    min={1}
-                    max={STACK_MAX}
-                    format={(value) => `×${value}`}
-                    onChange={(value) => {
-                      setCount(value);
-                      if (value < 2) setTotal(undefined);
-                      else if (total !== undefined)
-                        setTotal(clamp(total, 1, ringStackCapacity(value)));
-                    }}
-                    ariaLabel="How many of this"
-                  />
-                </div>
-                {count > 1 && effectiveTotal === undefined && (
-                  <>
-                    <label className="d1-check">
-                      <input
-                        type="checkbox"
-                        checked={copyDepth !== undefined}
-                        onChange={(event) =>
-                          setCopyDepth(event.currentTarget.checked ? 4 : undefined)
-                        }
-                      />
-                      <span>Limit the extra copies to a floor</span>
-                    </label>
-                    {copyDepth !== undefined && (
-                      <SliderRow
-                        label="Copies within first"
-                        valueLabel={`${copyDepth} floor${copyDepth === 1 ? "" : "s"}`}
-                        values={FLOOR_LIMIT_OPTIONS}
-                        value={copyDepth}
-                        fill
-                        onChange={setCopyDepth}
-                      />
-                    )}
-                  </>
-                )}
-                {totalable && (
-                  <>
-                    <label className="d1-check">
-                      <input
-                        type="checkbox"
-                        checked={total !== undefined}
-                        onChange={(event) =>
-                          setTotal(
-                            event.currentTarget.checked
-                              ? clamp(count, 1, totalCapacity)
-                              : undefined,
-                          )
-                        }
-                      />
-                      <span>Count levels together</span>
-                    </label>
-                    {total !== undefined && (
-                      <SliderRow
-                        label="Levels reach"
-                        valueLabel={`≥ ${total} across up to ${count}`}
-                        min={1}
-                        max={totalCapacity}
-                        value={clamp(total, 1, totalCapacity)}
-                        fill
-                        onChange={setTotal}
-                      />
-                    )}
-                  </>
-                )}
-              </section>
-            )}
+          {stack.visible && (
+            <section className="d1-modal-section">
+              <div className="d1-modal-section-head">
+                <h3>{stack.label}</h3>
+                <Stepper
+                  value={stack.count}
+                  min={stack.min}
+                  max={stack.max}
+                  format={() => stack.value_label}
+                  onChange={(value) => onChange({ type: "set_count", value })}
+                  ariaLabel={stack.label}
+                />
+              </div>
+              {stack.copy_depth.visible && (
+                <FloorLimit
+                  control={stack.copy_depth}
+                  name="Copies within first"
+                  onEnabled={(value) => onChange({ type: "set_copy_depth_enabled", value })}
+                  onFloor={(value) => onChange({ type: "set_copy_depth", value })}
+                />
+              )}
+              {stack.count_levels.visible && (
+                <>
+                  <label className="d1-check">
+                    <input
+                      type="checkbox"
+                      checked={stack.count_levels.enabled}
+                      onChange={(event) =>
+                        onChange({ type: "set_count_levels", value: event.currentTarget.checked })
+                      }
+                    />
+                    <span>{stack.count_levels.label}</span>
+                  </label>
+                  {/* This caption explains the switch, so it shows beside it. */}
+                  {stack.count_levels.caption_visible && stack.count_levels.caption !== null && (
+                    <p className="d1-caption">{stack.count_levels.caption}</p>
+                  )}
+                  {stack.count_levels.enabled && (
+                    <SliderRow
+                      label="Levels reach"
+                      valueLabel={stack.count_levels.value_label}
+                      min={stack.count_levels.min}
+                      max={stack.count_levels.max}
+                      value={stack.count_levels.value}
+                      fill
+                      onChange={(value) => onChange({ type: "set_total", value })}
+                    />
+                  )}
+                </>
+              )}
+            </section>
+          )}
 
-          {family !== "trinket" && (
+          {(effect.visible ||
+            form.uncursed.visible ||
+            form.source.visible ||
+            form.floor_limit.visible) && (
             <section className="d1-modal-section">
               <h3>Details</h3>
-              {(family === "weapon" || family === "armor") && (
+              {effect.visible && (
                 <>
-                  <Field label={family === "weapon" ? "Enchantment" : "Glyph"} stack>
+                  <Field label={effect.label} stack>
                     <Segmented
-                      value={effectMode}
-                      options={
-                        family === "weapon"
-                          ? EFFECT_MODE_OPTIONS
-                          : EFFECT_MODE_OPTIONS.map((option) =>
-                              option.value === "any_enchantment"
-                                ? { ...option, label: "Any glyph" }
-                                : option,
-                            )
-                      }
-                      onChange={setEffectMode}
-                      ariaLabel={family === "weapon" ? "Enchantment filter" : "Glyph filter"}
+                      value={effect.mode}
+                      options={effect.modes}
+                      onChange={(value) => onChange({ type: "set_effect_mode", value })}
+                      ariaLabel={`${effect.label} filter`}
                     />
                   </Field>
-                  {effectMode === "specific" && (
+                  {effect.choices_visible && (
                     <div className="d1-effect-grid" role="group" aria-label="Effects">
-                      <span className="d1-effect-grid-head">
-                        {family === "weapon" ? "Enchantments" : "Glyphs"}
-                      </span>
-                      {enchantments.map((name) => (
-                        <label className="d1-check" key={name}>
-                          <input
-                            type="checkbox"
-                            checked={chosenEffects.includes(name)}
-                            onChange={() => toggleEffect(name)}
-                          />
-                          <span>{name}</span>
-                        </label>
-                      ))}
-                      {!draft.uncursed && (
-                        <>
-                          <span className="d1-effect-grid-head">Curses</span>
-                          {curses.map((name) => (
-                            <label className="d1-check" key={name}>
+                      {effect.groups.flatMap((group) => [
+                        <span className="d1-effect-grid-head" key={group.value}>
+                          {group.label}
+                        </span>,
+                        ...effect.choices
+                          .filter((choice) => choice.group === group.value)
+                          .map((choice) => (
+                            <label className="d1-check" key={choice.value}>
                               <input
                                 type="checkbox"
-                                checked={chosenEffects.includes(name)}
-                                onChange={() => toggleEffect(name)}
+                                checked={choice.selected}
+                                onChange={() =>
+                                  onChange({ type: "toggle_effect", value: choice.value })
+                                }
                               />
-                              <span>{name}</span>
+                              <span>{choice.label}</span>
                             </label>
-                          ))}
-                        </>
-                      )}
-                      <p className="d1-caption d1-effect-grid-note">
-                        {chosenEffects.length === 0
-                          ? "Tick the effects the item may carry; none ticked means any."
-                          : `Matches any one of ${chosenEffects.length} effect${chosenEffects.length === 1 ? "" : "s"}.`}
-                      </p>
+                          )),
+                      ])}
+                      <p className="d1-caption d1-effect-grid-note">{effect.caption}</p>
                     </div>
                   )}
                 </>
               )}
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={draft.uncursed}
-                  onChange={(event) => {
-                    const uncursed = event.currentTarget.checked;
-                    // Curses leave the selection as they leave the grid.
-                    reviseDraft((current) => {
-                      if (
-                        !uncursed ||
-                        current.effect === undefined ||
-                        isAnyEnchantment(current.effect)
-                      )
-                        return { ...current, uncursed };
-                      const kept = effectNamesOf(current.effect, kind).filter(
-                        (name) => !curses.includes(name),
-                      );
-                      return { ...current, uncursed, effect: canonicalEffect(kept, kind) };
-                    });
-                  }}
+              {form.uncursed.visible && (
+                <CheckBox
+                  control={form.uncursed}
+                  onChange={(value) => onChange({ type: "set_uncursed", value })}
                 />
-                <span>{resin ? "Require uncursed wands" : "Require uncursed"}</span>
-              </label>
-              <Field label="Source">
-                <select
-                  className="d1-select"
-                  value={draft.source ?? ""}
-                  onChange={(event) => {
-                    const source = (event.currentTarget.value || undefined) as
-                      | ItemSource
-                      | undefined;
-                    reviseDraft((current) => ({ ...current, source }));
-                  }}
-                >
-                  <option value="">Any</option>
-                  {sources.map((source) => (
-                    <option key={source.value} value={source.value}>
-                      {source.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={draft.maxDepth !== undefined}
-                  onChange={(event) => {
-                    const limited = event.currentTarget.checked;
-                    reviseDraft((current) => ({ ...current, maxDepth: limited ? 4 : undefined }));
-                  }}
-                />
-                <span>{resin ? "Limit wands to a floor" : "Limit this item to a floor"}</span>
-              </label>
-              {draft.maxDepth !== undefined && (
-                <SliderRow
-                  label="Within first"
-                  valueLabel={`${draft.maxDepth} floor${draft.maxDepth === 1 ? "" : "s"}`}
-                  values={FLOOR_LIMIT_OPTIONS}
-                  value={draft.maxDepth}
-                  fill
-                  onChange={(value) => reviseDraft((current) => ({ ...current, maxDepth: value }))}
+              )}
+              {form.source.visible && (
+                <Field label="Source">
+                  <select
+                    className="d1-select"
+                    value={form.source.value ?? ""}
+                    onChange={(event) =>
+                      onChange({
+                        type: "set_source",
+                        value: (event.currentTarget.value || null) as ItemSource | null,
+                      })
+                    }
+                  >
+                    {form.source.options.map((option) => (
+                      <option key={option.value ?? ""} value={option.value ?? ""}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              {form.floor_limit.visible && (
+                <FloorLimit
+                  control={form.floor_limit}
+                  name="Within first"
+                  onEnabled={(value) => onChange({ type: "set_floor_limit_enabled", value })}
+                  onFloor={(value) => onChange({ type: "set_floor_limit", value })}
                 />
               )}
             </section>
           )}
 
-          {resin && (
+          {resin.include_mage_wand.visible && (
             <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={includeMageWand}
-                  onChange={(event) => setIncludeMageWand(event.currentTarget.checked)}
-                />
-                <span>Include Mage’s starting wand</span>
-              </label>
-              <p className="d1-caption">
-                Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and
-                dismantle it after imbuing.
-              </p>
+              <CheckBox
+                control={resin.include_mage_wand}
+                onChange={(value) => onChange({ type: "set_include_mage_wand", value })}
+              />
             </section>
           )}
-          {!resin && !draft.blanket && family === "wand" && (
+          {form.exclude_resin.visible && (
             <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={draft.excludeResin ?? false}
-                  onChange={(event) => {
-                    const excludeResin = event.currentTarget.checked;
-                    reviseDraft((current) => ({
-                      ...current,
-                      excludeResin: excludeResin || undefined,
-                    }));
-                  }}
-                />
-                <span>Exclude from Auto resin</span>
-              </label>
-              <p className="d1-caption">
-                Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin
-                upgrades do not transfer to the staff. Extra copies are reserved for reforging and
-                never need Auto resin.
-              </p>
+              <CheckBox
+                control={form.exclude_resin}
+                onChange={(value) => onChange({ type: "set_exclude_resin", value })}
+              />
             </section>
           )}
 
-          {errors.length > 0 && (
+          {(form.errors.length > 0 || notice) && (
             <ul className="d1-editor-errors" role="alert">
-              {errors.map((error) => (
+              {form.errors.map((error) => (
                 <li key={error}>{error}</li>
               ))}
+              {notice && <li>{notice}</li>}
             </ul>
           )}
         </div>
@@ -896,27 +513,11 @@ export function RequirementEditor({
           <button
             type="button"
             className="d1-btn d1-btn-primary"
-            disabled={errors.length > 0}
-            onClick={() =>
-              resin
-                ? onSaveResin?.(autoResin ? "auto" : amount, {
-                    uncursed: draft.uncursed,
-                    ...(includeMageWand ? { includeMageWand: true } : {}),
-                    maxDepth: draft.maxDepth,
-                    source: draft.source,
-                  })
-                : onSave(
-                    draft,
-                    draft.blanket || stack.inCluster ? 1 : count,
-                    effectiveTotal,
-                    stack.inCluster || count < 2 || effectiveTotal !== undefined
-                      ? undefined
-                      : copyDepth,
-                  )
-            }
+            disabled={!form.can_save}
+            onClick={onSave}
           >
             {isNew
-              ? draft.blanket
+              ? form.blanket
                 ? "Add Blanket Requirement"
                 : "Add Requirement"
               : "Save Changes"}

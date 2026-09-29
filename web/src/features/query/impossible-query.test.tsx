@@ -1,12 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, expect, it } from "vite-plus/test";
-import { defaultQueryState, fromQueryJson, toQueryJson, validateQuery } from "./query";
+import { defaultQueryState, fromQueryJson, toQueryJson } from "./query";
+import { validateQuery } from "./validation";
 import { queryStore } from "../../app/store";
 import init, { analyze_query, SearchSession } from "../../engine/pkg/seedfinder.js";
 import type { AnalysisResult } from "../../engine/types";
 import { QueryPanel } from "./QueryPanel";
 import { RequirementEditor } from "./requirements/RequirementEditor";
+import { changeSheet, openSheet } from "./requirements/sheet";
+import type { SheetTarget } from "./requirements/sheet";
 
 beforeAll(async () => {
   await init({
@@ -90,28 +93,28 @@ it("blocks duplicate trinkets in saved queries and the editor, while allowing bl
       "Rat Skull is required more than once, but each trinket appears only once in the deck.",
     ],
   });
-  for (const blanket of [false, true]) {
-    const html = renderToStaticMarkup(
+  const sheetHtml = (target: SheetTarget, item?: string) => {
+    let sheet = openSheet(query, target);
+    if (sheet.ok && item)
+      sheet = changeSheet(sheet.value, { type: "set_category", value: "trinket" });
+    if (sheet.ok && item) sheet = changeSheet(sheet.value, { type: "set_item", value: item });
+    if (!sheet.ok) throw new Error(sheet.error);
+    return renderToStaticMarkup(
       <RequirementEditor
-        requirement={{ ...query.requirements[1], blanket }}
-        isNew
-        stack={{ count: 1, inCluster: false }}
-        otherRequirements={[query.requirements[0]]}
+        sheet={sheet.value}
+        onChange={() => {}}
         onSave={() => {}}
         onCancel={() => {}}
       />,
     );
+  };
+  for (const blanket of [false, true]) {
+    const html = sheetHtml({ type: "new", blanket }, "rat_skull");
     expect(html.includes("This trinket is already required.")).toBe(!blanket);
   }
-  const html = renderToStaticMarkup(
-    <RequirementEditor
-      requirement={query.requirements[0]}
-      isNew={false}
-      stack={{ count: 1, inCluster: false }}
-      otherRequirements={[]}
-      onSave={() => {}}
-      onCancel={() => {}}
-    />,
-  );
-  expect(html).not.toContain("This trinket is already required.");
+  // A chip's sheet counts the other rows naming its trinket, never the chip itself.
+  expect(sheetHtml({ type: "row", key: 1 })).toContain("This trinket is already required.");
+  const single = fromQueryJson('{"requirements":[{"item":"rat_skull"}]}');
+  const own = openSheet(single, { type: "row", key: 1 });
+  expect(own.ok && own.value.form.errors).toEqual([]);
 });

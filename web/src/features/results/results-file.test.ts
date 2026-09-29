@@ -26,6 +26,7 @@ const loadedQuery: QueryState = {
   autoApplyTrinket: false,
   requirements: [
     {
+      key: 1,
       kind: "ring",
       item: "ring_tenacity",
       tier: { mode: "any", value: 3 },
@@ -34,6 +35,7 @@ const loadedQuery: QueryState = {
       source: "imp_reward",
     },
     {
+      key: 2,
       kind: "wand",
       tier: { mode: "any", value: 3 },
       upgrade: { mode: "at_least", value: 2 },
@@ -154,6 +156,7 @@ describe("results file", () => {
       ...defaultQueryState(),
       requirements: [
         {
+          key: 1,
           kind: "wand",
           tier: { mode: "any", value: 3 },
           upgrade: { mode: "any", value: 1 },
@@ -177,6 +180,7 @@ describe("results file", () => {
       requirements: [
         {
           ...base,
+          key: 1,
           kind: "weapon",
           item: "spear",
           upgrade: { mode: "exact", value: 3 },
@@ -184,6 +188,7 @@ describe("results file", () => {
         },
         {
           ...base,
+          key: 2,
           kind: "thrown_weapon",
           item: "shuriken",
           upgrade: { mode: "exact", value: 2 },
@@ -191,14 +196,15 @@ describe("results file", () => {
         },
         {
           ...base,
+          key: 3,
           kind: "weapon",
           item: "greatshield",
           upgrade: { mode: "exact", value: 2 },
           effect: ["Blocking", "Projecting", "Vampiric"],
         },
-        { ...base, kind: "armor", effect: "any_enchantment", uncursed: true },
-        { ...base, kind: "ring", item: "ring_might", levelSum: { group: 2, atLeast: 4 } },
-        { ...base, kind: "ring", item: "ring_might", levelSum: { group: 2, atLeast: 4 } },
+        { ...base, key: 4, kind: "armor", effect: "any_enchantment", uncursed: true },
+        { ...base, key: 5, kind: "ring", item: "ring_might", levelSum: { group: 2, atLeast: 4 } },
+        { ...base, key: 6, kind: "ring", item: "ring_might", levelSum: { group: 2, atLeast: 4 } },
       ],
     };
     const decoded = decodeResultsFile(encodeResultsFile(toQueryDocument(query), ["AAA-AAA-BUH"]));
@@ -242,6 +248,7 @@ it("preserves each automatic recipe through export, import and duplicate removal
     autoApplyTrinket: true,
     requirements: [
       {
+        key: 1,
         kind: "weapon",
         item: "runic_blade",
         tier: { mode: "any", value: 3 },
