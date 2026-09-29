@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it } from "vite-plus/test";
-import { defaultQueryState, validateQuery } from "./query";
+import { defaultQueryState } from "./query";
+import { validateQuery } from "./validation";
 import { queryStore } from "../../app/store";
 import { QueryPanel } from "./QueryPanel";
 import { FarmingFloors } from "./FarmingFloors";

@@ -80,6 +80,20 @@ impl ItemKind {
     }
 }
 
+/// Stable document name for one item family: the `kind` value of the query
+/// document, the share link's JSON form and the editor envelopes.
+#[must_use]
+pub const fn kind_name(kind: ItemKind) -> &'static str {
+    match kind {
+        ItemKind::Weapon => "weapon",
+        ItemKind::Armor => "armor",
+        ItemKind::Wand => "wand",
+        ItemKind::Ring => "ring",
+        ItemKind::Trinket => "trinket",
+        ItemKind::Artifact => "artifact",
+    }
+}
+
 /// Melee/thrown classification for `ItemKind::Weapon` catalog entries.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]
@@ -376,7 +390,13 @@ impl ItemId {
 pub struct ItemDefinition {
     pub id: ItemId,
     pub stable_id: &'static str,
+    /// Sentence-case name ("Wand of magic missile") used by feasibility
+    /// reasons and the CLI, whose output is pinned by tests and scripts.
     pub name: &'static str,
+    /// Title-case name every frontend shows ("Wand of Magic Missile"):
+    /// exactly the upstream catalog asset's `name`, so chips, pickers and the
+    /// scout agree on every platform. The requirement editor uses only this.
+    pub display_name: &'static str,
     pub kind: ItemKind,
     /// Weapon/armor tier. Wands have no tier.
     pub tier: Option<u8>,
@@ -425,11 +445,20 @@ impl ItemDefinition {
 }
 
 macro_rules! item {
-    ($variant:ident, $stable:literal, $name:literal, $kind:ident, $tier:expr, $sprite:expr) => {
+    (
+        $variant:ident,
+        $stable:literal,
+        $name:literal,
+        $display_name:literal,
+        $kind:ident,
+        $tier:expr,
+        $sprite:expr
+    ) => {
         ItemDefinition {
             id: ItemId::$variant,
             stable_id: $stable,
             name: $name,
+            display_name: $display_name,
             kind: ItemKind::$kind,
             tier: $tier,
             sprite_index: $sprite,
@@ -443,54 +472,99 @@ pub const ITEMS: &[ItemDefinition] = &[
         WornShortsword,
         "worn_shortsword",
         "Worn shortsword",
+        "Worn Shortsword",
         Weapon,
         Some(1),
         96
     ),
-    item!(Cudgel, "cudgel", "Cudgel", Weapon, Some(1), 97),
+    item!(Cudgel, "cudgel", "Cudgel", "Cudgel", Weapon, Some(1), 97),
     item!(
         StuddedGloves,
         "gloves",
         "Studded gloves",
+        "Studded Gloves",
         Weapon,
         Some(1),
         98
     ),
-    item!(Rapier, "rapier", "Rapier", Weapon, Some(1), 99),
-    item!(Dagger, "dagger", "Dagger", Weapon, Some(1), 100),
-    item!(Shortsword, "shortsword", "Shortsword", Weapon, Some(2), 104),
-    item!(HandAxe, "hand_axe", "Hand axe", Weapon, Some(2), 105),
-    item!(Spear, "spear", "Spear", Weapon, Some(2), 106),
+    item!(Rapier, "rapier", "Rapier", "Rapier", Weapon, Some(1), 99),
+    item!(Dagger, "dagger", "Dagger", "Dagger", Weapon, Some(1), 100),
+    item!(
+        Shortsword,
+        "shortsword",
+        "Shortsword",
+        "Shortsword",
+        Weapon,
+        Some(2),
+        104
+    ),
+    item!(
+        HandAxe,
+        "hand_axe",
+        "Hand axe",
+        "Hand Axe",
+        Weapon,
+        Some(2),
+        105
+    ),
+    item!(Spear, "spear", "Spear", "Spear", Weapon, Some(2), 106),
     item!(
         Quarterstaff,
         "quarterstaff",
+        "Quarterstaff",
         "Quarterstaff",
         Weapon,
         Some(2),
         107
     ),
-    item!(Dirk, "dirk", "Dirk", Weapon, Some(2), 108),
-    item!(Sickle, "sickle", "Sickle", Weapon, Some(2), 109),
-    item!(Sword, "sword", "Sword", Weapon, Some(3), 112),
-    item!(Mace, "mace", "Mace", Weapon, Some(3), 113),
-    item!(Scimitar, "scimitar", "Scimitar", Weapon, Some(3), 114),
+    item!(Dirk, "dirk", "Dirk", "Dirk", Weapon, Some(2), 108),
+    item!(Sickle, "sickle", "Sickle", "Sickle", Weapon, Some(2), 109),
+    item!(Sword, "sword", "Sword", "Sword", Weapon, Some(3), 112),
+    item!(Mace, "mace", "Mace", "Mace", Weapon, Some(3), 113),
+    item!(
+        Scimitar,
+        "scimitar",
+        "Scimitar",
+        "Scimitar",
+        Weapon,
+        Some(3),
+        114
+    ),
     item!(
         RoundShield,
         "round_shield",
         "Round shield",
+        "Round Shield",
         Weapon,
         Some(3),
         115
     ),
-    item!(Sai, "sai", "Sai", Weapon, Some(3), 116),
-    item!(Whip, "whip", "Whip", Weapon, Some(3), 117),
-    item!(Longsword, "longsword", "Longsword", Weapon, Some(4), 120),
-    item!(BattleAxe, "battle_axe", "Battle axe", Weapon, Some(4), 121),
-    item!(Flail, "flail", "Flail", Weapon, Some(4), 122),
+    item!(Sai, "sai", "Sai", "Sai", Weapon, Some(3), 116),
+    item!(Whip, "whip", "Whip", "Whip", Weapon, Some(3), 117),
+    item!(
+        Longsword,
+        "longsword",
+        "Longsword",
+        "Longsword",
+        Weapon,
+        Some(4),
+        120
+    ),
+    item!(
+        BattleAxe,
+        "battle_axe",
+        "Battle axe",
+        "Battle Axe",
+        Weapon,
+        Some(4),
+        121
+    ),
+    item!(Flail, "flail", "Flail", "Flail", Weapon, Some(4), 122),
     item!(
         RunicBlade,
         "runic_blade",
         "Runic blade",
+        "Runic Blade",
         Weapon,
         Some(4),
         123
@@ -499,19 +573,53 @@ pub const ITEMS: &[ItemDefinition] = &[
         AssassinsBlade,
         "assassins_blade",
         "Assassin's blade",
+        "Assassin's Blade",
         Weapon,
         Some(4),
         124
     ),
-    item!(Crossbow, "crossbow", "Crossbow", Weapon, Some(4), 125),
-    item!(Katana, "katana", "Katana", Weapon, Some(4), 126),
-    item!(Greatsword, "greatsword", "Greatsword", Weapon, Some(5), 128),
-    item!(WarHammer, "war_hammer", "War hammer", Weapon, Some(5), 129),
-    item!(Glaive, "glaive", "Glaive", Weapon, Some(5), 130),
-    item!(Greataxe, "greataxe", "Greataxe", Weapon, Some(5), 131),
+    item!(
+        Crossbow,
+        "crossbow",
+        "Crossbow",
+        "Crossbow",
+        Weapon,
+        Some(4),
+        125
+    ),
+    item!(Katana, "katana", "Katana", "Katana", Weapon, Some(4), 126),
+    item!(
+        Greatsword,
+        "greatsword",
+        "Greatsword",
+        "Greatsword",
+        Weapon,
+        Some(5),
+        128
+    ),
+    item!(
+        WarHammer,
+        "war_hammer",
+        "War hammer",
+        "War Hammer",
+        Weapon,
+        Some(5),
+        129
+    ),
+    item!(Glaive, "glaive", "Glaive", "Glaive", Weapon, Some(5), 130),
+    item!(
+        Greataxe,
+        "greataxe",
+        "Greataxe",
+        "Greataxe",
+        Weapon,
+        Some(5),
+        131
+    ),
     item!(
         Greatshield,
         "greatshield",
+        "Greatshield",
         "Greatshield",
         Weapon,
         Some(5),
@@ -521,15 +629,25 @@ pub const ITEMS: &[ItemDefinition] = &[
         StoneGauntlet,
         "gauntlet",
         "Stone gauntlet",
+        "Stone Gauntlet",
         Weapon,
         Some(5),
         133
     ),
-    item!(WarScythe, "war_scythe", "War scythe", Weapon, Some(5), 134),
+    item!(
+        WarScythe,
+        "war_scythe",
+        "War scythe",
+        "War Scythe",
+        Weapon,
+        Some(5),
+        134
+    ),
     item!(
         ThrowingStone,
         "throwing_stone",
         "Throwing stone",
+        "Throwing Stone",
         Weapon,
         Some(1),
         147
@@ -538,6 +656,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ThrowingKnife,
         "throwing_knife",
         "Throwing knife",
+        "Throwing Knife",
         Weapon,
         Some(1),
         146
@@ -546,6 +665,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ThrowingSpike,
         "throwing_spike",
         "Throwing spike",
+        "Throwing Spike",
         Weapon,
         Some(1),
         145
@@ -554,6 +674,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         FishingSpear,
         "fishing_spear",
         "Fishing spear",
+        "Fishing Spear",
         Weapon,
         Some(2),
         148
@@ -562,45 +683,90 @@ pub const ITEMS: &[ItemDefinition] = &[
         ThrowingClub,
         "throwing_club",
         "Throwing club",
+        "Throwing Club",
         Weapon,
         Some(2),
         150
     ),
-    item!(Shuriken, "shuriken", "Shuriken", Weapon, Some(2), 149),
+    item!(
+        Shuriken,
+        "shuriken",
+        "Shuriken",
+        "Shuriken",
+        Weapon,
+        Some(2),
+        149
+    ),
     item!(
         ThrowingSpear,
         "throwing_spear",
         "Throwing spear",
+        "Throwing Spear",
         Weapon,
         Some(3),
         151
     ),
-    item!(Kunai, "kunai", "Kunai", Weapon, Some(3), 153),
-    item!(Bolas, "bolas", "Bolas", Weapon, Some(3), 152),
-    item!(Javelin, "javelin", "Javelin", Weapon, Some(4), 154),
-    item!(Tomahawk, "tomahawk", "Tomahawk", Weapon, Some(4), 155),
+    item!(Kunai, "kunai", "Kunai", "Kunai", Weapon, Some(3), 153),
+    item!(Bolas, "bolas", "Bolas", "Bolas", Weapon, Some(3), 152),
+    item!(
+        Javelin,
+        "javelin",
+        "Javelin",
+        "Javelin",
+        Weapon,
+        Some(4),
+        154
+    ),
+    item!(
+        Tomahawk,
+        "tomahawk",
+        "Tomahawk",
+        "Tomahawk",
+        Weapon,
+        Some(4),
+        155
+    ),
     item!(
         HeavyBoomerang,
         "heavy_boomerang",
         "Heavy boomerang",
+        "Heavy Boomerang",
         Weapon,
         Some(4),
         156
     ),
-    item!(Trident, "trident", "Trident", Weapon, Some(5), 157),
+    item!(
+        Trident,
+        "trident",
+        "Trident",
+        "Trident",
+        Weapon,
+        Some(5),
+        157
+    ),
     item!(
         ThrowingHammer,
         "throwing_hammer",
         "Throwing hammer",
+        "Throwing Hammer",
         Weapon,
         Some(5),
         158
     ),
-    item!(ForceCube, "force_cube", "Force cube", Weapon, Some(5), 159),
+    item!(
+        ForceCube,
+        "force_cube",
+        "Force cube",
+        "Force Cube",
+        Weapon,
+        Some(5),
+        159
+    ),
     item!(
         ClothArmor,
         "cloth_armor",
         "Cloth armor",
+        "Cloth Armor",
         Armor,
         Some(1),
         176
@@ -609,15 +775,25 @@ pub const ITEMS: &[ItemDefinition] = &[
         LeatherArmor,
         "leather_armor",
         "Leather armor",
+        "Leather Armor",
         Armor,
         Some(2),
         177
     ),
-    item!(MailArmor, "mail_armor", "Mail armor", Armor, Some(3), 178),
+    item!(
+        MailArmor,
+        "mail_armor",
+        "Mail armor",
+        "Mail Armor",
+        Armor,
+        Some(3),
+        178
+    ),
     item!(
         ScaleArmor,
         "scale_armor",
         "Scale armor",
+        "Scale Armor",
         Armor,
         Some(4),
         179
@@ -626,6 +802,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         PlateArmor,
         "plate_armor",
         "Plate armor",
+        "Plate Armor",
         Armor,
         Some(5),
         180
@@ -634,6 +811,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandMagicMissile,
         "wand_magic_missile",
         "Wand of magic missile",
+        "Wand of Magic Missile",
         Wand,
         None,
         208
@@ -642,15 +820,25 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandFireblast,
         "wand_fireblast",
         "Wand of fireblast",
+        "Wand of Fireblast",
         Wand,
         None,
         209
     ),
-    item!(WandFrost, "wand_frost", "Wand of frost", Wand, None, 210),
+    item!(
+        WandFrost,
+        "wand_frost",
+        "Wand of frost",
+        "Wand of Frost",
+        Wand,
+        None,
+        210
+    ),
     item!(
         WandLightning,
         "wand_lightning",
         "Wand of lightning",
+        "Wand of Lightning",
         Wand,
         None,
         211
@@ -659,6 +847,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandDisintegration,
         "wand_disintegration",
         "Wand of disintegration",
+        "Wand of Disintegration",
         Wand,
         None,
         212
@@ -667,6 +856,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandPrismaticLight,
         "wand_prismatic_light",
         "Wand of prismatic light",
+        "Wand of Prismatic Light",
         Wand,
         None,
         213
@@ -675,6 +865,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandCorrosion,
         "wand_corrosion",
         "Wand of corrosion",
+        "Wand of Corrosion",
         Wand,
         None,
         214
@@ -683,6 +874,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandLivingEarth,
         "wand_living_earth",
         "Wand of living earth",
+        "Wand of Living Earth",
         Wand,
         None,
         215
@@ -691,6 +883,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandBlastWave,
         "wand_blast_wave",
         "Wand of blast wave",
+        "Wand of Blast Wave",
         Wand,
         None,
         216
@@ -699,6 +892,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandCorruption,
         "wand_corruption",
         "Wand of corruption",
+        "Wand of Corruption",
         Wand,
         None,
         217
@@ -707,6 +901,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandWarding,
         "wand_warding",
         "Wand of warding",
+        "Wand of Warding",
         Wand,
         None,
         218
@@ -715,6 +910,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandRegrowth,
         "wand_regrowth",
         "Wand of regrowth",
+        "Wand of Regrowth",
         Wand,
         None,
         219
@@ -723,15 +919,25 @@ pub const ITEMS: &[ItemDefinition] = &[
         WandTransfusion,
         "wand_transfusion",
         "Wand of transfusion",
+        "Wand of Transfusion",
         Wand,
         None,
         220
     ),
-    item!(RotDart, "rot_dart", "Rot dart", Weapon, Some(2), 161),
+    item!(
+        RotDart,
+        "rot_dart",
+        "Rot dart",
+        "Rot Dart",
+        Weapon,
+        Some(2),
+        161
+    ),
     item!(
         IncendiaryDart,
         "incendiary_dart",
         "Incendiary dart",
+        "Incendiary Dart",
         Weapon,
         Some(2),
         162
@@ -740,6 +946,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         AdrenalineDart,
         "adrenaline_dart",
         "Adrenaline dart",
+        "Adrenaline Dart",
         Weapon,
         Some(2),
         163
@@ -748,6 +955,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         HealingDart,
         "healing_dart",
         "Healing dart",
+        "Healing Dart",
         Weapon,
         Some(2),
         164
@@ -756,6 +964,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ChillingDart,
         "chilling_dart",
         "Chilling dart",
+        "Chilling Dart",
         Weapon,
         Some(2),
         165
@@ -764,6 +973,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ShockingDart,
         "shocking_dart",
         "Shocking dart",
+        "Shocking Dart",
         Weapon,
         Some(2),
         166
@@ -772,6 +982,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         PoisonDart,
         "poison_dart",
         "Poison dart",
+        "Poison Dart",
         Weapon,
         Some(2),
         167
@@ -780,6 +991,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         CleansingDart,
         "cleansing_dart",
         "Cleansing dart",
+        "Cleansing Dart",
         Weapon,
         Some(2),
         168
@@ -788,15 +1000,25 @@ pub const ITEMS: &[ItemDefinition] = &[
         ParalyticDart,
         "paralytic_dart",
         "Paralytic dart",
+        "Paralytic Dart",
         Weapon,
         Some(2),
         169
     ),
-    item!(HolyDart, "holy_dart", "Holy dart", Weapon, Some(2), 170),
+    item!(
+        HolyDart,
+        "holy_dart",
+        "Holy dart",
+        "Holy Dart",
+        Weapon,
+        Some(2),
+        170
+    ),
     item!(
         DisplacingDart,
         "displacing_dart",
         "Displacing dart",
+        "Displacing Dart",
         Weapon,
         Some(2),
         171
@@ -805,6 +1027,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         BlindingDart,
         "blinding_dart",
         "Blinding dart",
+        "Blinding Dart",
         Weapon,
         Some(2),
         172
@@ -813,36 +1036,88 @@ pub const ITEMS: &[ItemDefinition] = &[
         RingAccuracy,
         "ring_accuracy",
         "Ring of accuracy",
+        "Ring of Accuracy",
         Ring,
         None,
         224
     ),
-    item!(RingArcana, "ring_arcana", "Ring of arcana", Ring, None, 225),
+    item!(
+        RingArcana,
+        "ring_arcana",
+        "Ring of arcana",
+        "Ring of Arcana",
+        Ring,
+        None,
+        225
+    ),
     item!(
         RingElements,
         "ring_elements",
         "Ring of elements",
+        "Ring of Elements",
         Ring,
         None,
         226
     ),
-    item!(RingEnergy, "ring_energy", "Ring of energy", Ring, None, 227),
+    item!(
+        RingEnergy,
+        "ring_energy",
+        "Ring of energy",
+        "Ring of Energy",
+        Ring,
+        None,
+        227
+    ),
     item!(
         RingEvasion,
         "ring_evasion",
         "Ring of evasion",
+        "Ring of Evasion",
         Ring,
         None,
         228
     ),
-    item!(RingForce, "ring_force", "Ring of force", Ring, None, 229),
-    item!(RingFuror, "ring_furor", "Ring of furor", Ring, None, 230),
-    item!(RingHaste, "ring_haste", "Ring of haste", Ring, None, 231),
-    item!(RingMight, "ring_might", "Ring of might", Ring, None, 232),
+    item!(
+        RingForce,
+        "ring_force",
+        "Ring of force",
+        "Ring of Force",
+        Ring,
+        None,
+        229
+    ),
+    item!(
+        RingFuror,
+        "ring_furor",
+        "Ring of furor",
+        "Ring of Furor",
+        Ring,
+        None,
+        230
+    ),
+    item!(
+        RingHaste,
+        "ring_haste",
+        "Ring of haste",
+        "Ring of Haste",
+        Ring,
+        None,
+        231
+    ),
+    item!(
+        RingMight,
+        "ring_might",
+        "Ring of might",
+        "Ring of Might",
+        Ring,
+        None,
+        232
+    ),
     item!(
         RingSharpshooting,
         "ring_sharpshooting",
         "Ring of sharpshooting",
+        "Ring of Sharpshooting",
         Ring,
         None,
         233
@@ -851,15 +1126,33 @@ pub const ITEMS: &[ItemDefinition] = &[
         RingTenacity,
         "ring_tenacity",
         "Ring of tenacity",
+        "Ring of Tenacity",
         Ring,
         None,
         234
     ),
-    item!(RingWealth, "ring_wealth", "Ring of wealth", Ring, None, 235),
-    item!(RatSkull, "rat_skull", "Rat Skull", Trinket, None, 272),
+    item!(
+        RingWealth,
+        "ring_wealth",
+        "Ring of wealth",
+        "Ring of Wealth",
+        Ring,
+        None,
+        235
+    ),
+    item!(
+        RatSkull,
+        "rat_skull",
+        "Rat Skull",
+        "Rat Skull",
+        Trinket,
+        None,
+        272
+    ),
     item!(
         ParchmentScrap,
         "parchment_scrap",
+        "Parchment Scrap",
         "Parchment Scrap",
         Trinket,
         None,
@@ -869,6 +1162,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         PetrifiedSeed,
         "petrified_seed",
         "Petrified Seed",
+        "Petrified Seed",
         Trinket,
         None,
         274
@@ -877,14 +1171,24 @@ pub const ITEMS: &[ItemDefinition] = &[
         ExoticCrystals,
         "exotic_crystals",
         "Exotic Crystals",
+        "Exotic Crystals",
         Trinket,
         None,
         275
     ),
-    item!(MossyClump, "mossy_clump", "Mossy Clump", Trinket, None, 276),
+    item!(
+        MossyClump,
+        "mossy_clump",
+        "Mossy Clump",
+        "Mossy Clump",
+        Trinket,
+        None,
+        276
+    ),
     item!(
         DimensionalSundial,
         "dimensional_sundial",
+        "Dimensional Sundial",
         "Dimensional Sundial",
         Trinket,
         None,
@@ -894,6 +1198,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ThirteenLeafClover,
         "thirteen_leaf_clover",
         "Thirteen Leaf Clover",
+        "Thirteen Leaf Clover",
         Trinket,
         None,
         278
@@ -902,24 +1207,51 @@ pub const ITEMS: &[ItemDefinition] = &[
         TrapMechanism,
         "trap_mechanism",
         "Trap Mechanism",
+        "Trap Mechanism",
         Trinket,
         None,
         279
     ),
-    item!(MimicTooth, "mimic_tooth", "Mimic Tooth", Trinket, None, 280),
+    item!(
+        MimicTooth,
+        "mimic_tooth",
+        "Mimic Tooth",
+        "Mimic Tooth",
+        Trinket,
+        None,
+        280
+    ),
     item!(
         WondrousResin,
         "wondrous_resin",
+        "Wondrous Resin",
         "Wondrous Resin",
         Trinket,
         None,
         281
     ),
-    item!(EyeOfNewt, "eye_of_newt", "Eye Of Newt", Trinket, None, 282),
-    item!(SaltCube, "salt_cube", "Salt Cube", Trinket, None, 283),
+    item!(
+        EyeOfNewt,
+        "eye_of_newt",
+        "Eye Of Newt",
+        "Eye Of Newt",
+        Trinket,
+        None,
+        282
+    ),
+    item!(
+        SaltCube,
+        "salt_cube",
+        "Salt Cube",
+        "Salt Cube",
+        Trinket,
+        None,
+        283
+    ),
     item!(
         VialOfBlood,
         "vial_of_blood",
+        "Vial Of Blood",
         "Vial Of Blood",
         Trinket,
         None,
@@ -929,6 +1261,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         ShardOfOblivion,
         "shard_of_oblivion",
         "Shard Of Oblivion",
+        "Shard Of Oblivion",
         Trinket,
         None,
         285
@@ -937,14 +1270,24 @@ pub const ITEMS: &[ItemDefinition] = &[
         ChaoticCenser,
         "chaotic_censer",
         "Chaotic Censer",
+        "Chaotic Censer",
         Trinket,
         None,
         286
     ),
-    item!(FerretTuft, "ferret_tuft", "Ferret Tuft", Trinket, None, 287),
+    item!(
+        FerretTuft,
+        "ferret_tuft",
+        "Ferret Tuft",
+        "Ferret Tuft",
+        Trinket,
+        None,
+        287
+    ),
     item!(
         CrackedSpyglass,
         "cracked_spyglass",
+        "Cracked Spyglass",
         "Cracked Spyglass",
         Trinket,
         None,
@@ -954,6 +1297,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         TrinketCatalyst,
         "trinket_catalyst",
         "Magical catalyst",
+        "Magical Catalyst",
         Trinket,
         None,
         70
@@ -961,6 +1305,7 @@ pub const ITEMS: &[ItemDefinition] = &[
     item!(
         AlchemistsToolkit,
         "alchemists_toolkit",
+        "Alchemist's Toolkit",
         "Alchemist's Toolkit",
         Artifact,
         None,
@@ -970,14 +1315,24 @@ pub const ITEMS: &[ItemDefinition] = &[
         ChaliceOfBlood,
         "chalice_of_blood",
         "Chalice of Blood",
+        "Chalice of Blood",
         Artifact,
         None,
         253
     ),
-    item!(DriedRose, "dried_rose", "Dried Rose", Artifact, None, 260),
+    item!(
+        DriedRose,
+        "dried_rose",
+        "Dried Rose",
+        "Dried Rose",
+        Artifact,
+        None,
+        260
+    ),
     item!(
         EtherealChains,
         "ethereal_chains",
+        "Ethereal Chains",
         "Ethereal Chains",
         Artifact,
         None,
@@ -987,6 +1342,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         HornOfPlenty,
         "horn_of_plenty",
         "Horn of Plenty",
+        "Horn of Plenty",
         Artifact,
         None,
         249
@@ -994,6 +1350,7 @@ pub const ITEMS: &[ItemDefinition] = &[
     item!(
         MasterThievesArmband,
         "master_thieves_armband",
+        "Master Thieves' Armband",
         "Master Thieves' Armband",
         Artifact,
         None,
@@ -1003,6 +1360,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         SandalsOfNature,
         "sandals_of_nature",
         "Sandals of Nature",
+        "Sandals of Nature",
         Artifact,
         None,
         256
@@ -1010,6 +1368,7 @@ pub const ITEMS: &[ItemDefinition] = &[
     item!(
         SkeletonKey,
         "skeleton_key",
+        "Skeleton Key",
         "Skeleton Key",
         Artifact,
         None,
@@ -1019,6 +1378,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         TalismanOfForesight,
         "talisman_of_foresight",
         "Talisman of Foresight",
+        "Talisman of Foresight",
         Artifact,
         None,
         243
@@ -1027,6 +1387,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         TimekeepersHourglass,
         "timekeepers_hourglass",
         "Timekeeper's Hourglass",
+        "Timekeeper's Hourglass",
         Artifact,
         None,
         244
@@ -1034,6 +1395,7 @@ pub const ITEMS: &[ItemDefinition] = &[
     item!(
         UnstableSpellbook,
         "unstable_spellbook",
+        "Unstable Spellbook",
         "Unstable Spellbook",
         Artifact,
         None,
@@ -1480,6 +1842,49 @@ mod tests {
         assert_eq!(
             Effect::from_wire_name(ItemKind::Armor, "anti-magic"),
             Some(Effect::Armor(ArmorEffect::AntiMagic))
+        );
+    }
+
+    /// Every frontend shows the upstream catalog asset's names, so the
+    /// engine's display names must be exactly those for all 116 entries. The
+    /// trinket catalyst is an engine-only record (the asset lists the 17
+    /// trinkets a catalyst can offer), so it has no asset name to match.
+    #[cfg(feature = "json-query")]
+    #[test]
+    fn display_names_are_the_shared_catalog_asset_names() {
+        let asset: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"
+        ))
+        .expect("the catalog asset is JSON");
+        let entries = asset["entries"].as_array().expect("an entries array");
+        assert_eq!(entries.len(), ITEMS.len() - 1);
+        for entry in entries {
+            let id = entry["id"].as_str().expect("a string id");
+            let definition = item_by_stable_id(id).unwrap_or_else(|| panic!("{id} is searchable"));
+            assert_eq!(entry["name"], definition.display_name, "{id}");
+        }
+        for definition in ITEMS {
+            // Only the casing differs from the sentence-case `name`.
+            assert!(
+                definition
+                    .display_name
+                    .eq_ignore_ascii_case(definition.name),
+                "{}",
+                definition.stable_id
+            );
+            if definition.id != ItemId::TrinketCatalyst {
+                assert!(
+                    entries
+                        .iter()
+                        .any(|entry| entry["id"] == definition.stable_id),
+                    "{} is in the asset",
+                    definition.stable_id
+                );
+            }
+        }
+        assert_eq!(
+            item(ItemId::TrinketCatalyst).display_name,
+            "Magical Catalyst"
         );
     }
 }

@@ -1111,6 +1111,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "shpd-seedfinder-editor-wasm"
+version = "0.20.3"
+dependencies = [
+ "serde_json",
+ "shpd-seedfinder-core",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "shpd-seedfinder-ffi"
 version = "0.20.3"
 dependencies = [

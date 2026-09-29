@@ -28,6 +28,8 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial int seedfinder_results_encode(byte[] request, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_decode(byte[] contents, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_engine_info(out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_requirement_board(byte[] request, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_requirement_editor(byte[] request, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial void seedfinder_buffer_free(nint packet, nuint length);
 }
 
@@ -432,6 +434,29 @@ public sealed class NativeEngine
     {
         var code = Native.seedfinder_engine_info(out var ptr, out var len);
         if (code != 0) throw new InvalidOperationException($"Native engine info failed ({code}).");
+        return Encoding.UTF8.GetString(CopyAndFree(ptr, len));
+    }
+
+    /// <summary>
+    /// The shared requirement editor's board envelope
+    /// (docs/requirement-editor.md): the UTF-8 JSON request in, the answer
+    /// out. A request the editor cannot read is still answered, as
+    /// <c>{"error"}</c>; only a failure of the editor itself throws.
+    /// </summary>
+    public static string RequirementBoard(string request)
+    {
+        var bytes = Encoding.UTF8.GetBytes(request);
+        var code = Native.seedfinder_requirement_board(bytes, (nuint)bytes.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"The requirement editor failed ({code}).");
+        return Encoding.UTF8.GetString(CopyAndFree(ptr, len));
+    }
+
+    /// <summary>The shared requirement editor's sheet envelope, answered like <see cref="RequirementBoard"/>.</summary>
+    public static string RequirementEditor(string request)
+    {
+        var bytes = Encoding.UTF8.GetBytes(request);
+        var code = Native.seedfinder_requirement_editor(bytes, (nuint)bytes.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"The requirement editor failed ({code}).");
         return Encoding.UTF8.GetString(CopyAndFree(ptr, len));
     }
 

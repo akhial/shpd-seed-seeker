@@ -67,21 +67,26 @@ final class AppModel {
         controller = SearchController(checkpointURL: support.appendingPathComponent("search.json"))
         backgroundSearch = BackgroundSearch(controller: controller)
         if let saved = defaults.string(forKey: "savedQuery") {
-            query = QueryPersistence.decode(saved)
+            query = QueryPersistence.decode(saved).loadedForBoard()
         } else {
             query = SavedQuery(requirements: [try! ItemRequirement(key: 1,
                 item: ItemCatalog.findById("wand_fireblast"), upgrade: 3, kind: .wand)])
         }
-        if let pending = controller.pendingQuery { query = pending }
+        // The interrupted search's own list, exactly as it was searched so it
+        // resumes; only its keys are renumbered, which no document carries.
+        if let pending = controller.pendingQuery { query = pending.withKeysInOrder() }
         presets = PresetPersistence.decode(defaults.string(forKey: "savedPresets") ?? "")
         showResults = controller.hasPendingSearch || !controller.results.isEmpty
     }
 
     var request: SearchRequest? { try? query.searchRequest() }
     var validationMessage: String? { AndroidCopy.validationMessage(for: query) }
+    /// Search starts once the query builds and nothing — a query setting or
+    /// a problem the shared core finds with the requirements — stands in the way.
+    var canSearch: Bool { request != nil && validationMessage == nil }
 
     func search() {
-        guard let request else { return }
+        guard canSearch, let request else { return }
         importNotice = nil
         controller.start(request, workers: defaults.integer(forKey: WorkerPersistence.defaultsKey))
         backgroundSearch.start()
@@ -98,7 +103,11 @@ final class AppModel {
 
     func share() {
         do { sharedLink = SharePayload(text: try DeepLink.encodeLink(for: query)) }
-        catch { showError(AndroidCopy.shareError(error), title: "Shared search") }
+        catch {
+            // A list the shared core finds a problem with says which, in its
+            // words; anything else keeps the share's own wording.
+            showError(query.board.problems.first?.message ?? AndroidCopy.shareError(error), title: "Shared search")
+        }
     }
 
     func open(_ url: URL) {
@@ -110,7 +119,7 @@ final class AppModel {
             showError("Stop the search before opening a shared search.", title: "Shared search"); return
         }
         do {
-            query = try DeepLink.decode(url.absoluteString)
+            query = try DeepLink.decode(url.absoluteString).loadedForBoard()
             controller.clearDisplayedResults()
             importNotice = "Loaded shared search"
             tab = .finder
@@ -158,7 +167,7 @@ final class AppModel {
             guard !controller.isRunning else {
                 showError("Stop the search before importing results."); return
             }
-            query = imported.query
+            query = imported.query.loadedForBoard()
             controller.loadImported(seeds: imported.seeds, dropped: imported.dropped,
                                     query: imported.query, trinkets: imported.trinkets)
             var notice = "Imported \(imported.seeds.count) seed\(imported.seeds.count == 1 ? "" : "s") from \(source)"

@@ -1,0 +1,805 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package dev.seedseeker.app.model
+
+import dev.seedseeker.app.catalog.ItemCatalog
+import dev.seedseeker.app.catalog.PackagedCatalog
+import dev.seedseeker.app.engine.JniBindings
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * The bridge to the shared requirement editor. The editor's rules have their
+ * own tests in the core (`crates/seedfinder-core/src/editor/`); these pin the
+ * binding, the row codec, and the decoding of its answers, through the real
+ * engine.
+ */
+class RequirementEditorTest {
+    init { PackagedCatalog.install() }
+
+    private fun find(id: String): CatalogItem = requireNotNull(ItemCatalog.findById(id)) { id }
+
+    /** The core's golden request/answer pairs (docs/requirement-editor.md, "Golden fixtures"). */
+    private val fixtures: File = generateSequence(File("").absoluteFile) { it.parentFile }
+        .map { File(it, "crates/seedfinder-core/tests/fixtures/editor") }
+        .first { it.isDirectory }
+
+    private fun fixture(name: String) = JSONObject(File(fixtures, "$name.json").readText())
+
+    /** A JSON value with object key order and number spelling set aside. */
+    private fun canonical(value: Any?): Any? = when (value) {
+        is JSONObject -> value.keys().asSequence().associateWith { canonical(value.get(it)) }
+        is JSONArray -> List(value.length()) { canonical(value.get(it)) }
+        JSONObject.NULL -> null
+        is Int, is Long -> (value as Number).toLong()
+        is Number -> value.toDouble()
+        else -> value
+    }
+
+    @Test fun everyGoldenFixtureIsAnsweredTheSameThroughTheBinding() {
+        val files = fixtures.listFiles { file -> file.extension == "json" }.orEmpty().sortedBy { it.name }
+        assertTrue(files.size >= 30)
+        for (file in files) {
+            val fixture = JSONObject(file.readText())
+            // A request stored as a string is sent as that very text.
+            val request = fixture.get("request").let { if (it is String) it else it.toString() }.toByteArray()
+            val answer = when (val envelope = fixture.getString("envelope")) {
+                "requirement_board" -> JniBindings.requirementBoard(request)
+                "requirement_editor" -> JniBindings.requirementEditor(request)
+                else -> error("${file.name}: unknown envelope $envelope")
+            }
+            assertEquals(
+                file.name,
+                canonical(fixture.getJSONObject("response")),
+                canonical(JSONObject(String(answer, Charsets.UTF_8))),
+            )
+        }
+    }
+
+    @Test fun everyGoldenAnswerDecodesIntoWhatTheAppReads() {
+        val files = fixtures.listFiles { file -> file.extension == "json" }.orEmpty().sortedBy { it.name }
+        var decoded = 0
+        for (file in files) {
+            val fixture = JSONObject(file.readText())
+            val response = fixture.getJSONObject("response")
+            if (response.has("error")) continue
+            // Every field the app reads is there, of the type it reads it as.
+            runCatching {
+                when {
+                    fixture.getString("envelope") == "requirement_board" -> BoardAnswer.decode(response)
+                    response.has("saved") -> response.getJSONObject("saved").let { saved ->
+                        RequirementEditor.changedRows(saved)
+                        RequirementEditor.rekeyed(saved)
+                        saved.objectOrNull("resin")?.objectOrNull("set")?.let(ResinCondition::decode)
+                    }
+                    else -> EditorSheet.decode(response).form
+                }
+            }.onFailure { throw AssertionError("${file.name}: ${it.message}", it) }
+            decoded++
+        }
+        assertTrue(decoded >= 40)
+    }
+
+    @Test fun theBoardTourDecodesIntoWhatTheBoardDraws() {
+        val board = BoardView.decode(fixture("board-tour").getJSONObject("response"))
+        assertEquals(4, board.ordinaryCount)
+        assertEquals(1, board.blanketCount)
+        assertTrue(board.problems.isEmpty())
+        val (rings, melee, wands, skull, armor) = board.items
+
+        assertEquals(listOf(1L), rings.members)
+        assertEquals("Ring of Might", rings.name)
+        val might = rings.chips.single()
+        // The stack and its badges are the chip's own.
+        assertEquals(StackView(count = 3, countMax = 3, total = null, copyDepth = null), might.stack)
+        assertEquals(listOf(2L, 3L), might.copies)
+        assertEquals(BadgeView("×3", "×3", "3 of the same kind"), might.countBadge)
+        assertNull(might.totalBadge)
+        assertEquals("Ring of Might", might.name)
+        assertEquals(find("ring_might"), might.item)
+        assertEquals(listOf(TagView("+2", TagStyle.UPGRADE)), might.tags)
+        // A stack joins any category: its copies keep their own kind.
+        assertEquals(setOf(4L, 5L, 6L, 7L), might.join)
+        assertTrue(might.refuse.isEmpty())
+
+        val anyMelee = melee.chips.single()
+        assertEquals("Any melee", anyMelee.name)
+        assertNull(anyMelee.item)
+        assertEquals(ItemKind.MELEE_WEAPON, anyMelee.kind)
+        assertEquals(
+            listOf(TagView("T3+"), TagView("+2↑", TagStyle.UPGRADE), TagView("F≤9")),
+            anyMelee.tags,
+        )
+        assertTrue(anyMelee.effect!!.anyEnchantment)
+        assertEquals("any enchantment", anyMelee.effect!!.label)
+        assertTrue(anyMelee.uncursed)
+        assertEquals(setOf(1L, 5L, 6L, 7L), anyMelee.join)
+        assertEquals("Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9", anyMelee.description)
+
+        assertEquals(1, wands.cluster)
+        // A menu or the collapsed summary names a cluster by its members' names.
+        assertEquals("Wand of Fireblast or Any wand", wands.name)
+        assertEquals(listOf(5L, 6L), wands.members)
+        assertTrue(wands.chips.all { it.canDetach })
+        assertTrue(wands.chips.all { it.countBadge == null && it.stack.count == 1 && it.copies.isEmpty() })
+        assertEquals(listOf(TagView("No resin")), wands.chips[1].trailingTags)
+
+        assertEquals(find("rat_skull"), skull.chips.single().item)
+        assertEquals(listOf(TagView("Transmute ≤3")), skull.chips.single().tags)
+        // A trinket cannot grow, so its count stepper runs only to what it asks for.
+        assertEquals(1, skull.chips.single().stack.countMax)
+
+        assertTrue(armor.blanket)
+        assertEquals(listOf("Viscosity", "Brimstone"), armor.chips.single().effect!!.effects)
+        assertEquals("effect: Viscosity/Brimstone", armor.chips.single().effect!!.label)
+
+        val resin = board.resin!!
+        assertEquals("Arcane Resin", resin.name)
+        // The resin the chip counts is a credit, each with its own hover text.
+        assertEquals(
+            listOf(
+                TagView("Auto", TagStyle.CREDIT, "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"),
+                TagView("Mage +2", TagStyle.CREDIT, "Starting Magic Missile contributes 2 resin"),
+            ),
+            resin.tags,
+        )
+        assertTrue(resin.uncursed)
+        assertTrue(resin.description.startsWith("Arcane Resin, Auto"))
+    }
+
+    @Test fun theResinChipsCreditIsStyledApartFromItsDonorFilter() {
+        val resin = BoardView.decode(fixture("board-resin-credit").getJSONObject("response")).resin!!
+        assertEquals(
+            listOf(
+                TagView("≥4", TagStyle.CREDIT),
+                TagView("Mage +2", TagStyle.CREDIT, "Starting Magic Missile contributes 2 resin"),
+                TagView("F≤9"),
+            ),
+            resin.tags,
+        )
+        // A style this build does not know reads as a plain qualifier.
+        val unknown = JSONObject(fixture("board-resin-credit").getJSONObject("response").toString())
+        unknown.getJSONObject("resin").getJSONArray("tags").getJSONObject(0).put("style", "sparkle")
+        assertEquals(TagView("≥4"), BoardView.decode(unknown).resin!!.tags.first())
+    }
+
+    @Test fun anEntryThatCannotGrowOnlyShedsCopies() {
+        val might = find("ring_might")
+        // A blanket may not stack: it asks for one item and no more.
+        val rows = listOf(
+            ItemRequirement(1, might, 1),
+            ItemRequirement(2, might, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, blanket = true),
+        )
+        val (stack, blanket) = RequirementEditor.view(rows).items.map { it.chips.single().stack }
+        assertEquals(2 to 3, stack.count to stack.countMax)
+        assertEquals(1 to 1, blanket.count to blanket.countMax)
+    }
+
+    @Test fun problemsDecodeInOrderWithTheRowsTheyBlame() {
+        val board = BoardView.decode(fixture("board-problems").getJSONObject("response"))
+        assertEquals(
+            listOf(
+                RequirementProblem("Requirement floor must be 1 through 24.", listOf(2L)),
+                RequirementProblem("A blanket requirement cannot request extra copies, combined levels, or trinket selection.", listOf(4L)),
+                RequirementProblem("A stack must share one combined level.", listOf(1L, 3L)),
+            ),
+            board.problems,
+        )
+        assertEquals("Requirement floor must be 1 through 24.", board.itemOf(2)!!.chips.single().problem)
+        assertEquals("A stack must share one combined level.", board.itemOf(1)!!.chips.single().problem)
+    }
+
+    @Test fun answersDecodeRowsKeysAndRefusals() {
+        val saved = BoardAnswer.decode(fixture("board-save-new").getJSONObject("response"))
+        assertEquals(listOf(1L, 5L, 6L), saved.rows!!.map { it.key })
+        assertEquals(ItemKind.THROWN_WEAPON, saved.rows!![1].kind)
+        assertEquals(UpgradeMatch.AT_LEAST, saved.rows!![1].upgradeMatch)
+        assertEquals(listOf(null, 1, 1), saved.rows!!.map { it.identityGroup })
+        assertEquals(6, saved.rows!![2].maximumDepth)
+        assertEquals(7L, saved.nextKey)
+        assertEquals(5L, saved.focus)
+        assertNull(saved.refused)
+
+        val refused = BoardAnswer.decode(fixture("board-join-refused").getJSONObject("response"))
+        assertNull(refused.rows)
+        assertEquals("Every group label is in use. Remove a stack or a combined level first.", refused.refused)
+
+        val repaired = BoardAnswer.decode(fixture("board-key-repair").getJSONObject("response"))
+        assertEquals(mapOf(0L to 5L, 4L to 6L), repaired.rekeyed)
+        assertEquals(listOf(null, null, 1, 1), repaired.rows!!.map { it.alternativeGroup })
+    }
+
+    @Test fun errorAnswersAndPanicsNeverBecomeBoards() {
+        val failure = assertThrows(IllegalStateException::class.java) {
+            RequirementEditor.answer(JniBindings.requirementBoard("{\"rows\": [".toByteArray()))
+        }
+        assertTrue(failure.message!!.startsWith("invalid request"))
+        assertThrows(IllegalStateException::class.java) {
+            RequirementEditor.answer(JniBindings.requirementBoard(byteArrayOf(0xff.toByte())))
+        }
+        // A row this app cannot hold is reported, never adopted.
+        val unreadable = JSONObject(
+            """{"changed":true,"rows":[{"key":1,"kind":"artifact","identity_group":1}],"next_key":2,"rekeyed":[],
+            "focus":null,"refused":null,"items":[],"counts":{"ordinary":0,"blanket":0},"problems":[],"resin":null}""",
+        )
+        assertThrows(IllegalStateException::class.java) { BoardAnswer.decode(unreadable) }
+    }
+
+    @Test fun rowsRoundTripThroughTheEditorInItsOwnSpelling() {
+        val rows = listOf(
+            ItemRequirement(1, find("wand_fireblast"), 3),
+            ItemRequirement(
+                2, null, 2, kind = ItemKind.MELEE_WEAPON, upgradeMatch = UpgradeMatch.AT_LEAST,
+                tier = 3, tierMatch = TierMatch.AT_LEAST, effect = EffectFilter.AnyEnchantment,
+                requireUncursed = true, maximumDepth = 9, source = ScoutItemSource.LOCKED_CHEST,
+            ),
+            ItemRequirement(
+                3, null, 0, kind = ItemKind.THROWN_WEAPON, upgradeMatch = UpgradeMatch.ANY,
+                tier = 4, tierMatch = TierMatch.EXACT, effect = EffectFilter.OneOf(listOf("Blazing", "Lucky")),
+            ),
+            ItemRequirement(4, find("ring_might"), 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 3)),
+            ItemRequirement(5, find("ring_might"), 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 3)),
+            ItemRequirement(
+                6, null, 1, kind = ItemKind.ARMOR, tier = 4, tierMatch = TierMatch.AT_MOST,
+                effect = EffectFilter.OneOf(listOf("Brimstone")), identityGroup = 2,
+            ),
+            ItemRequirement(7, null, 0, kind = ItemKind.ARMOR, upgradeMatch = UpgradeMatch.ANY, identityGroup = 2, maximumDepth = 4),
+            ItemRequirement(8, find("wand_frost"), 2, alternativeGroup = 1, excludeResin = true),
+            ItemRequirement(9, null, 1, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.AT_LEAST, alternativeGroup = 1),
+            ItemRequirement(10, find("rat_skull"), 0, upgradeMatch = UpgradeMatch.ANY, trinketTransmutations = 3),
+            ItemRequirement(11, ItemCatalog.trinkets.first { it.id != "rat_skull" }, 0, upgradeMatch = UpgradeMatch.ANY, selectTrinket = true),
+            ItemRequirement(12, find("ethereal_chains"), 5, artifactTransmutations = 2),
+            ItemRequirement(13, null, 3, kind = ItemKind.WAND, blanket = true, source = ScoutItemSource.WANDMAKER_REWARD),
+        )
+        val sent = RequirementEditor.encodeRows(rows)
+        val answer = RequirementEditor.answer(JniBindings.requirementBoard(JSONObject().put("rows", sent).toString().toByteArray()))
+        assertTrue(!answer.getBoolean("changed"))
+        assertEquals(canonical(sent), canonical(answer.getJSONArray("rows")))
+        assertEquals(rows, RequirementEditor.decodeRows(answer.getJSONArray("rows")))
+        assertNull(RequirementEditor.board(rows).rows)
+        assertTrue(RequirementEditor.view(rows).problems.isEmpty())
+    }
+
+    /**
+     * The four stack shapes the editor writes, through the app's own query
+     * document and back: the document is the one the web writes for the same
+     * gestures, and loading it folds into the board the editor drew.
+     */
+    @Test fun theFourStackShapesSurviveTheQueryDocumentAndALoad() {
+        val webDocuments = mapOf(
+            "board-stack-concrete" to """[{"kind":"ring","item":"ring_might","upgrade":2},""" +
+                """{"kind":"ring","item":"ring_might"},{"kind":"ring","item":"ring_might"}]""",
+            "board-stack-wildcard" to """[{"kind":"wand","upgrade":3,"identity_group":1},""" +
+                """{"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1}]""",
+            "board-stack-total" to """[{"kind":"ring","item":"ring_might","level_sum":{"group":1,"at_least":3}},""" +
+                """{"kind":"ring","item":"ring_might","level_sum":{"group":1,"at_least":3}}]""",
+            "board-stack-cluster" to """[{"any_of":[{"kind":"wand","item":"wand_fireblast","upgrade":3,"identity_group":1},""" +
+                """{"kind":"wand","upgrade":3,"identity_group":1}]},""" +
+                """{"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1}]""",
+        )
+        for ((name, web) in webDocuments) {
+            val answer = fixture(name).getJSONObject("response")
+            val rows = RequirementEditor.decodeRows(answer.getJSONArray("rows"))
+            val document = ResultsExport.encodeQuery(PresetQuery(rows))
+            assertEquals(name, canonical(JSONArray(web)), canonical(document.getJSONArray("requirements")))
+
+            val loaded = RequirementEditor.loaded(ResultsExport.decodeQuery(document).requirements, firstKey = 1)
+            val board = RequirementEditor.view(loaded)
+            val drawn = BoardView.decode(answer)
+            assertEquals(name, drawn.items.map { it.cluster != null }, board.items.map { it.cluster != null })
+            assertEquals(name, drawn.items.map { item -> item.chips.map { it.stack } }, board.items.map { item -> item.chips.map { it.stack } })
+            assertEquals(name, drawn.items.map { item -> item.chips.map { it.name } }, board.items.map { item -> item.chips.map { it.name } })
+            assertTrue(name, board.problems.isEmpty())
+            // Already canonical: loading re-keys the rows and changes nothing else.
+            assertEquals(name, rows.map { it.copy(key = 0, alternativeGroup = null) }, loaded.map { it.copy(key = 0, alternativeGroup = null) })
+        }
+    }
+
+    @Test fun aJoinIsAdoptedAndARefusedOneLeavesTheListAlone() {
+        val energy = find("ring_energy")
+        val rows = listOf(
+            ItemRequirement(1, energy, 4),
+            ItemRequirement(2, energy, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(3, energy, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(4, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(5, find("wand_frost"), 2),
+        )
+        // A wand may join a ring stack: the stack's copies keep their own kind.
+        val wand = RequirementEditor.view(rows).itemOf(4)!!.chips.single()
+        assertEquals(setOf(1L, 5L), wand.join)
+        assertTrue(wand.refuse.isEmpty())
+
+        // The stacked target keeps its stack, as a member: two more rings, or the wand.
+        val joined = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 4, target = 1)))
+        assertEquals(4L, joined.focus)
+        val cluster = joined.board.itemOf(4)!!
+        assertEquals(listOf(1L, 4L), cluster.members)
+        assertEquals(listOf(3, 1), cluster.chips.map { it.stack.count })
+        assertEquals(listOf("×3", null), cluster.chips.map { it.countBadge?.text })
+
+        // Out on its own again, the wand leaves a cluster of one, which is the ring stack.
+        val detached = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Detach(4)))
+        assertTrue(detached.rows!!.all { it.alternativeGroup == null })
+        assertEquals(listOf(3, 1, 1), detached.board.items.map { it.chips.single().stack.count })
+        // The chip's Remove takes the member with its whole stack.
+        val removed = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Remove(1)))
+        assertEquals(listOf(4L, 5L), removed.rows!!.map { it.key })
+
+        // With all four labels in use, the stacked target cannot keep its stack.
+        val busy = RequirementEditor.decodeRows(fixture("board-join-refused").getJSONObject("request").getJSONArray("rows"))
+        val disintegration = RequirementEditor.view(busy).itemOf(11)!!.chips.single()
+        assertEquals(setOf(9L), disintegration.refuse.keys)
+        val refused = RequirementEditor.board(busy, listOf(BoardEdit.Join(source = 11, target = 9)))
+        assertNull(refused.rows)
+        assertEquals(disintegration.refuse.getValue(9), refused.refused)
+    }
+
+    /** The bin's `remove_one` takes one item; the chip's Remove takes its whole stack. */
+    @Test fun removingOneItemLeavesTheRestOfItsStack() {
+        val frost = find("wand_frost")
+        val rows = listOf(
+            ItemRequirement(1, frost, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+            ItemRequirement(2, find("wand_disintegration"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+            ItemRequirement(4, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+        )
+        assertEquals(mapOf("type" to "remove_one", "key" to 1L), canonical(BoardEdit.RemoveOne(1).json()))
+        // {Frost ×3 | Disintegration}: one Frost goes, two stay.
+        val one = RequirementEditor.board(rows, listOf(BoardEdit.RemoveOne(1)))
+        assertEquals(1L, one.focus)
+        assertEquals(listOf(2, 1), one.board.items.single().chips.map { it.stack.count })
+        // The ×1 member leaves, and a cluster of one is a lone Frost ×3.
+        val member = RequirementEditor.board(rows, listOf(BoardEdit.RemoveOne(2)))
+        assertNull(member.focus)
+        assertNull(member.board.items.single().cluster)
+        assertEquals(3, member.board.items.single().chips.single().stack.count)
+        // The chip's Remove takes Frost with its copies.
+        val whole = RequirementEditor.board(rows, listOf(BoardEdit.Remove(1)))
+        assertEquals(listOf(2L), whole.rows!!.map { it.key })
+    }
+
+    @Test fun eachChipSaysWhatItsStackKeepsWhileOneItemIsLifted() {
+        val energy = BoardView.decode(fixture("board-remaining-badges").getJSONObject("response")).items.single().chips.single()
+        assertEquals(BadgeView("×3", "×3", "3 of the same kind"), energy.badges.count)
+        assertEquals(BadgesView(BadgeView("×2", "×2", "2 of the same kind"), null), energy.remainingBadges)
+        // {Frost ×2 | Disintegration}: Frost leaves one Frost, and Disintegration leaves whole.
+        val frost = find("wand_frost")
+        val rows = listOf(
+            ItemRequirement(1, frost, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+            ItemRequirement(2, find("wand_disintegration"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+        )
+        assertEquals(
+            listOf(BadgesView(null, null), null),
+            RequirementEditor.view(rows).items.single().chips.map { it.remainingBadges },
+        )
+    }
+
+    /** A drag carries a bare copy: the chip's `lifted` face, which is what lands. */
+    @Test fun eachChipSaysWhichItemADragOfItLifts() {
+        val join = fixture("board-join-bare-copy")
+        val rows = RequirementEditor.decodeRows(join.getJSONObject("request").getJSONArray("rows"))
+        val (ring, disintegration) = RequirementEditor.view(rows).items.map { it.chips.single() }
+        // Ring of Energy +4 ×3 lifts a plain Ring of Energy, and keeps its +4.
+        assertEquals(listOf(TagView("+4", TagStyle.UPGRADE)), ring.tags)
+        val lifted = ring.lifted!!
+        assertEquals(
+            ChipFace(
+                name = "Ring of Energy", title = "Ring of Energy", item = find("ring_energy"), kind = ItemKind.RING,
+                tags = emptyList(), trailingTags = emptyList(), effect = null, uncursed = false,
+                details = listOf("any upgrade"), description = "Ring of Energy, any upgrade",
+            ),
+            lifted,
+        )
+        assertEquals(lifted, ring.movingFace)
+        // A chip without copies moves itself.
+        assertNull(disintegration.lifted)
+        assertEquals(disintegration.face, disintegration.movingFace)
+        assertEquals("Wand of Disintegration, any upgrade", disintegration.face.description)
+
+        // The join lands that face beside Disintegration, and the chip stays +4 ×2.
+        val joined = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 1, target = 4)))
+        assertEquals(3L, joined.focus)
+        val (rest, cluster) = joined.board.items
+        assertEquals(listOf(1L) to "×2", rest.members to rest.chips.single().countBadge?.text)
+        assertEquals(ring.tags, rest.chips.single().tags)
+        assertEquals(listOf(4L, 3L), cluster.members)
+        assertEquals(lifted, cluster.chips.last().face)
+        assertEquals(BoardView.decode(join.getJSONObject("response")), joined.board)
+
+        // Detached again, it folds back into the stack: Ring of Energy +4 ×3.
+        val back = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Detach(3)))
+        assertEquals(1L, back.focus)
+        val (energy, alone) = back.board.items.map { it.chips.single() }
+        assertEquals("Ring of Energy, exactly +4" to "×3", energy.description to energy.countBadge?.text)
+        assertEquals("Wand of Disintegration", alone.name)
+        assertEquals(
+            BoardView.decode(fixture("board-join-bare-copy-round-trip").getJSONObject("response")),
+            back.board,
+        )
+
+        // {Frost +2 ×2 | Disintegration}: the Frost that leaves is a bare one.
+        val detach = fixture("board-detach-bare-copy")
+        val stacked = RequirementEditor.decodeRows(detach.getJSONObject("request").getJSONArray("rows"))
+        val frost = RequirementEditor.view(stacked).itemOf(1)!!.chips.first()
+        assertEquals("Wand of Frost, exactly +2", frost.description)
+        assertEquals("Wand of Frost, any upgrade", frost.lifted?.description)
+        val detached = RequirementEditor.board(stacked, listOf(BoardEdit.Detach(1)))
+        assertEquals(3L, detached.focus)
+        val (kept, out) = detached.board.items
+        assertEquals(listOf("Wand of Frost, exactly +2", "Wand of Disintegration, any upgrade"), kept.chips.map { it.description })
+        assertEquals(frost.lifted, out.chips.single().face)
+    }
+
+    @Test fun savingKeepsAnUnchangedStackAndAppendsANewChip() {
+        val might = ItemRequirement(0, find("ring_might"), 2)
+        val stacked = RequirementEditor.board(
+            emptyList(), listOf(BoardEdit.Save(null, might, count = 3, total = null, copyDepth = 9)), nextKey = 1,
+        ).rows!!
+        assertEquals(listOf(1L, 2L, 3L), stacked.map { it.key })
+        assertEquals(listOf(null, 9, 9), stacked.map { it.maximumDepth })
+
+        // Saving what is already there changes nothing, so a refine can resume.
+        val unchanged = RequirementEditor.board(stacked, listOf(BoardEdit.Save(1, stacked[0], 3, null, 9)))
+        assertNull(unchanged.rows)
+        assertEquals(1L, unchanged.focus)
+
+        val wand = ItemRequirement(0, find("wand_frost"), 2)
+        val added = RequirementEditor.board(stacked, listOf(BoardEdit.Save(null, wand, 1, null, null)), nextKey = 10)
+        assertEquals(wand.copy(key = 10), added.rows!!.last())
+        assertEquals(11L, added.nextKey)
+    }
+
+    @Test fun aClusterMemberSavedIntoAnotherCategoryKeepsAStackOfItsNewKind() {
+        val spear = ItemRequirement(0, find("spear"), 2)
+        val stacked = RequirementEditor.board(
+            emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
+        ).rows!! + ItemRequirement(3, find("mace"), 2)
+        val cluster = RequirementEditor.board(stacked, listOf(BoardEdit.Join(source = 3, target = 1))).rows!!
+        assertEquals(listOf(2, 1), RequirementEditor.view(cluster).items.single().chips.map { it.stack.count })
+
+        // The spear's stack is the spear's own, so the mace may turn trinket.
+        val skull = ItemRequirement(3, find("rat_skull"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1)
+        val trinket = RequirementEditor.board(cluster, listOf(BoardEdit.Save(3, skull, 1, null, null)))
+        assertNull(trinket.refused)
+        assertEquals(listOf("Spear" to 2, "Rat Skull" to 1), trinket.board.items.single().chips.map { it.name to it.stack.count })
+
+        // A stacked member saved as a ring keeps a stack of rings.
+        val might = ItemRequirement(1, find("ring_might"), 1, alternativeGroup = 1)
+        val ring = RequirementEditor.board(cluster, listOf(BoardEdit.Save(1, might, 2, null, null)))
+        assertNull(ring.refused)
+        assertEquals(listOf("Ring of Might" to 2, "Mace" to 1), ring.board.items.single().chips.map { it.name to it.stack.count })
+        assertEquals(listOf(ItemKind.RING, ItemKind.RING), ring.rows!!.filter { it.identityGroup != null }.map { it.kind })
+    }
+
+    @Test fun everyEditIsReadByTheEditor() {
+        val haste = find("ring_haste")
+        val rows = listOf(
+            ItemRequirement(1, haste, 1),
+            ItemRequirement(2, haste, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(4, find("wand_frost"), 2, alternativeGroup = 1),
+        )
+        val edits = listOf(
+            BoardEdit.Normalize, BoardEdit.Join(1, 3), BoardEdit.Detach(3), BoardEdit.Remove(4), BoardEdit.RemoveOne(1), BoardEdit.RemoveItem(1),
+            BoardEdit.SetCount(1, 3), BoardEdit.SetTotal(1, 4), BoardEdit.SetTotal(1, null), BoardEdit.ToggleLevels(1),
+            BoardEdit.SetCopyDepth(1, 10), BoardEdit.SetCopyDepth(1, null),
+            BoardEdit.Save(1, rows[0], count = 2, total = 3, copyDepth = null), BoardEdit.Save(null, rows[3], 1, null, null),
+        )
+        for (edit in edits) RequirementEditor.board(rows, listOf(edit), ResinCondition.of(4, auto = false, ArcaneResinFilter()))
+        val floored = RequirementEditor.board(rows, listOf(BoardEdit.SetCopyDepth(1, 10))).rows!!
+        // Floor 10 is an empty boss floor; the copies keep to floor 9.
+        assertEquals(9, floored[1].maximumDepth)
+    }
+
+    @Test fun loadedListsAreKeyedOnInTheCanonicalEncoding() {
+        val frost = find("wand_frost")
+        val labelled = listOf(
+            ItemRequirement(7, frost, 3, identityGroup = 1),
+            ItemRequirement(7, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+        )
+        // A stack of a named item is written as plain repeats.
+        val loaded = RequirementEditor.loaded(labelled, firstKey = 40)
+        assertEquals(listOf(40L, 41L), loaded.map { it.key })
+        assertEquals(listOf(null, null), loaded.map { it.identityGroup })
+        assertEquals(listOf(frost, frost), loaded.map { it.item })
+        // Built-in presets are already canonical: loading one changes only its keys.
+        for (preset in BuiltInPresets.all) {
+            val requirements = preset.query.requirements
+            assertEquals(preset.name, requirements.mapIndexed { index, it -> it.copy(key = 1L + index) }, RequirementEditor.loaded(requirements, 1))
+        }
+    }
+
+    @Test fun theSheetFormDecodesEveryControl() {
+        val sheet = EditorSheet.decode(fixture("editor-open-row").getJSONObject("response"))
+        val form = sheet.form
+        assertFalse(form.adding)
+        assertEquals(1L, form.rowKey)
+        assertEquals("Ring of Might", form.title)
+        assertEquals(ItemKind.RING, form.kind)
+        assertEquals("ring", form.category.value)
+        assertEquals(listOf("Weapon", "Armor", "Wand", "Ring", "Trinket", "Artifact"), form.category.options.map { it.label })
+        assertEquals("ring_might", form.item.value)
+        assertEquals(SheetOption<String?>(null, "Any ring", null, hidden = false), form.item.options.first())
+        // Counting levels speaks for the rings' upgrades; a named ring has no tier.
+        assertFalse(form.upgrade.visible)
+        assertFalse(form.tier.visible)
+        assertNull(form.source.value)
+        assertEquals("Any", form.source.label)
+        assertEquals((1..24).filterNot { it in setOf(5, 10, 15) }, form.floorLimit.options.map { it.value })
+        assertEquals(SheetFloors(true, false, 4, form.floorLimit.options, "Limit this item to a floor", "Within first 4 floors"), form.floorLimit)
+        assertEquals(2, form.stack.count)
+        assertEquals("×2", form.stack.valueLabel)
+        assertEquals(
+            SheetStepper(
+                true, true, 3, 1, 8, "Count levels together",
+                "Each item counts its upgrade plus one, and spare items may go unused.", captionVisible = true, "≥ 3 across up to 2",
+            ),
+            form.stack.countLevels,
+        )
+        assertFalse(form.stack.copyDepth.visible)
+        assertEquals(listOf("up to 2 — levels add to ≥ 3"), form.preview!!.relations)
+        assertTrue(form.canSave)
+        // A sheet survives saved state as the editor's two strings.
+        assertEquals(form, EditorSheet(sheet.draft, sheet.formJson).form)
+
+        val effect = EditorSheet.decode(fixture("editor-change-effect").getJSONObject("response")).form.effect
+        assertEquals("specific", effect.mode)
+        assertEquals(listOf("enchantment", "curse"), effect.groups.map { it.value })
+        assertEquals(listOf("Blazing"), effect.choices.filter { it.selected }.map { it.value })
+
+        val resin = EditorSheet.decode(fixture("editor-resin-amount-invalid").getJSONObject("response")).form
+        assertTrue(resin.resinPicked)
+        assertNull(resin.rowKey)
+        assertEquals(null, resin.resin.amount)
+        assertFalse(resin.resin.auto)
+        assertTrue(resin.resin.includeMageWand.value)
+        assertEquals(listOf("Enter an amount from 1 to 65535."), resin.errors)
+        assertFalse(resin.canSave)
+        assertNull(resin.preview)
+    }
+
+    /** The fixture's save request, sent again through [RequirementEditor.save]. */
+    private fun replaySave(name: String): SheetSave {
+        val request = fixture(name).getJSONObject("request")
+        return RequirementEditor.save(
+            request.getString("draft"),
+            RequirementEditor.decodeRows(request.getJSONArray("rows")),
+            if (request.isNull("next_key")) null else request.getLong("next_key"),
+        )
+    }
+
+    @Test fun savesDecodeTheirRowsAndTheQueryResin() {
+        val saved = replaySave("editor-save") as SheetSave.Saved
+        assertEquals(listOf(1L, 2L, 3L, 4L), saved.rows!!.map { it.key })
+        assertEquals(listOf(find("spear"), find("spear")), saved.rows!!.drop(2).map { it.item })
+        assertEquals(6, saved.rows!!.last().maximumDepth)
+        assertEquals(3L, saved.focus)
+        assertEquals(5L, saved.nextKey)
+        assertNull(saved.resin)
+
+        val set = replaySave("editor-resin-save-set") as SheetSave.Saved
+        assertEquals(listOf(2L), set.rows!!.map { it.key })
+        assertEquals(SavedResin.Set(ResinCondition(4, auto = false, ArcaneResinFilter(maximumDepth = 14))), set.resin)
+        assertNull(set.focus)
+
+        val clear = replaySave("editor-resin-save-clear") as SheetSave.Saved
+        assertEquals(SavedResin.Clear, clear.resin)
+        assertEquals(find("wand_frost"), clear.rows!!.last().item)
+
+        val refused = replaySave("editor-save-refused") as SheetSave.Refused
+        assertEquals(
+            listOf("This trinket is already required. Each trinket appears only once in the deck."),
+            refused.sheet.form.errors,
+        )
+        assertFalse(refused.sheet.form.canSave)
+    }
+
+    @Test fun anUntouchedSaveWritesNothingAndKeepsWhatTheSheetCannotShow() {
+        val untouched = replaySave("editor-save-untouched") as SheetSave.Saved
+        assertNull(untouched.rows)
+        assertEquals(1L, untouched.focus)
+
+        // The city vault's +5 artifact: the sheet has no control for its upgrade.
+        val sandals = listOf(ItemRequirement(1, find("sandals_of_nature"), 5, maximumDepth = 19))
+        val opened = RequirementEditor.open(sandals, key = 1)
+        assertFalse(opened.form.upgrade.visible)
+        assertNull((RequirementEditor.save(opened.draft, sandals) as SheetSave.Saved).rows)
+        // A save that changes something else keeps it too.
+        val floored = RequirementEditor.change(opened.draft, SheetChange.floorLimit(9))
+        val changed = RequirementEditor.save(floored.draft, sandals) as SheetSave.Saved
+        assertEquals(listOf(sandals.single().copy(maximumDepth = 9)), changed.rows)
+    }
+
+    @Test fun theFormWordsItsSectionsAndSaysWhatShows() {
+        fun sheet(rows: List<ItemRequirement>, vararg changes: SheetChange, key: Long? = null) =
+            changes.fold(RequirementEditor.open(rows, key = key)) { open, change -> RequirementEditor.change(open.draft, change) }.form
+
+        val weapon = sheet(emptyList())
+        assertEquals("Enchantment", weapon.effect.label)
+        assertFalse(weapon.effect.choicesVisible)
+        assertEquals("any", weapon.tier.mode)
+        assertFalse(weapon.tier.valueVisible)
+        assertFalse(weapon.upgrade.valueVisible)
+        assertNull(weapon.uncursed.caption)
+        val specific = sheet(
+            emptyList(), SheetChange.effectMode("specific"), SheetChange.tierMode("at_least"), SheetChange.upgradeMode("exact"),
+        )
+        assertTrue(specific.effect.choicesVisible)
+        assertTrue(specific.tier.valueVisible)
+        assertTrue(specific.upgrade.valueVisible)
+        assertEquals("Glyph", sheet(emptyList(), SheetChange.category("armor")).effect.label)
+
+        val wand = sheet(emptyList(), SheetChange.category("wand"))
+        assertTrue(wand.excludeResin.visible)
+        assertTrue(wand.excludeResin.caption!!.startsWith("Keep this wand without budgeting resin to upgrade it."))
+
+        val skull = sheet(emptyList(), SheetChange.category("trinket"), SheetChange.item("rat_skull"))
+        assertEquals(
+            "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
+            skull.selectTrinket.caption,
+        )
+        // The transmutation limit's caption describes the limit, so it shows while the limit is on.
+        assertFalse(skull.transmutations.captionVisible)
+        assertTrue(sheet(emptyList(), SheetChange.category("trinket"), SheetChange.item("rat_skull"), SheetChange.transmutationsEnabled(true)).transmutations.captionVisible)
+
+        // The combined level's caption explains its switch, so it shows while the switch is off too.
+        val rings = sheet(emptyList(), SheetChange.category("ring"), SheetChange.item("ring_might"), SheetChange.count(2))
+        assertEquals("Total item count", rings.stack.label)
+        assertFalse(rings.stack.countLevels.enabled)
+        assertTrue(rings.stack.countLevels.captionVisible)
+        assertEquals("Each item counts its upgrade plus one, and spare items may go unused.", rings.stack.countLevels.caption)
+    }
+
+    @Test fun theResinSectionWordsItsChoiceItsBoundsAndItsSwitch() {
+        val form = EditorSheet.decode(fixture("editor-resin-mage-wand").getJSONObject("response")).form
+        val resin = form.resin
+        assertEquals("Minimum resin", resin.label)
+        assertEquals(listOf(false to "Amount", true to "Auto"), resin.modes.map { it.value to it.label })
+        assertEquals("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", resin.caption)
+        assertEquals(1 to 65535, resin.min to resin.max)
+        assertEquals(
+            SheetToggle(
+                visible = true, value = true, label = "Include Mage’s starting wand",
+                caption = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. " +
+                    "The preserved wand is +0, regardless of the staff’s level.",
+            ),
+            resin.includeMageWand,
+        )
+        // The error for an amount out of bounds names the same bounds.
+        val invalid = EditorSheet.decode(fixture("editor-resin-amount-invalid").getJSONObject("response")).form
+        assertEquals(listOf("Enter an amount from ${invalid.resin.min} to ${invalid.resin.max}."), invalid.errors)
+    }
+
+    @Test fun theResinSheetAddsToAQueryWithoutResinAndEditsOneWithIt() {
+        val frost = listOf(ItemRequirement(1, find("wand_frost"), 2))
+        val added = RequirementEditor.open(frost, openResin = true).form
+        assertTrue(added.adding)
+        assertTrue(added.resinPicked)
+        assertEquals(added.adding, EditorSheet.decode(fixture("editor-resin-open-new").getJSONObject("response")).form.adding)
+
+        val resin = ResinCondition(4, auto = false, ArcaneResinFilter(maximumDepth = 5, includeMageWand = true))
+        val opened = RequirementEditor.open(frost, resin = resin, openResin = true)
+        assertFalse(opened.form.adding)
+        // Floor 5 holds no items, so the slider shows it as 4; saved untouched, the query keeps its 5.
+        assertEquals(4, opened.form.floorLimit.value)
+        val untouched = RequirementEditor.save(opened.draft, frost) as SheetSave.Saved
+        assertNull(untouched.resin)
+        assertNull(untouched.rows)
+        val flipped = listOf(SheetChange.resinAuto(true), SheetChange.resinAuto(false))
+            .fold(opened) { open, change -> RequirementEditor.change(open.draft, change) }
+        assertNull((RequirementEditor.save(flipped.draft, frost) as SheetSave.Saved).resin)
+        assertNull((replaySave("editor-resin-save-untouched") as SheetSave.Saved).resin)
+
+        val more = RequirementEditor.change(opened.draft, SheetChange.resinAmount(6.0))
+        assertEquals(
+            SavedResin.Set(ResinCondition(6, auto = false, resin.filter.copy(maximumDepth = 4))),
+            (RequirementEditor.save(more.draft, frost) as SheetSave.Saved).resin,
+        )
+    }
+
+    @Test fun aSheetOpensChangesAndSavesThroughTheEngine() {
+        val frost = ItemRequirement(1, find("wand_frost"), 2)
+        var sheet = RequirementEditor.open(listOf(frost), offerResin = true)
+        assertTrue(sheet.form.adding)
+        assertEquals("Any weapon", sheet.form.title)
+        val changes = listOf(
+            SheetChange.category("ring"), SheetChange.item("ring_might"), SheetChange.count(2),
+            SheetChange.countLevels(true), SheetChange.total(5),
+        )
+        for (change in changes) sheet = RequirementEditor.change(sheet.draft, change)
+        assertEquals("≥ 5 across up to 2", sheet.form.stack.countLevels.valueLabel)
+        val saved = RequirementEditor.save(sheet.draft, listOf(frost), nextKey = 10) as SheetSave.Saved
+        val rings = saved.rows!!.drop(1)
+        assertEquals(listOf(10L, 11L), rings.map { it.key })
+        assertEquals(listOf(LevelSum(1, 5), LevelSum(1, 5)), rings.map { it.levelSum })
+        assertEquals(10L, saved.focus)
+        assertEquals(12L, saved.nextKey)
+
+        // Reopened and saved as it is, the stack changes nothing, so a refine can resume.
+        val reopened = RequirementEditor.open(saved.rows!!, key = 10)
+        assertEquals(2, reopened.form.stack.count)
+        assertTrue(reopened.form.stack.countLevels.enabled)
+        val unchanged = RequirementEditor.save(reopened.draft, saved.rows!!) as SheetSave.Saved
+        assertNull(unchanged.rows)
+        assertEquals(10L, unchanged.focus)
+    }
+
+    @Test fun aClusterMembersSheetEditsItsOwnStack() {
+        val spear = ItemRequirement(0, find("spear"), 2)
+        val stacked = RequirementEditor.board(
+            emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
+        ).rows!! + ItemRequirement(3, find("mace"), 2)
+        val cluster = RequirementEditor.board(stacked, listOf(BoardEdit.Join(source = 3, target = 1))).rows!!
+        val spearSheet = RequirementEditor.open(cluster, key = 1)
+        assertTrue(spearSheet.form.inCluster)
+        assertTrue(spearSheet.form.stack.visible)
+        assertEquals(2, spearSheet.form.stack.count)
+        val opened = RequirementEditor.open(cluster, key = 3)
+        assertTrue(opened.form.stack.visible)
+        assertEquals(1, opened.form.stack.count)
+
+        // Two maces or two spears: the member's own stack, beside the spear's.
+        val grown = RequirementEditor.save(RequirementEditor.change(opened.draft, SheetChange.count(2)).draft, cluster) as SheetSave.Saved
+        assertEquals(3L, grown.focus)
+        assertEquals(listOf(2, 2), RequirementEditor.view(grown.rows!!).items.single().chips.map { it.stack.count })
+
+        // The spear's copies are its own, so the mace may turn trinket.
+        val trinket = RequirementEditor.change(opened.draft, SheetChange.category("trinket"))
+        assertTrue(trinket.form.errors.isEmpty())
+        assertTrue(trinket.form.canSave)
+        assertTrue(RequirementEditor.save(trinket.draft, cluster) is SheetSave.Saved)
+    }
+
+    @Test fun everyItemTheSheetOffersHasATile() {
+        val sheet = RequirementEditor.open(emptyList(), offerResin = true)
+        for (family in sheet.form.category.options.map { it.value }) {
+            val options = RequirementEditor.change(sheet.draft, SheetChange.category(family)).form.item.options
+            val items = options.mapNotNull { it.value }.filter { it != SheetChange.ARCANE_RESIN }
+            assertTrue(family, items.isNotEmpty())
+            assertEquals(family, emptyList<String>(), items.filter { ItemCatalog.findById(it) == null })
+        }
+    }
+
+    @Test fun everyChangeIsReadByTheEditor() {
+        val sheet = RequirementEditor.open(listOf(ItemRequirement(1, find("wand_frost"), 2)), key = 1, offerResin = true)
+        val changes = listOf(
+            SheetChange.category("weapon"), SheetChange.weaponType("melee"), SheetChange.item(null),
+            SheetChange.item("spear"), SheetChange.tierMode("at_least"), SheetChange.tier(4),
+            SheetChange.upgradeMode("at_least"), SheetChange.upgrade(2), SheetChange.effectMode("specific"),
+            SheetChange.toggleEffect("Blazing"), SheetChange.uncursed(true), SheetChange.source("locked_chest"),
+            SheetChange.source(null), SheetChange.floorLimitEnabled(true), SheetChange.floorLimit(6),
+            SheetChange.excludeResin(true), SheetChange.transmutationsEnabled(true), SheetChange.transmutations(3),
+            SheetChange.selectTrinket(true), SheetChange.count(3), SheetChange.copyDepthEnabled(true),
+            SheetChange.copyDepth(9), SheetChange.countLevels(true), SheetChange.total(4),
+            SheetChange.item(SheetChange.ARCANE_RESIN), SheetChange.resinAuto(true), SheetChange.resinAmount(4.0),
+            SheetChange.resinAmount(null), SheetChange.resinAmount(Double.NaN), SheetChange.includeMageWand(true),
+        )
+        for (change in changes) RequirementEditor.change(sheet.draft, change)
+        // Floor 5 is an empty boss floor: a step up from floor 4 lands on 6.
+        val floored = listOf(SheetChange.floorLimitEnabled(true), SheetChange.floorLimit(5))
+            .fold(sheet) { open, change -> RequirementEditor.change(open.draft, change) }
+        assertEquals(6, floored.form.floorLimit.value)
+        val failure = assertThrows(IllegalStateException::class.java) {
+            RequirementEditor.change("{\"v\":99}", SheetChange.uncursed(true))
+        }
+        assertTrue(failure.message!!.startsWith("The draft cannot be read"))
+    }
+
+    @Test fun theBoardOfAnEditIsKeptForTheListItProduced() {
+        val views = BoardViews()
+        val rows = listOf(ItemRequirement(1, find("wand_frost"), 2))
+        val board = views.of(rows, null)
+        assertTrue(board === views.of(rows.toList(), null))
+        val resin = ResinCondition.of(0, auto = true, ArcaneResinFilter())
+        assertEquals("Arcane Resin", views.of(rows, resin).resin!!.name)
+        assertNull(ResinCondition.of(0, auto = false, ArcaneResinFilter()))
+    }
+}

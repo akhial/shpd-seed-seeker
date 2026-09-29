@@ -515,6 +515,11 @@ pub struct QueryPlan {
     /// One entry per query slot: a plain requirement alone, or every member
     /// of an alternative group, any one of which satisfies the slot.
     slots: Vec<Vec<RequirementPlan>>,
+    /// Per slot, whether it is a member stack's copy, waived when another
+    /// member fills its alternative group. Such a slot still extends
+    /// generation, but no pruning or impossibility counts it as needed.
+    /// Empty when the query holds no member stack.
+    waivable: Vec<bool>,
     /// Equal mandatory ordinary-only slots that need distinct item indices.
     /// Each entry stores the first slot and the number of required instances.
     closed_multiplicities: Vec<(usize, usize)>,
@@ -549,14 +554,16 @@ fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<Requirement
 // Matching uses distinct item indices. Group only identical singleton mandatory
 // slots with no remaining quest source, so their ordinary deadline closes every
 // possible source. Full plan equality preserves caps and all predicate metadata.
-fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> {
+// A member stack's copies may be waived, so they are not mandatory.
+fn closed_multiplicities(slots: &[Vec<RequirementPlan>], waivable: &[bool]) -> Vec<(usize, usize)> {
     use std::collections::HashMap;
 
     let eligible = slots.iter().enumerate().filter_map(|(index, slot)| {
         let [plan] = slot.as_slice() else {
             return None;
         };
-        (plan.quests == 0
+        (!waivable.get(index).copied().unwrap_or(false)
+            && plan.quests == 0
             && plan.open_deadline.is_some()
             && plan.requirement.level_sum.is_none()
             && !plan.requirement.blanket
@@ -810,7 +817,12 @@ impl QueryPlan {
         let mut generation_depth = donor_depth;
         let mut needs_vault_treasure = donor_vault;
         let mut slots: Vec<Vec<RequirementPlan>> = Vec::new();
+        let gates = crate::query::stack_gates(&query.requirements);
+        let mut waivable = Vec::new();
         for slot in query.slots() {
+            if !gates.is_empty() {
+                waivable.push(crate::query::gate_of(&gates, slot[0]).is_some());
+            }
             let mut members = Vec::with_capacity(slot.len());
             let requirements = slot.into_iter().flat_map(|index| {
                 let requirement = query.requirements[index];
@@ -915,7 +927,7 @@ impl QueryPlan {
         });
 
         let required_trinket_slots = required_trinket_slots(&slots);
-        let closed_multiplicities = closed_multiplicities(&slots);
+        let closed_multiplicities = closed_multiplicities(&slots, &waivable);
         let mut floor_requirements = [None; 25];
         for floor in &query.floor_requirements {
             if let Some(slot) = floor_requirements.get_mut(usize::from(floor.depth)) {
@@ -964,6 +976,7 @@ impl QueryPlan {
             closed_multiplicities,
             closed_resin_supply,
             slots,
+            waivable,
             generation_depth,
             blacksmith_deadline,
             wandmaker_deadline,
@@ -972,6 +985,12 @@ impl QueryPlan {
         };
         plan.unsatisfiable_reason = plan.impossibility_reason(query, &profile, &deadline);
         plan
+    }
+
+    /// Whether the slot at `index` is a member stack's copy, which another
+    /// member filling its alternative group waives.
+    fn waivable(&self, index: usize) -> bool {
+        self.waivable.get(index).copied().unwrap_or(false)
     }
 
     /// Whether no seed can ever match the query (for example a +4 ring with a
@@ -1068,7 +1087,10 @@ impl QueryPlan {
         // cover at most one slot; Hall's condition over the sixteen quest
         // subsets then decides whether an assignment exists.
         let mut quest_only = [0_u16; 16];
-        for slot in &self.slots {
+        for (index, slot) in self.slots.iter().enumerate() {
+            if self.waivable(index) {
+                continue;
+            }
             let open = slot.iter().any(|plan| {
                 // Deck identity was checked at run init. Here any catalyst offer
                 // is an optimistic witness for its placement; the final matcher
@@ -2673,6 +2695,47 @@ mod tests {
         let mut original = plan.clone();
         original.closed_multiplicities.clear();
         original
+    }
+
+    /// A member stack's copies are needed only when their member fills the
+    /// group: two early copies of Frost must not prune a seed whose
+    /// Disintegration fills it, while copies of whichever member matched
+    /// still close like any repeated slot.
+    #[test]
+    fn a_member_stacks_copies_never_prune_what_another_member_satisfies() {
+        let member = |item, label| Requirement {
+            item: Some(item),
+            identity_group: label,
+            alternative_group: Some(1),
+            ..requirement(ItemKind::Wand, UpgradeRequirement::Any)
+        };
+        let copy = Requirement {
+            identity_group: Some(1),
+            ..early_wand(UpgradeRequirement::Any)
+        };
+        let disintegration = item(ItemId::WandDisintegration, 0, 2, ItemSource::Heap);
+        for (label, needed) in [(None, false), (Some(1), true)] {
+            let query = multiplicity_query(
+                vec![
+                    member(ItemId::WandFrost, Some(1)),
+                    member(ItemId::WandDisintegration, label),
+                    copy,
+                    copy,
+                ],
+                24,
+            );
+            let plan = QueryPlan::analyze(&query);
+            assert_eq!(plan.unsatisfiable_reason(), None);
+            assert_eq!(plan.closed_multiplicities.is_empty(), !needed);
+            assert_eq!(
+                viable(&plan, 5, std::slice::from_ref(&disintegration)),
+                !needed
+            );
+            assert_eq!(
+                query.matches(&multiplicity_world(std::slice::from_ref(&disintegration))),
+                !needed
+            );
+        }
     }
 
     #[test]
@@ -5253,7 +5316,7 @@ mod closed_multiplicity_grouping_tests {
     fn check(slots: &[Vec<RequirementPlan>], expected: &[(usize, usize)]) {
         assert_eq!(suffix_count_oracle(slots), expected, "oracle fixture");
         assert_eq!(
-            closed_multiplicities(slots),
+            closed_multiplicities(slots, &[]),
             expected,
             "complete stable output"
         );

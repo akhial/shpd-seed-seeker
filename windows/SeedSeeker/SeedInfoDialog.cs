@@ -13,9 +13,11 @@ internal static class SeedInfoDialog
     {
         var content = new StackPanel { Spacing = 14, Width = 321 };
         content.Children.Add(new TextBlock { Text = seed, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 18 });
-        var detail = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        var detail = new TextBlock { TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed, FontWeight = FontWeights.SemiBold };
         content.Children.Add(detail);
         var artwork = ItemMappingArtwork.Shared;
+        // The tile whose name the detail line shows, tinted while it does.
+        Button? selected = null;
         foreach (var (category, title, entries) in new[] {
             ("potions", "Potions", mappings.Potions), ("scrolls", "Scrolls", mappings.Scrolls), ("rings", "Rings", mappings.Rings),
         })
@@ -28,20 +30,25 @@ internal static class SeedInfoDialog
             for (var index = 0; index < entries.Count; index++)
             {
                 var entry = entries[index];
+                // A subtle button: no fill at rest, the Fluent subtle fills under
+                // the pointer, and the palette's yellow while its name is shown.
                 var button = new Button {
                     Content = new MappingSprite(entry, artwork.Categories[category], index),
                     Padding = new Thickness(0), BorderThickness = new Thickness(0),
-                    MinWidth = 0, MinHeight = 0,
+                    MinWidth = 0, MinHeight = 0, CornerRadius = new CornerRadius(4),
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 };
-                foreach (var key in new[] { "ButtonBackground", "ButtonBackgroundPointerOver", "ButtonBackgroundPressed" })
-                    button.Resources[key] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                button.Resources["ButtonBackgroundPointerOver"] = Application.Current.Resources["SubtleFillColorSecondaryBrush"];
+                button.Resources["ButtonBackgroundPressed"] = Application.Current.Resources["SubtleFillColorTertiaryBrush"];
                 AutomationProperties.SetName(button, entry.Label);
                 ToolTipService.SetToolTip(button, entry.Label);
                 button.Click += (_, _) => {
                     var show = detail.Visibility != Visibility.Visible || detail.Text != entry.Label;
                     detail.Text = entry.Label;
                     detail.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+                    if (selected is not null) selected.Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                    selected = show ? button : null;
+                    if (selected is not null) selected.Background = Palette.AmberFill;
                 };
                 Grid.SetColumn(button, index % 6); Grid.SetRow(button, index / 6);
                 grid.Children.Add(button);

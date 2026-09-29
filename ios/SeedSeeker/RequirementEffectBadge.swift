@@ -1,20 +1,21 @@
 import SeedSeekerKit
 import SwiftUI
 
-/// Resolve the full selected set in catalog order, as the web's effectGlows
-/// does. "Any enchantment" has no fixed sprite colour of its own.
-func requirementGlows(_ effect: EffectFilter) -> [ItemGlow] {
-    effect.names.map { enchantmentGlows[$0] ?? curseGlow }
+/// The glows a board chip's sprite pulses through: the full selected set in
+/// catalog order, as the web's effectGlows does. "Any enchantment" has no
+/// fixed sprite colour of its own.
+func chipGlows(_ effect: ChipEffect?) -> [ItemGlow] {
+    (effect?.glowNames ?? []).map { enchantmentGlows[$0] ?? curseGlow }
 }
 
 /// The web's effect wheel is stationary: all selected colours remain visible
 /// around the count while the item's sprite pulses through them in turn.
 struct RequirementEffectBadge: View {
-    let effect: EffectFilter
+    let effect: ChipEffect?
     let isWildcard: Bool
 
     @ViewBuilder var body: some View {
-        let glows = requirementGlows(effect)
+        let glows = chipGlows(effect)
         if glows.count > 1 {
             let colors = glows.map(color)
             Text("\(glows.count)")
@@ -29,7 +30,7 @@ struct RequirementEffectBadge: View {
                         lineWidth: 2.5)
                 }
                 .accessibilityHidden(true)
-        } else if effect == .anyEnchantment {
+        } else if effect?.anyEnchantment == true {
             Circle()
                 .fill(AngularGradient(colors: Self.spectrum, center: .center,
                                       startAngle: .degrees(-90), endAngle: .degrees(270)))

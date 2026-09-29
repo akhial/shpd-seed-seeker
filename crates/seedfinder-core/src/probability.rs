@@ -114,7 +114,10 @@ use crate::quests::WandmakerQuestType;
 /// Combined-level groups collapse to their cheapest sufficient subset: the
 /// fewest members that can reach the total, each carrying an equal share of
 /// it — pessimistic, since lopsided splits and larger subsets also satisfy
-/// the group.
+/// the group. A member stack — copies needed only when a member carrying
+/// the stack's label fills its alternative group — is estimated as the
+/// likeliest way of filling the group, with the copies that way needs:
+/// pessimistic too, since the ways together are likelier than any one.
 #[must_use]
 pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
     cache::query(query, None, || estimate_uncached(query))
@@ -123,6 +126,12 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 fn estimate_uncached(query: &SearchQuery) -> f64 {
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
+    }
+    // Spell member stacks out for the trinket deck and the plain estimate
+    // alike. (Automatic trinkets keep the policy prepared for the query as
+    // searched; their equipment estimates spell the stacks out themselves.)
+    if let Some(variants) = crate::query::member_stack_variants(query) {
+        return likeliest(&variants, estimate_uncached);
     }
     if query
         .requirements
@@ -143,6 +152,9 @@ pub(crate) fn cached_equipment_probability(query: &SearchQuery, profile: Profile
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if let Some(variants) = crate::query::member_stack_variants(query) {
+        return likeliest(&variants, |variant| equipment_probability(variant, profile));
+    }
     if query.floor_requirements.is_empty() {
         return equipment_probability_without_floors(query, profile);
     }
@@ -518,6 +530,14 @@ fn effective_requirements(query: &SearchQuery, profile: Profile) -> Vec<Requirem
     }
     flattened.extend(alternatives.into_values());
     flattened
+}
+
+/// The best estimate among the ways of filling a query's member stacks
+/// ([`crate::query::member_stack_variants`]): a world matching any of them
+/// matches the query. Ways the model cannot estimate are passed over; `NaN`
+/// when it can estimate none.
+fn likeliest(variants: &[SearchQuery], estimate: impl Fn(&SearchQuery) -> f64) -> f64 {
+    variants.iter().map(estimate).fold(f64::NAN, f64::max)
 }
 
 /// Probability that an accessible Blacksmith exists within the search depth.
@@ -2322,6 +2342,46 @@ mod tests {
     };
 
     use super::{estimate_match_probability, rarity_probability};
+
+    /// A member stack is estimated as its likeliest way of filling the
+    /// group: {Frost ×2 | Disintegration} as the likelier of two Frosts and
+    /// one Disintegration — which is one Disintegration, so the copy no
+    /// longer drags the estimate down to two Frosts'.
+    #[test]
+    fn member_stacks_take_the_likeliest_way_of_filling_their_group() {
+        let estimate = |requirements: &str, extra: &str| {
+            estimate_match_probability(
+                &crate::json_query::decode(&format!(
+                    r#"{{"max_depth":12{extra},"requirements":{requirements}}}"#
+                ))
+                .unwrap(),
+            )
+        };
+        for extra in [
+            "",
+            r#","arcane_resin":"auto""#,
+            r#","auto_apply_trinket":true"#,
+        ] {
+            let member = estimate(
+                r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                    {"item":"wand_disintegration"}]},{"kind":"wand","identity_group":1}]"#,
+                extra,
+            );
+            let frosts = estimate(
+                r#"[{"item":"wand_frost","identity_group":1},{"kind":"wand","identity_group":1}]"#,
+                extra,
+            );
+            let disintegration = estimate(r#"[{"item":"wand_disintegration"}]"#, extra);
+            assert!(
+                frosts < disintegration,
+                "{extra}: {frosts} {disintegration}"
+            );
+            assert!(
+                (member - frosts.max(disintegration)).abs() < 1e-12,
+                "{extra}: {member} {frosts} {disintegration}"
+            );
+        }
+    }
 
     #[test]
     fn separate_item_streams_keep_their_own_arrival_budget() {

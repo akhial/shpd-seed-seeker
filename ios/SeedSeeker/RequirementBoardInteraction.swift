@@ -26,8 +26,9 @@ final class RequirementBoardInteraction {
 struct RequirementLift {
     let id: String
     let frame: CGRect
-    let requirement: ItemRequirement?
-    let item: BoardItem?
+    /// The lifted chip as the board drew it, with the rows it may join; nil
+    /// for the resin chip. A drag moves one item of it.
+    let chip: BoardChip?
     var translation = CGSize.zero
     var scale: CGFloat = 1.06
     var opacity: Double = 1

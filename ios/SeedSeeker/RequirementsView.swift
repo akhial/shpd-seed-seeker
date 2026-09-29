@@ -2,8 +2,10 @@ import SwiftUI
 import SeedSeekerKit
 import UIKit
 
-/// The board operates on the shared relation model, including the hidden copies
-/// behind a stack. Keys, rather than positions, survive every model rewrite.
+/// The board draws what the shared core's requirement board says — the folded
+/// entries, every chip's words, what each chip may join — and every gesture
+/// is one of its edits, named by row key: keys, rather than positions,
+/// survive every rewrite.
 struct RequirementsView: View {
     @Binding var query: SavedQuery
     let interaction: RequirementBoardInteraction
@@ -12,7 +14,7 @@ struct RequirementsView: View {
     @Namespace private var glass
     @GestureState private var gestureActive = false
     @State private var editor: RequirementsEditorPresentation?
-    @State private var resinPresented = false
+    @State private var resinEditor: RequirementsResinPresentation?
     @State private var blanketsExpanded = false
     @State private var blanketHelp = false
     @State private var chipFrames: [String: CGRect] = [:]
@@ -22,12 +24,17 @@ struct RequirementsView: View {
     @State private var liftGeneration = UUID()
     @State private var suppressEditingUntil = Date.distantPast
     @State private var stackKey: RequirementsStackPresentation?
-    @State private var resinSource = "resin"
     @State private var landedKey: Int64?
+    /// Why the last drop could not join, shown in the hint's place for a moment.
+    @State private var notice: String?
+    @State private var noticeReset: Task<Void, Never>?
     @AppStorage("learnedGrouping") private var learnedGrouping = false
     @Namespace private var sheetZoom
 
     private var requirements: [ItemRequirement] { query.requirements }
+    /// The shared core's board, memoized per change of the list, so drag
+    /// frames and hover passes never ask the core again.
+    private var snapshot: RequirementBoard { query.board }
     private var lift: RequirementLift? {
         get { interaction.lift }
         nonmutating set { interaction.lift = newValue }
@@ -37,7 +44,13 @@ struct RequirementsView: View {
         GlassEffectContainer(spacing: 10) {
           VStack(alignment: .leading, spacing: 18) {
             board(blanket: false)
-            if let boardHint {
+            if let notice {
+                Label(notice, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .padding(.top, -8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            } else if let boardHint {
                 Label(boardHint.text, systemImage: boardHint.symbol)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -52,7 +65,7 @@ struct RequirementsView: View {
                     HStack(spacing: 9) {
                         Image(systemName: "square.3.layers.3d")
                             .font(.subheadline)
-                        Text("Blanket Requirements (\(requirements.filter(\.blanket).boardCount))")
+                        Text("Blanket Requirements (\(snapshot.blanketCount))")
                         Image(systemName: blanketsExpanded ? "chevron.up" : "chevron.down")
                             .font(.caption2.weight(.semibold))
                     }
@@ -94,55 +107,31 @@ struct RequirementsView: View {
         .onDisappear { resetLift() }
         .sheet(item: $editor) { presentation in
             RequirementsEditor(
-                editing: presentation.key.flatMap { key in requirements.first { $0.key == key } },
-                otherRequirements: requirements.filter { $0.key != presentation.key },
-                blanket: presentation.blanket,
-                editingCount: presentation.count,
-                editingTotal: presentation.total,
-                editingCopyDepth: presentation.copyDepth,
-                onAddResin: presentation.blanket ? nil : {
+                sheet: presentation.sheet,
+                onPickResin: { picked in
+                    // Arcane Resin has a sheet of its own; the picked draft
+                    // moves there, with the wand chip it may replace.
                     editor = nil
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
-                        resinSource = presentation.source
-                        resinPresented = true
+                        resinEditor = RequirementsResinPresentation(sheet: picked, source: presentation.source)
                     }
                 },
-                onEditGroupQuantity: groupQuantityAction(for: presentation),
-                onSave: { requirement, count, total, copyDepth in
-                    let index = presentation.key.flatMap { key in requirements.firstIndex { $0.key == key } }
-                    let before = Set(requirements.map(\.key))
-                    withAnimation(boardSpring) {
-                        query.requirements = requirements.applyEdit(index: index, requirement: requirement,
-                                                                   count: count, total: total, copyDepth: copyDepth)
-                    }
-                    if presentation.key == nil {
-                        land(requirements.first { !before.contains($0.key) }?.key)
-                    }
-                },
+                onSave: { save($0) },
                 onRemove: presentation.key.map { key in { remove(key: key) } }
             )
             .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
-        .sheet(isPresented: $resinPresented) {
-            RequirementsResinEditor(initialAmount: query.arcaneResin, initialAuto: query.arcaneResinAuto,
-                                    initialFilter: query.arcaneResinFilter,
-                                    hasRequirement: query.arcaneResinAuto || query.arcaneResin > 0,
-                                    onSave: { amount, auto, filter in
-                                        query.arcaneResin = amount
-                                        query.arcaneResinAuto = auto
-                                        query.arcaneResinFilter = filter
-                                    }, onRemove: removeResin)
-                .navigationTransition(.zoom(sourceID: resinSource, in: sheetZoom))
+        .sheet(item: $resinEditor) { presentation in
+            RequirementsResinEditor(sheet: presentation.sheet,
+                                    onSave: { save($0) }, onRemove: removeResin)
+                .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
         .sheet(item: $stackKey) { presentation in
-            if let index = requirements.firstIndex(where: { $0.key == presentation.id }),
-               let item = requirements.boardItem(holding: index) {
-                RequirementsStackEditor(count: item.stackCount, copyDepth: requirements.copyDepth(of: item)) { count, depth in
-                    let updated = requirements.setStackCount(item, count)
-                    guard let updatedIndex = updated.firstIndex(where: { $0.key == presentation.id }),
-                          let refreshed = updated.boardItem(holding: updatedIndex) else { return }
-                    query.requirements = updated.setCopyDepth(refreshed, depth)
+            if let member = snapshot.chip(presentation.id) {
+                RequirementsStackEditor(key: presentation.id, stack: member.stack,
+                                        control: presentation.control) { edit in
+                    editStack(presentation.id, edit)
                 }
                 .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
             }
@@ -157,12 +146,12 @@ struct RequirementsView: View {
     /// Grouping is a gesture, so it is taught once, only when there are two
     /// chips to group, and never again after the first either/or group.
     private var boardHint: (text: String, symbol: String)? {
-        let ordinary = requirements.filter { !$0.blanket }
-        if ordinary.isEmpty && !query.arcaneResinAuto && query.arcaneResin == 0 {
+        let shown = snapshot
+        if shown.ordinaryCount == 0 && !query.arcaneResinAuto && query.arcaneResin == 0 {
             return ("Add the items a seed must contain.", "sparkles")
         }
-        guard !learnedGrouping, ordinary.boardCount >= 2,
-              !requirements.contains(where: { $0.alternativeGroup != nil }) else { return nil }
+        guard !learnedGrouping, shown.ordinaryCount >= 2,
+              !shown.items.contains(where: { $0.cluster != nil }) else { return nil }
         return ("Hold a chip and drop it on another for either/or.", "hand.draw")
     }
 
@@ -176,11 +165,13 @@ struct RequirementsView: View {
                 boardEntry(entry.item)
                     .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
-            if !blanket && (query.arcaneResinAuto || query.arcaneResin > 0) {
-                resinChip
+            if !blanket, let resin = snapshot.resin {
+                resinChip(resin)
             }
             Button {
-                editor = RequirementsEditorPresentation(blanket: blanket, source: blanket ? "add-blanket" : "add")
+                openEditor(RequirementSheet.open(rows: requirements, blanket: blanket, resin: query.boardResin,
+                                                 offerResin: true),
+                           key: nil, source: blanket ? "add-blanket" : "add")
             } label: {
                 Label("Add", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
@@ -202,31 +193,31 @@ struct RequirementsView: View {
     }
 
     private func boardEntries(blanket: Bool) -> [RequirementBoardEntry] {
-        requirements.boardItems()
-            .filter { requirements[$0.anchor].blanket == blanket }
-            .map { RequirementBoardEntry(id: $0.cluster.map { "group-\($0)" } ?? "chip-\(requirements[$0.anchor].key)", item: $0) }
+        snapshot.section(blanket: blanket)
+            .map { RequirementBoardEntry(id: $0.cluster.map { "group-\($0)" } ?? "chip-\($0.anchor)", item: $0) }
     }
 
     @ViewBuilder private func boardEntry(_ item: BoardItem) -> some View {
         if let cluster = item.cluster {
             RequirementsFlowLayout(spacing: 8, fillsWidth: false) {
-                ForEach(item.members.map { requirements[$0] }, id: \.key) { requirement in
+                ForEach(item.chips) { member in
                     HStack(spacing: 8) {
-                        chip(requirement, item: item)
-                        if requirement.key == requirements[item.anchor].key && item.stackCount > 1 && requirements.canStack(item) {
+                        chip(member)
+                        // Each member's stack is its own: its ×N sits beside
+                        // it and opens that member's "How many" sheet.
+                        if let badge = memberCountBadge(member) {
                             Button {
-                                stackKey = RequirementsStackPresentation(id: requirements[item.anchor].key,
-                                                                         source: "stack-\(cluster)")
+                                showStack(member.key, source: "stack-\(member.key)")
                             } label: {
-                                Text("×\(item.stackCount)")
+                                Text(badge.compactText)
                                     .font(.caption.monospaced().weight(.semibold))
                                     .foregroundStyle(AppTheme.seed)
                                     .padding(.horizontal, 12).frame(minHeight: 44)
                                     .glassEffect(.regular.interactive(), in: .capsule)
                             }
                             .buttonStyle(.plain)
-                            .matchedTransitionSource(id: "stack-\(cluster)", in: sheetZoom)
-                            .background(frameReader(id: "stack-\(cluster)"))
+                            .matchedTransitionSource(id: "stack-\(member.key)", in: sheetZoom)
+                            .background(frameReader(id: "stack-\(member.key)"))
                             .accessibilityLabel("How many")
                         }
                     }
@@ -236,18 +227,35 @@ struct RequirementsView: View {
             .glassEffect(.regular.tint(AppTheme.seed.opacity(0.10)), in: .rect(cornerRadius: 32))
             .glassEffectID("group-\(cluster)", in: glass)
             .id("group-\(cluster)")
-        } else {
-            chip(requirements[item.anchor], item: item)
+        } else if let member = item.chips.first {
+            chip(member)
         }
     }
 
-    private var resinChip: some View {
+    /// A cluster member's ×N when it is the member's own "How many" button
+    /// beside the chip rather than a tag inside it: while the core offers
+    /// the member a count.
+    private func memberCountBadge(_ chip: BoardChip) -> BoardBadge? {
+        guard chip.inCluster, chip.stack.canChangeCount else { return nil }
+        return originBadges(chip).count
+    }
+
+    /// The badges a chip's place on the board shows: its own, or — while
+    /// one of its items is lifted away — what its stack keeps, so the
+    /// dimmed chip left behind already reads as the drop will leave it (a
+    /// ×3 chip, ×2).
+    private func originBadges(_ chip: BoardChip) -> BoardBadges {
+        chip.shownBadges(lifted: lift?.id == "chip-\(chip.key)")
+    }
+
+    private func resinChip(_ resin: BoardResinChip) -> some View {
         Button {
-            guard lift == nil, Date.now >= suppressEditingUntil else { return }
-            resinSource = "resin"
-            resinPresented = true
+            guard lift == nil, Date.now >= suppressEditingUntil,
+                  let sheet = RequirementSheet.open(rows: requirements, resin: query.boardResin,
+                                                    openResin: true) else { return }
+            resinEditor = RequirementsResinPresentation(sheet: sheet, source: "resin")
         } label: {
-            resinContent
+            resinContent(resin)
                 .glassEffect(.regular.tint(.orange.opacity(0.05)).interactive(), in: .capsule)
                 .glassEffectID("resin", in: glass)
         }
@@ -258,21 +266,22 @@ struct RequirementsView: View {
         .opacity(lift?.id == "resin" ? 0.18 : 1)
         .scaleEffect(lift?.id == "resin" ? 0.94 : 1)
         .simultaneousGesture(liftGesture(id: "resin"))
-        .accessibilityLabel("Arcane Resin, \(query.arcaneResinAuto ? "Auto, upgrade matched wands to +3" : "at least \(query.arcaneResin)"), \(query.arcaneResinFilter.summary)")
+        .accessibilityLabel(resin.description)
         .accessibilityAction(named: Text("Remove requirement"), removeResin)
     }
 
-    private var resinContent: some View {
+    private func resinContent(_ resin: BoardResinChip) -> some View {
         HStack(spacing: 8) {
             ItemSpriteView(item: CatalogItem(id: "arcane_resin", name: "Arcane Resin", kind: .wand, spriteIndex: 317),
                            pointSize: compactChips ? 23 : 28)
-            Text("Arcane Resin")
+            Text(resin.name)
                 .font(compactChips ? .caption.weight(.medium) : .subheadline.weight(.medium))
                 .lineLimit(1).minimumScaleFactor(0.85).layoutPriority(-1)
-            tag(query.arcaneResinAuto ? "Auto" : "≥\(query.arcaneResin)")
-            if query.arcaneResinFilter.includeMageWand { tag("Mage +2") }
-            if let depth = query.arcaneResinFilter.maximumDepth { tag("F≤\(depth)") }
-            if query.arcaneResinFilter.uncursed {
+            // The resin it counts (style credit) keeps the seed tint iOS has
+            // always drawn every resin tag in. Tags have no hover here; what
+            // "Mage +2" means is in the description VoiceOver reads.
+            ForEach(resin.tags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
+            if resin.uncursed {
                 uncursedTag
             }
         }
@@ -280,17 +289,17 @@ struct RequirementsView: View {
         .frame(minHeight: compactChips ? 44 : 52)
     }
 
-    private func chip(_ requirement: ItemRequirement, item: BoardItem) -> some View {
-        let id = "chip-\(requirement.key)"
-        let hovered = hoverKey == requirement.key
+    private func chip(_ chip: BoardChip) -> some View {
+        let id = "chip-\(chip.key)"
+        let hovered = hoverKey == chip.key
         return Button {
             guard lift == nil, Date.now >= suppressEditingUntil else { return }
-            editor = RequirementsEditorPresentation(key: requirement.key, blanket: requirement.blanket,
-                                                   count: item.stackCount, total: item.total,
-                                                   copyDepth: requirements.copyDepth(of: item), source: id)
+            openEditor(RequirementSheet.open(rows: requirements, key: chip.key, resin: query.boardResin,
+                                             offerResin: true),
+                       key: chip.key, source: id)
         } label: {
-            chipContent(requirement, item: item)
-                .glassEffect(.regular.tint(chipTint(requirement, hovered: hovered)).interactive(), in: .capsule)
+            chipContent(chip.face, badges: originBadges(chip), countBeside: memberCountBadge(chip) != nil)
+                .glassEffect(.regular.tint(chipTint(chip, hovered: hovered)).interactive(), in: .capsule)
                 .glassEffectID(id, in: glass)
                 .glassEffectUnion(id: id, namespace: glass)
         }
@@ -299,51 +308,58 @@ struct RequirementsView: View {
         .contentShape(.interaction, Capsule())
         .background(frameReader(id: id))
         .opacity(lift?.id == id ? 0.18 : 1)
-        .scaleEffect(reduceMotion ? 1 : (lift?.id == id ? 0.94 : (hovered ? 1.045 : (landedKey == requirement.key ? 1.06 : 1))))
+        .scaleEffect(reduceMotion ? 1 : (lift?.id == id ? 0.94 : (hovered ? 1.045 : (landedKey == chip.key ? 1.06 : 1))))
         .offset(y: !reduceMotion && hovered ? -3 : 0)
         .animation(boardSpring, value: hovered)
         .simultaneousGesture(liftGesture(id: id))
-        .accessibilityLabel(requirement.title + ", " + requirement.description)
+        .accessibilityLabel(chip.problem.map { "\(chip.description), \($0)" } ?? chip.description)
         .accessibilityActions {
-            Button(requirement.alternativeGroup == nil ? "Remove requirement" : "Remove alternative", role: .destructive) {
-                remove(key: requirement.key)
+            Button(chip.inCluster ? "Remove alternative" : "Remove requirement", role: .destructive) {
+                remove(key: chip.key)
             }
-            ForEach(requirements.filter {
-                $0.key != requirement.key && $0.blanket == requirement.blanket
-                    && (requirement.alternativeGroup == nil || $0.alternativeGroup != requirement.alternativeGroup)
-            }, id: \.key) { target in
-                Button("or \(target.item?.name ?? "Any \(target.kind.singularLabel)")") {
-                    join(key: requirement.key, target: target.key)
+            // The rows the core offers this chip, as the drag would.
+            ForEach(chip.join, id: \.self) { target in
+                Button("or \(chipName(target))") {
+                    join(key: chip.key, target: target)
                 }
             }
         }
     }
 
-    private func chipTint(_ requirement: ItemRequirement, hovered: Bool) -> Color {
-        if hovered { return AppTheme.seed.opacity(0.24) }
-        if landedKey == requirement.key { return AppTheme.accent.opacity(0.4) }
-        return requirement.alternativeGroup != nil ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
+    private func chipName(_ key: Int64) -> String {
+        snapshot.chip(key)?.name ?? ""
     }
 
-    private func chipContent(_ requirement: ItemRequirement, item: BoardItem) -> some View {
+    private func chipTint(_ chip: BoardChip, hovered: Bool) -> Color {
+        // A drop the core refuses warns rather than invites.
+        if hovered { return lift?.chip?.refusal(onto: chip.key) == nil ? AppTheme.seed.opacity(0.24) : Color.red.opacity(0.22) }
+        if landedKey == chip.key { return AppTheme.accent.opacity(0.4) }
+        if chip.problem != nil { return Color.red.opacity(0.14) }
+        return chip.inCluster ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
+    }
+
+    /// A face with the stack `badges` given: a chip's own with those its
+    /// place shows, or the item a lift carries with none, since it is one
+    /// item whatever its stack. A member whose ×N stands `countBeside` it,
+    /// as a button, shows only its Σ inline.
+    private func chipContent(_ face: ChipFace, badges: BoardBadges?, countBeside: Bool = false) -> some View {
         HStack(spacing: compactChips ? 6 : 8) {
-            RequirementsSprite(requirement: requirement, size: compactChips ? 23 : 28)
-            Text(requirement.item?.name ?? "Any \(requirement.kind.singularLabel)")
+            RequirementsChipSprite(face: face, size: compactChips ? 23 : 28)
+            Text(face.name)
                 .font(compactChips ? .caption.weight(.medium) : .subheadline.weight(.medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .layoutPriority(-1)
                 .foregroundStyle(.primary)
             HStack(spacing: 4) {
-                ForEach(tags(for: requirement), id: \.text) { value in tag(value.text, upgrade: value.upgrade) }
-                if requirement.requireUncursed {
+                ForEach(face.tags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
+                if face.uncursed {
                     uncursedTag
                 }
-                if item.cluster == nil && item.stackCount > 1 {
-                    tag(item.total == nil ? "×\(item.stackCount)" : "≤\(item.stackCount)")
-                }
-                if let total = item.total, item.cluster == nil { tag("Σ≥\(total)") }
-                RequirementEffectBadge(effect: requirement.effect, isWildcard: requirement.item == nil)
+                if !countBeside, let badge = badges?.count { tag(badge.compactText) }
+                if let badge = badges?.total { tag(badge.compactText) }
+                RequirementEffectBadge(effect: face.effect, isWildcard: face.item == nil)
+                ForEach(face.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -383,20 +399,24 @@ struct RequirementsView: View {
 
     private func beginLift(id: String) {
         guard let frame = chipFrames[id] else { return }
+        let shown = snapshot
         let key = id.hasPrefix("chip-") ? Int64(id.dropFirst(5)) : nil
-        let index = key.flatMap { key in requirements.firstIndex { $0.key == key } }
-        if let index, let item = requirements.boardItem(holding: index) {
-            interaction.preview = AnyView(chipContent(requirements[index], item: item))
-        } else {
-            interaction.preview = AnyView(resinContent)
+        // The chip carries its join candidates and refusals, read once here
+        // rather than on every frame of the drag.
+        let lifted = key.flatMap { shown.chip($0) }
+        if let lifted {
+            // A drag moves one item — for a chip with copies a bare copy of
+            // it, the chip keeping its requirements — so what follows the
+            // finger is that item's face, without ×N or Σ.
+            interaction.preview = AnyView(chipContent(lifted.movingFace, badges: nil))
+        } else if let resin = shown.resin {
+            interaction.preview = AnyView(resinContent(resin))
         }
         liftGeneration = UUID()
         suppressEditingUntil = .distantFuture
         settling = false
         withAnimation(boardSpring) {
-            lift = RequirementLift(id: id, frame: frame,
-                                   requirement: index.map { requirements[$0] },
-                                   item: index.flatMap { requirements.boardItem(holding: $0) },
+            lift = RequirementLift(id: id, frame: frame, chip: lifted,
                                    scale: reduceMotion ? 1 : 1.06)
             interaction.activeID = id
             interaction.location = CGPoint(x: frame.midX, y: frame.midY)
@@ -407,15 +427,16 @@ struct RequirementsView: View {
     private func updateHover(at point: CGPoint) {
         let previous = hoverKey
         let overRemove = interaction.isOverRemove
-        guard !overRemove, let source = lift?.requirement else {
+        guard !overRemove, let source = lift?.chip else {
             if previous != nil { withAnimation(boardSpring) { hoverKey = nil } }
             return
         }
-        let target = requirements.first { candidate in
-            candidate.key != source.key && candidate.blanket == source.blanket
-                && (source.alternativeGroup == nil || candidate.alternativeGroup != source.alternativeGroup)
-                && chipFrames["chip-\(candidate.key)"]?.insetBy(dx: -6, dy: -6).contains(point) == true
-        }?.key
+        // Only the rows the core names — joins, and refusals to explain —
+        // answer the finger.
+        let candidates = source.join + source.refuse.map(\.key)
+        let target = candidates.first { candidate in
+            chipFrames["chip-\(candidate)"]?.insetBy(dx: -6, dy: -6).contains(point) == true
+        }
         if target != previous {
             withAnimation(boardSpring) { hoverKey = target }
             if target != nil { UISelectionFeedbackGenerator().selectionChanged() }
@@ -439,25 +460,27 @@ struct RequirementsView: View {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(200))
                 guard generation == liftGeneration else { return }
-                if let key = current.requirement?.key { remove(key: key) } else { removeResin() }
+                if let key = current.chip?.key { removeOne(key: key) } else { removeResin() }
                 resetLift()
             }
-        } else if let target = hoverKey, let key = current.requirement?.key {
+        } else if let target = hoverKey, let source = current.chip, let refusal = source.refusal(onto: target) {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            show(refusal.message)
+            returnLift()
+        } else if let target = hoverKey, let source = current.chip {
             withAnimation(boardSpring) {
-                if let sourceIndex = requirements.firstIndex(where: { $0.key == key }),
-                   let targetIndex = requirements.firstIndex(where: { $0.key == target }) {
-                    query.requirements = requirements.joinAlternatives(source: sourceIndex, target: targetIndex)
+                if apply([.join(source: source.key, target: target)])?.changed == true {
                     learnedGrouping = true
                 }
                 resetLift()
             }
             UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.8)
-        } else if let requirement = current.requirement, requirement.alternativeGroup != nil,
+        } else if let source = current.chip, source.canDetach,
                   boardFrame.contains(interaction.location),
                   !current.frame.insetBy(dx: -12, dy: -12).contains(interaction.location),
                   !chipFrames.contains(where: { $0.key != current.id && $0.value.contains(interaction.location) }) {
             withAnimation(boardSpring) {
-                detach(key: requirement.key)
+                detach(key: source.key)
                 resetLift()
             }
             UISelectionFeedbackGenerator().selectionChanged()
@@ -508,40 +531,65 @@ struct RequirementsView: View {
             .accessibilityLabel("Uncursed")
     }
 
-    private func tags(for requirement: ItemRequirement) -> [(text: String, upgrade: Bool)] {
-        var values: [(text: String, upgrade: Bool)] = []
-        switch requirement.tierMatch {
-        case .any: break
-        case .exactly: values.append(("T\(requirement.tier)", false))
-        case .atLeast: values.append(("T\(requirement.tier)+", false))
-        case .atMost: values.append(("T≤\(requirement.tier)", false))
-        }
-        switch requirement.upgradeMatch {
-        case .any: break
-        case .exactly: values.append(("+\(requirement.upgrade)", true))
-        case .atLeast: values.append(("+\(requirement.upgrade)↑", true))
-        }
-        if requirement.excludeResin { values.append(("No resin", false)) }
-        if requirement.trinketTransmutations > 0 { values.append(("Transmute ≤\(requirement.trinketTransmutations)", false)) }
-        if requirement.artifactTransmutations > 0 { values.append(("Transmute ≤\(requirement.artifactTransmutations)", false)) }
-        if let floor = requirement.maximumDepth { values.append(("F≤\(floor)", false)) }
-        return values
+    /// Opens a cluster member's "How many" sheet on its `key`.
+    private func showStack(_ key: Int64, source: String) {
+        stackKey = RequirementsStackPresentation(id: key, source: source,
+                                                 control: stackControl(of: key, in: requirements))
     }
 
-    private func groupQuantityAction(for presentation: RequirementsEditorPresentation) -> (() -> Void)? {
-        guard let key = presentation.key,
-              let index = requirements.firstIndex(where: { $0.key == key }),
-              let item = requirements.boardItem(holding: index),
-              item.cluster != nil, requirements.canStack(item) else { return nil }
-        return {
-            editor = nil
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(350))
-                guard let currentIndex = requirements.firstIndex(where: { $0.key == key }),
-                      let currentItem = requirements.boardItem(holding: currentIndex),
-                      requirements.canStack(currentItem) else { return }
-                stackKey = RequirementsStackPresentation(id: key, source: "chip-\(key)")
+    /// Runs one edit of a member's "How many" sheet on the board as it is
+    /// made, and answers what the sheet shows next: why the core refused it,
+    /// and the stack section's words and copy floor after it.
+    private func editStack(_ key: Int64, _ edit: BoardEdit) -> (refusal: String?, control: SheetStack?) {
+        let result = apply([edit])
+        if result?.refusal != nil { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+        return (result?.refusal?.message, stackControl(of: key, in: result?.rows ?? requirements))
+    }
+
+    /// The stack section as the shared core words it for the member's own
+    /// sheet: the count's label, and the copies' floor control — its switch,
+    /// the floors it stops at and the floor it turns on at.
+    private func stackControl(of key: Int64, in rows: [ItemRequirement]) -> SheetStack? {
+        RequirementSheet.open(rows: rows, key: key)?.form.stack
+    }
+
+    /// Shows a sheet the shared core opened as the chip or "Add" was tapped,
+    /// never from the sheet's own builder, which runs again on every update.
+    private func openEditor(_ sheet: RequirementSheet?, key: Int64?, source: String) {
+        guard let sheet else { return }
+        editor = RequirementsEditorPresentation(sheet: sheet, key: key, source: source)
+    }
+
+    /// Saves a sheet onto the list as it is now, through the shared core:
+    /// the rows it writes back — only when they changed — and the query's
+    /// resin when the sheet set or cleared it. Answers the sheet to keep
+    /// showing when the core refused the save; its errors say why.
+    private func save(_ sheet: RequirementSheet) -> RequirementSheet? {
+        guard let outcome = sheet.save(onto: requirements) else { return sheet }
+        switch outcome {
+        case .refused(let refused):
+            return refused
+        case .saved(let saved):
+            withAnimation(boardSpring) {
+                if saved.changed { query.requirements = saved.rows }
+                switch saved.resin {
+                case .set(let condition):
+                    query.arcaneResin = condition.amount
+                    query.arcaneResinAuto = condition.auto
+                    query.arcaneResinFilter = condition.filter
+                case .clear:
+                    query.arcaneResin = 0
+                    query.arcaneResinAuto = false
+                    query.arcaneResinFilter = ArcaneResinFilter()
+                case .unchanged:
+                    break
+                }
             }
+            // Keys the core had to repair carry the chip the board is
+            // following along with them.
+            if saved.changed { landedKey = landedKey.map { saved.key(following: $0) } }
+            if sheet.form.mode == .new { land(saved.focus) }
+            return nil
         }
     }
 
@@ -558,25 +606,58 @@ struct RequirementsView: View {
         }
     }
 
-    private func join(key: Int64, target: Int64) {
-        guard let source = requirements.firstIndex(where: { $0.key == key }),
-              let target = requirements.firstIndex(where: { $0.key == target }),
-              requirements[source].blanket == requirements[target].blanket else { return }
-        withAnimation(boardSpring) {
-            query.requirements = requirements.joinAlternatives(source: source, target: target)
+    /// Runs board edits through the shared core, writing the rows back only
+    /// when they changed: an edit that did nothing leaves the query — and
+    /// the search it would resume or refine — untouched.
+    @discardableResult
+    private func apply(_ edits: [BoardEdit]) -> RequirementBoard? {
+        guard let result = RequirementBoard.apply(edits, to: requirements, resin: query.boardResin) else { return nil }
+        if result.changed {
+            withAnimation(boardSpring) { query.requirements = result.rows }
+            // Keys the core had to repair carry the chip the board is
+            // following along with them.
+            landedKey = landedKey.map { result.key(following: $0) }
         }
+        return result
     }
 
+    private func join(key: Int64, target: Int64) {
+        if let refusal = apply([.join(source: key, target: target)])?.refusal { show(refusal.message) }
+    }
+
+    /// Takes one item of a member out on its own; the core may refuse it
+    /// when every group label is in use.
     private func detach(key: Int64) {
-        guard let index = requirements.firstIndex(where: { $0.key == key }) else { return }
-        withAnimation(boardSpring) { query.requirements = requirements.detach(index) }
+        warn(apply([.detach(key)])?.refusal)
     }
 
+    /// Removes the chip with its whole stack: its sheet's and VoiceOver's
+    /// Remove.
     private func remove(key: Int64) {
-        guard let index = requirements.firstIndex(where: { $0.key == key }),
-              let item = requirements.boardItem(holding: index) else { return }
-        withAnimation(boardSpring) {
-            query.requirements = item.cluster == nil ? requirements.removeItem(item) : requirements.removeMember(index)
+        apply([.remove(key)])
+    }
+
+    /// Removes one item of the chip: what the remove target takes, since a
+    /// drag moves one item.
+    private func removeOne(key: Int64) {
+        warn(apply([.removeOne(key)])?.refusal)
+    }
+
+    /// Says why the core refused an edit, with a warning haptic.
+    private func warn(_ refusal: BoardRefusal?) {
+        guard let refusal else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        show(refusal.message)
+    }
+
+    /// Says why a drop could not join, in the hint's place, for a moment.
+    private func show(_ message: String) {
+        withAnimation(boardSpring) { notice = message }
+        noticeReset?.cancel()
+        noticeReset = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(boardSpring) { notice = nil }
         }
     }
 
@@ -603,30 +684,39 @@ private struct RequirementChipFrames: PreferenceKey {
 }
 
 private struct RequirementsEditorPresentation: Identifiable {
-    var id = UUID()
-    var key: Int64?
-    var blanket: Bool
-    var count = 1
-    var total: Int?
-    var copyDepth: Int?
+    let id = UUID()
+    let sheet: RequirementSheet
+    /// The row the sheet was opened on, nil for a new chip.
+    let key: Int64?
     /// The chip or Add button the editor grows from.
-    var source: String
+    let source: String
+}
+
+private struct RequirementsResinPresentation: Identifiable {
+    let id = UUID()
+    let sheet: RequirementSheet
+    /// The resin chip, or the chip whose sheet picked Arcane Resin.
+    let source: String
 }
 
 private struct RequirementsStackPresentation: Identifiable {
     let id: Int64
     let source: String
+    /// The stack section's words and copy floor as the sheet opens.
+    let control: SheetStack?
 }
 
-struct RequirementsSprite: View {
-    let requirement: ItemRequirement
+/// A board chip's sprite: the item with its effects' glows, or the
+/// wildcard's family silhouette.
+struct RequirementsChipSprite: View {
+    let face: ChipFace
     var size: Int = 32
     var body: some View {
         Group {
-            if let item = requirement.item {
-                ItemSpriteView(item: item, glows: requirementGlows(requirement.effect), pointSize: size)
-            } else {
-                WildcardSpriteView(kind: requirement.kind, pointSize: size)
+            if let item = face.catalogItem {
+                ItemSpriteView(item: item, glows: chipGlows(face.effect), pointSize: size)
+            } else if let kind = face.kind {
+                WildcardSpriteView(kind: kind, pointSize: size)
             }
         }
         .frame(width: CGFloat(size), height: CGFloat(size))
@@ -694,36 +784,77 @@ struct RequirementsFlowLayout: Layout {
     }
 }
 
+/// The "How many" sheet of an either/or cluster's member, whose stack is its
+/// own. Every control is one board edit, applied as it is made, so the sheet
+/// always shows the stack the board holds.
 private struct RequirementsStackEditor: View {
     @Environment(\.dismiss) private var dismiss
-    @State var count: Int
-    @State var copyDepth: Int?
-    let onSave: (Int, Int?) -> Void
+    /// The member, which the edits name.
+    let key: Int64
+    /// The member's stack as the board draws it now.
+    let stack: BoardStack
+    /// The stack section — the count's label and the copies' floor control —
+    /// in the shared core's words.
+    @State var control: SheetStack?
+    /// Runs one edit; answers why the core refused it, and the stack
+    /// section after it.
+    let onEdit: (BoardEdit) -> (refusal: String?, control: SheetStack?)
+    /// Why the core refused the last edit.
+    @State private var refusal: String?
 
     var body: some View {
         NavigationStack {
             Form {
-                Stepper(value: $count, in: 1...SearchLimits.stackMax) {
-                    HStack { Text("How many"); Spacer(); Text("×\(count)").foregroundStyle(.tint) }
+                Section {
+                    Stepper(value: countBinding, in: stack.countRange) {
+                        HStack {
+                            if let label = control?.label { Text(label) }
+                            Spacer()
+                            Text(stack.countText).foregroundStyle(.tint)
+                        }
+                    }
+                } footer: {
+                    if let refusal { Text(refusal).foregroundStyle(.orange) }
                 }
-                if count > 1 {
+                if stack.canSetCopyDepth, let copyFloor = control?.copyDepth {
                     Section {
-                        Toggle("Limit the extra copies to a floor", isOn: Binding(get: { copyDepth != nil }, set: { copyDepth = $0 ? 4 : nil }))
-                        if copyDepth != nil { RequirementsFloorPicker(title: "Copies within first", depth: $copyDepth, allowsNone: false) }
-                    } footer: {
-                        Text("A floor limit is where an item lies, not what it is, so the copies keep their own.")
+                        RequirementsFloorControl(control: copyFloor, enabled: copyFloorEnabled(copyFloor),
+                                                 floor: copyFloorValue(copyFloor))
                     }
                 }
             }
             .navigationTitle("How many")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave(count, count > 1 ? copyDepth : nil); dismiss() }
-                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private var countBinding: Binding<Int> {
+        Binding(get: { stack.count }, set: { count in
+            if count != stack.count { run(.setCount(key, count)) }
+        })
+    }
+
+    /// Turning the limit on starts the copies at the floor the core offers.
+    private func copyFloorEnabled(_ control: SheetFloorToggle) -> Binding<Bool> {
+        Binding(get: { control.enabled }, set: { on in
+            if on != control.enabled { run(.setCopyDepth(key, on ? control.value : nil)) }
+        })
+    }
+
+    /// A slider stop the copies are not already at.
+    private func copyFloorValue(_ control: SheetFloorToggle) -> Binding<Int> {
+        Binding(get: { control.value }, set: { floor in
+            if floor != control.value { run(.setCopyDepth(key, floor)) }
+        })
+    }
+
+    private func run(_ edit: BoardEdit) {
+        let answer = onEdit(edit)
+        refusal = answer.refusal
+        control = answer.control
     }
 }

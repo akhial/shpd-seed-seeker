@@ -16,8 +16,9 @@ pub fn present(
     state: &Rc<RefCell<AppState>>,
     on_changed: &Rc<dyn Fn()>,
 ) {
+    // The dialog's own title already says "Challenges"; the group only
+    // explains them.
     let group = adw::PreferencesGroup::builder()
-        .title("Challenges")
         .description("Searches and scouting simulate runs with the selected challenges enabled.")
         .build();
     for info in ALL_CHALLENGES {

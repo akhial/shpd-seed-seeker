@@ -115,23 +115,29 @@ struct RequirementGraduatedSlider: View {
     }
 }
 
+/// The source picker, over the sources the shared core's form offers.
 struct RequirementSourceSelector: View {
     var title = "Source"
-    @Binding var source: ScoutItemSource?
+    let options: [SheetOption]
+    /// The chosen source's document name, nil for any source.
+    @Binding var selection: String?
+
+    private var shown: String {
+        options.first(where: { $0.value == selection })?.label ?? ""
+    }
 
     var body: some View {
         Menu {
-            Picker(title, selection: $source) {
-                Text("Any source").tag(ScoutItemSource?.none)
-                ForEach(ScoutItemSource.allCases, id: \.rawValue) { option in
-                    Text(option.label).tag(ScoutItemSource?.some(option))
+            Picker(title, selection: $selection) {
+                ForEach(options) { option in
+                    Text(option.label).tag(option.value)
                 }
             }
         } label: {
             HStack(spacing: 12) {
                 Text(title).foregroundStyle(.primary)
                 Spacer(minLength: 8)
-                Text(source?.label ?? "Any source")
+                Text(shown)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.trailing)
                 Image(systemName: "chevron.up.chevron.down")
@@ -146,6 +152,6 @@ struct RequirementSourceSelector: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityValue(source?.label ?? "Any source")
+        .accessibilityValue(shown)
     }
 }

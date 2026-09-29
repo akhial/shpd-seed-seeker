@@ -1,0 +1,25 @@
+[package]
+name = "shpd-seedfinder-editor-wasm"
+description = "Lean browser WebAssembly module for the Seed Seeker requirement editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "seedfinder_editor"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+shpd-seedfinder-core = { path = "../seedfinder-core", features = ["json-query"] }
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+serde_json = "1"
+
+# Built exactly like the engine module (`crates/seedfinder-wasm`).
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lints]
+workspace = true

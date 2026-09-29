@@ -172,15 +172,39 @@ public enum BuiltInPresets {
         ], maximumDepth: vaultFloorLimit))
 }
 
+extension Array where Element == ItemRequirement {
+    /// The list with its rows keyed 1…n in order. A key only names a row
+    /// within one list, so a loaded or imported list starts from these:
+    /// small keys every platform's integers hold exactly, none of them zero
+    /// and none repeated.
+    public func withKeysInOrder() -> [ItemRequirement] {
+        var keyed = self
+        for index in keyed.indices { keyed[index].key = Int64(index + 1) }
+        return keyed
+    }
+}
+
+extension SavedQuery {
+    /// The query with its requirements keyed 1…n in order.
+    public func withKeysInOrder() -> SavedQuery {
+        var keyed = self
+        keyed.requirements = requirements.withKeysInOrder()
+        return keyed
+    }
+}
+
 public enum QueryPersistence {
     public static func encode(_ query: SavedQuery) -> String? {
         guard let data = try? JSONEncoder().encode(query) else { return nil }
         return String(data: data, encoding: .utf8)
     }
+    /// The saved query, its requirements keyed 1…n in order: a key only
+    /// names a row within one list, and earlier builds saved random 64-bit
+    /// keys (macOS) and key 0 for new rows (iOS).
     public static func decode(_ text: String) -> SavedQuery {
         guard let data = text.data(using: .utf8), let value = try? JSONDecoder().decode(SavedQuery.self, from: data),
               let validated = value.validated() else { return SavedQuery() }
-        return validated
+        return validated.withKeysInOrder()
     }
 }
 
@@ -237,7 +261,14 @@ public enum PresetPersistence {
                   let elementData = try? JSONSerialization.data(withJSONObject: element) else { return nil }
             return try? JSONDecoder().decode(QueryPreset.self, from: elementData)
         }
-        return presets.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.query.validated() != nil }
+        return presets
+            .filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.query.validated() != nil }
+            .map { preset in
+                // Keyed in order, as a saved query loads.
+                var keyed = preset
+                keyed.query = preset.query.withKeysInOrder()
+                return keyed
+            }
     }
 }
 

@@ -25,21 +25,11 @@ object SearchLimits {
     /** Highest combined-level group number; groups run 1..this. */
     const val LEVEL_SUM_GROUP_MAX = 4
 
-    /** The most items a stack may ask for, its anchor included. */
-    const val STACK_MAX = 3
-
     /** Highest upgrade a search may name, for everything but weapons. */
     const val MAX_UPGRADE_DEFAULT = 4
 
     /** Highest upgrade a ring requirement may name. */
     const val MAX_UPGRADE_RING = 4
-
-    /**
-     * Highest upgrade every ring but one can carry in a single world: ring
-     * drops roll +0..+2, and the only source beyond that — the Imp vault's
-     * final-room prize — appears once per run.
-     */
-    const val MAX_UPGRADE_RING_STANDARD = 2
 
     /**
      * Highest upgrade a weapon requirement may name. v4.0.0's Imp vault lays
@@ -84,35 +74,28 @@ object SearchLimits {
         }
         return if (reachesExtraTier) ceiling else MAX_UPGRADE_ANY_TIER
     }
-
-    /**
-     * The highest combined level [count] rings can reach together: one ring
-     * at the vault ceiling, every other at the standard roll, each counting
-     * its upgrade plus one.
-     */
-    fun ringStackCapacity(count: Int): Int =
-        (MAX_UPGRADE_RING + 1) + (count - 1) * (MAX_UPGRADE_RING_STANDARD + 1)
 }
 
 enum class ItemKind(
     val label: String,
     val singularLabel: String,
-    val modifierLabel: String?,
+    /** Whether the family's items carry an enchantment or glyph a requirement may name. */
+    val carriesEffects: Boolean,
     /** The highest upgrade a search may name for this family. */
     val maximumSearchUpgrade: Int,
 ) {
-    WEAPON("Weapons", "weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    ARMOR("Armor", "armor", "Glyph", SearchLimits.MAX_UPGRADE_DEFAULT),
-    WAND("Wands", "wand", null, SearchLimits.MAX_UPGRADE_DEFAULT),
-    RING("Rings", "ring", null, SearchLimits.MAX_UPGRADE_RING),
+    WEAPON("Weapons", "weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    ARMOR("Armor", "armor", true, SearchLimits.MAX_UPGRADE_DEFAULT),
+    WAND("Wands", "wand", false, SearchLimits.MAX_UPGRADE_DEFAULT),
+    RING("Rings", "ring", false, SearchLimits.MAX_UPGRADE_RING),
 
     // Wire kind IDs 4 and 5 (the enum ordinal is the wire ID): weapon
     // requirements narrowed to one weapon class. Catalog items always carry
     // the WEAPON family, never a narrowed kind.
-    MELEE_WEAPON("Melee weapons", "melee weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    THROWN_WEAPON("Thrown weapons", "thrown weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    TRINKET("Trinket", "trinket", null, 0),
-    ARTIFACT("Artifacts", "artifact", null, SearchLimits.MAX_UPGRADE_ARTIFACT),
+    MELEE_WEAPON("Melee weapons", "melee weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    THROWN_WEAPON("Thrown weapons", "thrown weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    TRINKET("Trinket", "trinket", false, 0),
+    ARTIFACT("Artifacts", "artifact", false, SearchLimits.MAX_UPGRADE_ARTIFACT),
     ;
 
     val requiresNamedItem: Boolean get() = this == TRINKET || this == ARTIFACT
@@ -146,16 +129,7 @@ data class CatalogItem(
     val tier: Int? = null,
     val typeIconIndex: Int? = null,
     val weaponClass: WeaponClass? = null,
-) {
-    /**
-     * Whether this is a tipped dart. Every shop stocks tipped darts and any
-     * dart can be tipped by hand, so the item picker never offers them —
-     * though a scouted world still lists the ones it rolled. The engine's
-     * catalog keeps the `_dart` suffix unambiguous (the plain dart has no
-     * entry), and its wasm cross-check test pins the suffix to the tipped set.
-     */
-    val isTippedDart: Boolean get() = id.endsWith("_dart")
-}
+)
 
 /**
  * Which enchantment, glyph or curse a weapon/armor requirement accepts.
@@ -273,7 +247,7 @@ data class ItemRequirement(
         require(validUpgrade) {
             "Upgrade predicate is invalid for ${kind.label}"
         }
-        require(kind.modifierLabel != null || effect == EffectFilter.Any) {
+        require(kind.carriesEffects || effect == EffectFilter.Any) {
             "${kind.label} cannot carry an effect requirement"
         }
         if (effect is EffectFilter.OneOf) {
@@ -301,84 +275,6 @@ data class ItemRequirement(
     /** The one effect this requirement pins, for the sprite glow; null for any other filter. */
     val singleEffect: String?
         get() = (effect as? EffectFilter.OneOf)?.names?.singleOrNull()
-
-    /** The highest upgrade an item satisfying this requirement can carry. */
-    val maximumUpgrade: Int
-        get() = if (upgradeMatch == UpgradeMatch.EXACT) upgrade else upgradeCeiling
-
-    /** The highest upgrade this requirement may name, its item and tier filter included. */
-    val upgradeCeiling: Int
-        get() = SearchLimits.maximumUpgrade(kind, item, tierMatch, tier)
-
-    /**
-     * The most *levels* this requirement can contribute to a combined total:
-     * its highest upgrade plus one, since every matched item counts itself.
-     */
-    val maximumLevel: Int
-        get() = maximumUpgrade + 1
-
-    /**
-     * Whether this constrains nothing beyond its category — the shape a
-     * stack's extra copies take. A narrowed weapon kind is a constraint; a
-     * per-item floor limit is a placement bound, not an item property, and
-     * does not count.
-     */
-    val isBare: Boolean
-        get() = item == null &&
-            kind == kind.family &&
-            tierMatch == TierMatch.ANY &&
-            upgradeMatch == UpgradeMatch.ANY &&
-            effect == EffectFilter.Any &&
-            !requireUncursed &&
-            !excludeResin &&
-            source == null
-
-    /** Human-readable effect constraint, or null when any effect is accepted. */
-    val effectLabel: String?
-        get() = when (val filter = effect) {
-            EffectFilter.Any -> null
-            EffectFilter.AnyEnchantment -> "any ${kind.modifierLabel?.lowercase() ?: "enchantment"}"
-            is EffectFilter.OneOf -> filter.names.joinToString("/")
-        }
-
-    val description: String
-        get() = if (kind == ItemKind.TRINKET) {
-            "Trinket"
-        } else buildString {
-            append(
-                when (upgradeMatch) {
-                    UpgradeMatch.ANY -> "Any upgrade"
-                    UpgradeMatch.EXACT -> "+$upgrade exactly"
-                    UpgradeMatch.AT_LEAST -> "+$upgrade or higher"
-                },
-            )
-            effectLabel?.let {
-                append(" • ")
-                append(it)
-            }
-            if (requireUncursed) append(" • uncursed")
-            if (excludeResin) append(" • excluded from Auto resin")
-            source?.let {
-                append(" • ")
-                append(it.label)
-            }
-            levelSum?.let {
-                append(" • combined level ≥ ")
-                append(it.atLeast)
-            }
-            maximumDepth?.let {
-                append(" • by floor ")
-                append(it)
-            }
-        }
-
-    val title: String
-        get() = item?.name ?: when (tierMatch) {
-            TierMatch.ANY -> "Any ${kind.singularLabel}"
-            TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
-            TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
-            TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
-        }
 }
 
 /**
@@ -412,72 +308,23 @@ fun List<ItemRequirement>.slots(): List<List<ItemRequirement>> {
 fun List<ItemRequirement>.slotCount(): Int = slots().size
 
 /**
- * The first problem that would make the engine refuse this requirement list,
- * as a user-facing message, or null when it is runnable. [SearchRequest]
- * enforces the same rules; this form exists so the editor can show the
- * message instead of silently disabling Search.
+ * The query-level problem that keeps this list from running, as a
+ * user-facing message, or null when there is none: a resin amount out of
+ * range, or nothing asked for at all. What is wrong with the requirements
+ * themselves — a stack, a combined level, an either/or group, blankets
+ * without an ordinary requirement — is the requirement editor's to say
+ * ([RequirementEditor], [BoardView.problems]); the header shows it after
+ * this, and the engine refuses such a query as well.
  */
 fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0, arcaneResinAuto: Boolean = false, hasFloorRequirements: Boolean = false): String? {
     if (arcaneResin !in 0..65535) return "Arcane Resin must be 0..65535."
     if (isEmpty() && arcaneResin == 0 && !arcaneResinAuto && !hasFloorRequirements) return "Add at least one requirement."
-    if (isNotEmpty() && none { !it.blanket }) return "Add at least one ordinary requirement."
-    if (slots().any { slot -> slot.any { it.blanket != slot.first().blanket } }) {
-        return "An either/or group cannot mix ordinary and blanket requirements."
-    }
-    // A stack (identity group) has one anchor unit — a lone requirement or one
-    // whole alternative group — that may constrain the item it binds to; every
-    // other member is a bare copy of the same category.
-    val identityGroups = filter { it.identityGroup != null }.groupBy { it.identityGroup!! }
-    for ((_, members) in identityGroups.toSortedMap()) {
-        if (members.map { it.kind.family }.distinct().size > 1) {
-            return "The copies of a stack must share its category."
-        }
-        val units = members.filterNot { it.isBare }
-            .map { it.alternativeGroup?.let { group -> "alt:$group" } ?: "req:${it.key}" }
-            .distinct()
-        if (units.size > 1) {
-            return "Only one item of a stack can carry constraints; the extra copies are plain."
-        }
-    }
-    // Combined-level groups: rings only, and one shared, reachable total,
-    // counted in levels (upgrade plus one per item).
-    val sumGroups = filter { it.levelSum != null }.groupBy { it.levelSum!!.group }
-    for ((_, members) in sumGroups.toSortedMap()) {
-        if (members.any { it.kind.family != ItemKind.RING }) {
-            return "Only rings can count levels together."
-        }
-        val totals = members.map { it.levelSum!!.atLeast }.distinct()
-        if (totals.size > 1) {
-            return "A stack must share one combined level " +
-                "(it has ${totals.sorted().joinToString(" and ")})."
-        }
-        // Each member's own ceiling, bounded by what a world generates: only
-        // the Imp vault's one prize levels a ring past the standard roll.
-        val reachable = minOf(
-            members.sumOf { it.maximumLevel },
-            SearchLimits.ringStackCapacity(members.size),
-        )
-        val needed = totals.single()
-        if (needed > reachable) {
-            return "A combined level of $needed needs more items: " +
-                "these ${members.size} can reach $reachable."
-        }
-    }
     return null
 }
 
-enum class TierMatch(val label: String) {
-    ANY("Any tier"),
-    EXACT("Exactly"),
-    AT_LEAST("At least"),
-    AT_MOST("At most"),
-}
+enum class TierMatch { ANY, EXACT, AT_LEAST, AT_MOST }
 
-enum class UpgradeMatch(val label: String) {
-    ANY("Any"),
-    EXACT("Exactly"),
-    AT_LEAST("At least"),
-}
+enum class UpgradeMatch { ANY, EXACT, AT_LEAST }
 
 /**
  * Boss floors that generate no searchable items. The engine treats a floor

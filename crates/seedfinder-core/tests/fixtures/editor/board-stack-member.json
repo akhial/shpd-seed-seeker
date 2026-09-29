@@ -1,0 +1,218 @@
+{
+  "about": "The +3 wand of (Fireblast or any +3 wand) grown to two: a stack of its own, under a label only it carries — two of the same wand, or a Fireblast.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "count": 2,
+        "key": 1,
+        "type": "set_count"
+      }
+    ],
+    "rows": [
+      {
+        "alternative_group": 1,
+        "item": "wand_fireblast",
+        "key": 2,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 1,
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 3
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 1,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Fireblast, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_fireblast",
+            "join": [],
+            "key": 2,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Fireblast",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any wand"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Wand of Fireblast",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [
+              3
+            ],
+            "description": "Any wand, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": null,
+            "join": [],
+            "key": 1,
+            "kind": "wand",
+            "lifted": {
+              "description": "Any wand, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": null,
+              "kind": "wand",
+              "name": "Any wand",
+              "tags": [],
+              "title": "Any wand",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Fireblast"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [
+          3
+        ],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          2,
+          1
+        ],
+        "name": "Wand of Fireblast or Any wand",
+        "problem": null
+      }
+    ],
+    "next_key": 4,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "item": "wand_fireblast",
+        "key": 2,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "wand"
+      }
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "about": "A fixed resin amount with the Mage's credit and a donor floor: the resin the chip counts is styled credit, Mage +2 explains itself, the floor is a plain filter, and the source is the chip's hover text.",
+  "envelope": "requirement_board",
+  "request": {
+    "resin": {
+      "amount": 4,
+      "filter": {
+        "include_mage_wand": true,
+        "max_depth": 9,
+        "source": "locked_chest",
+        "uncursed": true
+      }
+    },
+    "rows": [
+      {
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_frost",
+            "join": [],
+            "key": 1,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Wand of Frost",
+        "problem": null
+      }
+    ],
+    "next_key": 2,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": {
+      "description": "Arcane Resin, at least 4, starting Magic Missile contributes 2 resin, uncursed wands, Locked chest, floors 1–9",
+      "details": [
+        "at least 4",
+        "starting Magic Missile contributes 2 resin",
+        "uncursed wands",
+        "Locked chest",
+        "floors 1–9"
+      ],
+      "name": "Arcane Resin",
+      "tags": [
+        {
+          "style": "credit",
+          "text": "≥4",
+          "tooltip": null
+        },
+        {
+          "style": "credit",
+          "text": "Mage +2",
+          "tooltip": "Starting Magic Missile contributes 2 resin"
+        },
+        {
+          "style": "plain",
+          "text": "F≤9",
+          "tooltip": null
+        }
+      ],
+      "tooltip": "Locked chest",
+      "uncursed": true
+    },
+    "rows": [
+      {
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  }
+}

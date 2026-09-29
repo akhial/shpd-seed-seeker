@@ -1,0 +1,40 @@
+{
+  "about": "A hand-written blanket wand excluded from Auto resin, which only an ordinary wand can be: the sheet opens without the exclusion, and saved untouched it writes the repaired row.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":true,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":2,\"offer_resin\":false,\"origin\":{\"key\":2,\"type\":\"row\"},\"query_resin\":null,\"requirement\":{\"blanket\":true,\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"ring\"},{\"blanket\":true,\"exclude_resin\":true,\"key\":2,\"kind\":\"wand\"}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "op": "save",
+    "rows": [
+      {
+        "key": 1,
+        "kind": "ring"
+      },
+      {
+        "blanket": true,
+        "exclude_resin": true,
+        "key": 2,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": true,
+      "focus": 2,
+      "next_key": 3,
+      "rekeyed": [],
+      "resin": null,
+      "rows": [
+        {
+          "key": 1,
+          "kind": "ring"
+        },
+        {
+          "blanket": true,
+          "key": 2,
+          "kind": "wand"
+        }
+      ]
+    }
+  }
+}

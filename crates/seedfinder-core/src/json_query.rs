@@ -166,10 +166,13 @@ struct FileLevelSum {
 /// The effect shorthand for [`EffectSet::enchantments`].
 const ANY_ENCHANTMENT: &str = "any_enchantment";
 
+/// One requirement object as the query document spells it. The requirement
+/// editor's envelopes read their rows through it too (`editor::json`), so a
+/// row and a document entry can never disagree on a field.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[allow(clippy::struct_excessive_bools)] // Independent flags in the shared JSON schema.
-struct FileRequirement {
+pub(crate) struct FileRequirement {
     #[serde(default)]
     kind: Option<FileItemKind>,
     #[serde(default)]
@@ -237,7 +240,7 @@ struct AtMostTier {
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum FileItemKind {
+pub(crate) enum FileItemKind {
     Weapon,
     /// A weapon narrowed to wielded weapons. Plain "weapon" continues to
     /// match both melee and thrown weapons, so pre-existing documents keep
@@ -253,7 +256,7 @@ enum FileItemKind {
 }
 
 impl FileItemKind {
-    const fn decompose(self) -> (ItemKind, Option<WeaponCategory>) {
+    pub(crate) const fn decompose(self) -> (ItemKind, Option<WeaponCategory>) {
         match self {
             Self::Weapon => (ItemKind::Weapon, None),
             Self::MeleeWeapon => (ItemKind::Weapon, Some(WeaponCategory::Melee)),
@@ -296,7 +299,7 @@ struct AtLeastUpgrade {
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum FileItemSource {
+pub(crate) enum FileItemSource {
     Heap,
     Chest,
     LockedChest,
@@ -479,7 +482,9 @@ fn convert_effect(kind: ItemKind, effect: FileEffect) -> Result<EffectRequiremen
     }
 }
 
-fn convert_requirement(
+/// Converts one requirement object into a [`Requirement`] in the given
+/// alternative group, without validating it.
+pub(crate) fn convert_requirement(
     requirement: FileRequirement,
     alternative_group: Option<u8>,
 ) -> Result<Requirement, String> {
@@ -555,43 +560,10 @@ pub const CHALLENGE_NAMES: &[(&str, Challenges)] = &[
     ("badder_bosses", Challenges::STRONGER_BOSSES),
 ];
 
-/// Stable document name for one item family.
-#[must_use]
-pub const fn kind_name(kind: ItemKind) -> &'static str {
-    match kind {
-        ItemKind::Weapon => "weapon",
-        ItemKind::Armor => "armor",
-        ItemKind::Wand => "wand",
-        ItemKind::Ring => "ring",
-        ItemKind::Trinket => "trinket",
-        ItemKind::Artifact => "artifact",
-    }
-}
-
-/// Stable document name for one item source.
-#[must_use]
-pub const fn source_name(source: ItemSource) -> &'static str {
-    match source {
-        ItemSource::Heap => "heap",
-        ItemSource::Chest => "chest",
-        ItemSource::LockedChest => "locked_chest",
-        ItemSource::CrystalChest => "crystal_chest",
-        ItemSource::Tomb => "tomb",
-        ItemSource::Skeleton => "skeleton",
-        ItemSource::SacrificialFire => "sacrificial_fire",
-        ItemSource::Mimic => "mimic",
-        ItemSource::GoldenMimic => "golden_mimic",
-        ItemSource::CrystalMimic => "crystal_mimic",
-        ItemSource::Statue => "statue",
-        ItemSource::ArmoredStatue => "armored_statue",
-        ItemSource::Shop => "shop",
-        ItemSource::GhostReward => "ghost_reward",
-        ItemSource::WandmakerReward => "wandmaker_reward",
-        ItemSource::BlacksmithReward => "blacksmith_reward",
-        ItemSource::ImpReward => "imp_reward",
-        ItemSource::VaultTreasure => "vault_treasure",
-    }
-}
+// The wire names live beside the types they name, outside this feature-gated
+// module, so the always-built requirement editor can use them too.
+pub use crate::catalog::kind_name;
+pub use crate::model::source_name;
 
 /// Encodes a query as the canonical JSON document accepted by [`decode`].
 ///
@@ -680,6 +652,14 @@ fn document_effect_order(set: EffectSet) -> Vec<Effect> {
 }
 
 fn encode_requirement(requirement: &Requirement) -> Value {
+    Value::Object(requirement_object(requirement))
+}
+
+/// The canonical requirement object of `requirement`, defaults omitted —
+/// one entry of the document's `requirements`, and the body of a row in the
+/// requirement editor's envelopes. The alternative group is not part of it:
+/// the document writes groups as `any_of` entries, a row as its own field.
+pub(crate) fn requirement_object(requirement: &Requirement) -> Map<String, Value> {
     let mut output = Map::new();
     // A weapon-category narrowing is part of the kind in this format;
     // dropping it here would silently widen the requirement on re-import.
@@ -769,7 +749,7 @@ fn encode_requirement(requirement: &Requirement) -> Value {
             json!({ "group": sum.group, "at_least": sum.minimum_total }),
         );
     }
-    Value::Object(output)
+    output
 }
 
 #[cfg(test)]

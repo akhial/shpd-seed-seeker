@@ -1,0 +1,290 @@
+{
+  "about": "The reported drag: Ring of Energy +4 ×3 dropped on Wand of Disintegration. The item a drag carries is the chip's lifted face, a bare Ring of Energy — the copy remove_one takes — so {Disintegration | Ring of Energy} forms and the chip stays Ring of Energy +4 ×2.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 1,
+        "target": 4,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 4
+      },
+      {
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 4,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 2
+    },
+    "focus": 3,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Ring of Energy, exactly +4",
+            "details": [
+              "exactly +4"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_energy",
+            "join": [
+              4,
+              3
+            ],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+4",
+                "tooltip": null
+              }
+            ],
+            "title": "Ring of Energy",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Ring of Energy",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_disintegration",
+            "join": [
+              1
+            ],
+            "key": 4,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Ring of Energy"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Ring of Energy, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": true,
+            "item": "ring_energy",
+            "join": [
+              1
+            ],
+            "key": 3,
+            "kind": "ring",
+            "lifted": null,
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Ring of Energy",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          4,
+          3
+        ],
+        "name": "Wand of Disintegration or Ring of Energy",
+        "problem": null
+      }
+    ],
+    "next_key": 5,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_energy",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 4
+      },
+      {
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_disintegration",
+        "key": 4,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  }
+}

@@ -1,0 +1,367 @@
+{
+  "about": "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: a bare Frost joins the wand, the +2 Frost stays in the group at ×1, and Disintegration keeps its ×2.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 1,
+        "target": 7,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 2
+      },
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "wand"
+      },
+      {
+        "key": 7,
+        "kind": "wand",
+        "upgrade": 3
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 2
+    },
+    "focus": 8,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Frost, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_frost",
+            "join": [
+              7,
+              8
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [
+              3
+            ],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_disintegration",
+            "join": [
+              7,
+              8
+            ],
+            "key": 2,
+            "kind": "wand",
+            "lifted": {
+              "description": "Wand of Disintegration, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_disintegration",
+              "kind": "wand",
+              "name": "Wand of Disintegration",
+              "tags": [],
+              "title": "Wand of Disintegration",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Frost"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [
+          3
+        ],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          1,
+          2
+        ],
+        "name": "Wand of Frost or Wand of Disintegration",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Any wand, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": null,
+            "join": [
+              1,
+              2
+            ],
+            "key": 7,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Frost"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_frost",
+            "join": [
+              1,
+              2
+            ],
+            "key": 8,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any wand"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 2,
+        "extras": [],
+        "id": "c2",
+        "label": "Any of 2",
+        "members": [
+          7,
+          8
+        ],
+        "name": "Any wand or Wand of Frost",
+        "problem": null
+      }
+    ],
+    "next_key": 9,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 2
+      },
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 2,
+        "key": 7,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 2,
+        "item": "wand_frost",
+        "key": 8,
+        "kind": "wand"
+      }
+    ]
+  }
+}

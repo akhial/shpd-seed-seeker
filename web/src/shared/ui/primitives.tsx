@@ -54,7 +54,7 @@ export interface SegmentedOption<T> {
   label: string;
 }
 
-export function Segmented<T extends string | number>({
+export function Segmented<T extends string | number | boolean>({
   value,
   options,
   onChange,
@@ -150,14 +150,17 @@ type SliderRowScale =
 export function SliderRow(
   props: {
     label: string;
-    valueLabel: string;
+    /** The value in words; leave it out when `label` already says it. */
+    valueLabel?: string;
+    /** The range input's name, when `label` changes with the value. */
+    ariaLabel?: string;
     value: number;
     onChange: (value: number) => void;
     /** Fill the track left of the thumb — for "first N floors" style ranges. */
     fill?: boolean;
   } & SliderRowScale,
 ) {
-  const { label, valueLabel, value, onChange, fill = false } = props;
+  const { label, valueLabel, ariaLabel = label, value, onChange, fill = false } = props;
   const options =
     props.values !== undefined
       ? props.values
@@ -169,7 +172,7 @@ export function SliderRow(
     <div className="d1-slider">
       <div className="d1-slider-head">
         <span>{label}</span>
-        <span className="d1-mono d1-slider-value">{valueLabel}</span>
+        {valueLabel !== undefined && <span className="d1-mono d1-slider-value">{valueLabel}</span>}
       </div>
       <input
         type="range"
@@ -179,7 +182,7 @@ export function SliderRow(
         max={options.length - 1}
         step={1}
         value={index}
-        aria-label={label}
+        aria-label={ariaLabel}
         aria-valuetext={String(options[index])}
         onChange={(event) => onChange(options[Number(event.currentTarget.value)])}
       />

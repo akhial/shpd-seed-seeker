@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::catalog::{ItemKind, item};
+use crate::editor::{STACK_MAX, is_plain_item_copy};
 use crate::model::{ItemSource, WorldItem};
 
 use super::{EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
@@ -28,7 +29,7 @@ pub(crate) fn reforge_copies(query: &SearchQuery) -> Vec<bool> {
             .copied()
             .find(|&i| !requirements[i].is_bare())
             .unwrap_or(members[0]);
-        let mut count = 0;
+        let mut count: usize = 0;
         for &index in members {
             let r = requirements[index];
             if index != anchor && r.alternative_group.is_none() && r.is_bare() {
@@ -39,8 +40,11 @@ pub(crate) fn reforge_copies(query: &SearchQuery) -> Vec<bool> {
         extra_counts.insert(anchor, count);
     }
     // Named stacks fold plain repeats into the nearest preceding chip, up to
-    // the three-copy limit shared by all editors. Constrained copies start a
+    // the stack limit shared by all editors. Constrained copies start a
     // separate chip, and alternatives never absorb independent named copies.
+    // This restates the board's fold (`editor::board_items`) for wands only,
+    // without its allocations: it runs for every world the matcher checks.
+    // A differential test holds the two together on valid queries.
     let mut named = BTreeMap::new();
     for (index, r) in requirements.iter().enumerate() {
         if copies[index]
@@ -52,10 +56,9 @@ pub(crate) fn reforge_copies(query: &SearchQuery) -> Vec<bool> {
             continue;
         }
         let Some(item) = r.item else { continue };
-        let plain = Requirement { item: None, ..*r }.is_bare() && r.identity_group.is_none();
-        if plain
+        if is_plain_item_copy(r, item)
             && let Some(count) = named.get_mut(&item)
-            && *count < 3
+            && *count < usize::from(STACK_MAX)
         {
             copies[index] = true;
             *count += 1;
@@ -414,5 +417,52 @@ mod reforge_tests {
                 .unwrap();
             assert_eq!(reforge_copies(&query), expected, "{requirements}");
         }
+    }
+
+    /// `reforge_copies` restates the editors' board fold for wands, without
+    /// its allocations, because it runs for every world the matcher checks.
+    /// On every valid query the two agree: the reforge copies are exactly
+    /// the board's hidden copies that are wands. (Invalid queries — two
+    /// constrained members in one stack, say — never reach the matcher.)
+    #[test]
+    fn reforge_copies_are_the_boards_hidden_wand_copies() {
+        use crate::editor::testing::{Rng, query, random_edit, random_rows};
+        use crate::editor::{apply, board_items};
+
+        let mut rng = Rng::new(0x7e5f_0bad_cafe_f00d);
+        let (mut checked, mut with_copies, mut attempts) = (0, 0, 0);
+        // AGENTS.md caps differential tests at 1,024 cases.
+        while checked < 1024 {
+            attempts += 1;
+            assert!(
+                attempts < 100_000,
+                "the generator stopped yielding valid queries"
+            );
+            let mut rows = random_rows(&mut rng);
+            // Board edits build the canonical stack shapes on top of the
+            // generator's hand-written ones.
+            for _ in 0..rng.range(0, 3) {
+                let edit = random_edit(&mut rng, &rows);
+                rows = apply(&rows, None, &[edit]).rows;
+            }
+            let query = query(rows.iter().map(|row| row.requirement).collect());
+            if query.validate().is_err() {
+                continue;
+            }
+            checked += 1;
+            let mut expected = vec![false; query.requirements.len()];
+            for item in board_items(&query.requirements) {
+                for index in item.extras {
+                    expected[index] = query.requirements[index].kind == ItemKind::Wand;
+                }
+            }
+            with_copies += usize::from(expected.contains(&true));
+            assert_eq!(reforge_copies(&query), expected, "{:?}", query.requirements);
+        }
+        // The sample must actually exercise stacks of wands.
+        assert!(
+            with_copies >= 100,
+            "only {with_copies} queries held wand copies"
+        );
     }
 }

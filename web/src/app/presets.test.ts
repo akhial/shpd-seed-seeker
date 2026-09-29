@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { VAULT_FLOOR_LIMIT, builtInPresets } from "./store";
-import { validateQuery } from "../features/query/query";
+import { validateQuery } from "../features/query/validation";
 
 describe("built-in presets", () => {
   it("ships a query the editor accepts", () => {

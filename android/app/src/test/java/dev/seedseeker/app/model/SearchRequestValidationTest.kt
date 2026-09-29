@@ -9,9 +9,10 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
- * The local pre-validation that gives the editor its messages. The engine
- * enforces the same rules (QueryDocumentTest pins its refusals); these cases
- * pin the friendlier wording the header shows instead of an inert button.
+ * The query-level checks and model invariants the app keeps itself. What is
+ * wrong with the requirement list — stacks, combined levels, either/or
+ * groups — is the shared requirement editor's (RequirementEditorTest), and
+ * the engine refuses the same queries (QueryDocumentTest pins its refusals).
  */
 class SearchRequestValidationTest {
     init { PackagedCatalog.install() }
@@ -22,107 +23,10 @@ class SearchRequestValidationTest {
     /** A tier-4 weapon: the one thing the vault levels past +4. */
     private val battleAxe = ItemCatalog.findById("battle_axe")
 
-    private fun ring(key: Long, atLeast: Int, upgrade: Int? = null, group: Int = 1) = ItemRequirement(
-        key = key,
-        item = might,
-        upgrade = upgrade ?: 0,
-        upgradeMatch = if (upgrade == null) UpgradeMatch.ANY else UpgradeMatch.EXACT,
-        levelSum = LevelSum(group = group, atLeast = atLeast),
-    )
-
     @Test
     fun anEmptyListAsksForARequirement() {
         assertEquals("Add at least one requirement.", emptyList<ItemRequirement>().validationProblem())
         assertThrows(IllegalArgumentException::class.java) { SearchRequest(emptyList()) }
-    }
-
-    @Test
-    fun anUnattainableTotalNamesWhatTheItemsCanReach() {
-        // Levels, not upgrades: an exact +1 ring counts 2, an unbounded ring
-        // counts the ring cap of 4 plus one, so the pair reaches 7.
-        val members = listOf(ring(1, atLeast = 8, upgrade = 1), ring(2, atLeast = 8))
-        assertEquals(
-            "A combined level of 8 needs more items: these 2 can reach 7.",
-            members.validationProblem(),
-        )
-        assertNull(listOf(ring(1, atLeast = 7, upgrade = 1), ring(2, atLeast = 7)).validationProblem())
-        val failure = assertThrows(IllegalArgumentException::class.java) { SearchRequest(members) }
-        assertEquals("A combined level of 8 needs more items: these 2 can reach 7.", failure.message)
-    }
-
-    @Test
-    fun aWorldLevelsOnlyOneRingPastTheStandardRoll() {
-        // Each ring counts its upgrade plus one, but only the Imp vault's one
-        // prize goes past +2 — so three rings reach 5 + 3 + 3, not 3 × 5.
-        assertEquals(listOf(5, 8, 11), (1..3).map(SearchLimits::ringStackCapacity))
-        val trio = listOf(ring(1, atLeast = 12), ring(2, atLeast = 12), ring(3, atLeast = 12))
-        assertEquals(
-            "A combined level of 12 needs more items: these 3 can reach 11.",
-            trio.validationProblem(),
-        )
-        assertNull(listOf(ring(1, atLeast = 11), ring(2, atLeast = 11), ring(3, atLeast = 11)).validationProblem())
-    }
-
-    @Test
-    fun onlyRingsCanCountLevelsTogether() {
-        // A weapon's damage does not scale the way a ring's effect does, so a
-        // level sum outside rings says nothing the engine could honour.
-        val weapons = listOf(
-            ItemRequirement(1, battleAxe, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(2, 6)),
-            ItemRequirement(2, battleAxe, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(2, 6)),
-        )
-        assertEquals("Only rings can count levels together.", weapons.validationProblem())
-        val failure = assertThrows(IllegalArgumentException::class.java) { SearchRequest(weapons) }
-        assertEquals("Only rings can count levels together.", failure.message)
-    }
-
-    @Test
-    fun oneUpgradedItemCanCoverACombinedLevelOnItsOwn() {
-        // The reforge case: "+3 strength" is one +2 ring, or a +0 and a +1.
-        // Members are optional, so a two-ring group asking for 3 levels is
-        // reachable — and a single ring reaching 3 on its own is too.
-        assertNull(listOf(ring(1, atLeast = 3), ring(2, atLeast = 3)).validationProblem())
-    }
-
-    @Test
-    fun membersOfASumGroupMustShareOneTotal() {
-        assertEquals(
-            "A stack must share one combined level (it has 2 and 3).",
-            listOf(ring(1, atLeast = 2), ring(2, atLeast = 3)).validationProblem(),
-        )
-        // Different groups are independent.
-        assertNull(listOf(ring(1, atLeast = 2, group = 1), ring(2, atLeast = 3, group = 2)).validationProblem())
-    }
-
-    @Test
-    fun onlyOneItemOfAStackMayCarryConstraints() {
-        val frost = ItemCatalog.findById("wand_frost")
-        val fire = ItemCatalog.findById("wand_fireblast")
-        val clash = listOf(
-            ItemRequirement(1, frost, 1, identityGroup = 1),
-            ItemRequirement(2, fire, 1, identityGroup = 1),
-        )
-        assertEquals(
-            "Only one item of a stack can carry constraints; the extra copies are plain.",
-            clash.validationProblem(),
-        )
-        // The same two as alternatives of one slot are fine: they are one unit,
-        // and the stack binds to whichever of them the search assigns.
-        assertNull(clash.map { it.copy(alternativeGroup = 1) }.validationProblem())
-        // The reforge shape: one constrained anchor plus bare copies of its kind.
-        assertNull(
-            listOf(
-                ItemRequirement(1, frost, 1, identityGroup = 1),
-                ItemRequirement(2, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-            ).validationProblem(),
-        )
-        assertEquals(
-            "The copies of a stack must share its category.",
-            listOf(
-                ItemRequirement(1, frost, 1, identityGroup = 1),
-                ItemRequirement(2, null, 0, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-            ).validationProblem(),
-        )
     }
 
     @Test
@@ -171,7 +75,6 @@ class SearchRequestValidationTest {
         assertThrows(IllegalArgumentException::class.java) {
             ItemRequirement(1, sword, 0, kind = ItemKind.THROWN_WEAPON, upgradeMatch = UpgradeMatch.ANY)
         }
-        assertEquals("Any melee weapon", anyWeapon.copy(kind = ItemKind.MELEE_WEAPON).title)
         // The vault's +5 lands on a tier-4 weapon and nothing else: another
         // tier, another family, and a tier filter that rules tier 4 out all
         // stop at +4.

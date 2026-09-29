@@ -1,14 +1,35 @@
 import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
-import { displayedUpgrade, itemsForKind } from "../../shared/game/catalog";
-import { fromQueryJson, maxUpgradeOf, toQueryDocument, validateRequirement } from "./query";
+import { displayedUpgrade, itemsByCategory } from "../../shared/game/catalog";
+import { fromQueryJson, toQueryDocument } from "./query";
 import init, { analyze_query, filter_seeds, scout } from "../../engine/pkg/seedfinder.js";
-import type { ScoutResult } from "../../engine/types";
-import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
+import type { BoardEdit, EditorSheet, QueryState, ScoutResult } from "../../engine/types";
+import { RequirementEditor } from "./requirements/RequirementEditor";
 import { ScoutPanel } from "../scout/ScoutPanel";
 import { availableArtifactIds } from "../scout/choices";
-import { boardItems, canStack, joinAlternatives } from "./requirements/relations";
+import { editBoard, requirementBoardOf } from "./requirements/board";
+import { openSheet, saveSheet } from "./requirements/sheet";
+
+const boardOf = (query: QueryState) => {
+  const answer = requirementBoardOf(query);
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+const sheetOn = (query: QueryState, key: number): EditorSheet => {
+  const answer = openSheet(query, { type: "row", key });
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+const sheetHtml = (sheet: EditorSheet) =>
+  renderToStaticMarkup(
+    <RequirementEditor sheet={sheet} onChange={() => {}} onSave={() => {}} onCancel={() => {}} />,
+  );
+const edited = (query: QueryState, edits: BoardEdit[]): QueryState => {
+  const answer = editBoard(query, edits);
+  if (!answer.ok) throw new Error(answer.error);
+  return { ...query, requirements: answer.value.requirements };
+};
 
 beforeAll(async () => {
   await init({
@@ -88,15 +109,7 @@ describe("artifact search and scout", () => {
     expect(html).toContain("Ethereal Chains, matches requirement");
     expect(result.artifactDecks?.find((deck) => deck.depth === 0)?.order).toHaveLength(11);
     expect(html).toContain("Starting artifact deck order");
-    const editor = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={state.requirements[0]}
-        isNew={false}
-        stack={{ count: 1, inCluster: false }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
-    );
+    const editor = sheetHtml(sheetOn(state, 1));
     expect(editor).toContain("Allow transmutations");
     expect(editor).toContain("At most 4");
     for (const count of [-1, 11, 1.5, "1"])
@@ -110,7 +123,7 @@ describe("artifact search and scout", () => {
   });
 
   it("shows the game's rounded levels for every generated artifact", () => {
-    for (const item of itemsForKind("artifact")) {
+    for (const item of itemsByCategory.artifact) {
       const expected =
         item.id === "sandals_of_nature"
           ? 7
@@ -123,47 +136,53 @@ describe("artifact search and scout", () => {
     expect(displayedUpgrade("ring_of_wealth", 3)).toBe(3);
   });
   it("requires a named artifact and exposes floor limits", () => {
-    const wildcard = fromQueryJson('{"requirements":[{"kind":"artifact"}]}').requirements[0];
-    expect(validateRequirement(wildcard)).toContain("Select an artifact.");
+    const wildcard = fromQueryJson('{"requirements":[{"kind":"artifact"}]}');
+    expect(boardOf(wildcard).items[0].problem).not.toBeNull();
     expect(JSON.parse(analyze_query('{"requirements":[{"kind":"artifact"}]}')).valid).toBe(false);
-    expect(itemsForKind("artifact")).toHaveLength(11);
-    const requirement = fromQueryJson(
+    expect(itemsByCategory.artifact).toHaveLength(11);
+    const query = fromQueryJson(
       '{"requirements":[{"item":"sandals_of_nature","upgrade":5,"max_depth":19}]}',
-    ).requirements[0];
-    expect(maxUpgradeOf(requirement)).toBe(5);
-    const html = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={requirement}
-        isNew={false}
-        stack={{ count: 1, inCluster: false }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
     );
+    const sheet = sheetOn(query, 1);
+    const html = sheetHtml(sheet);
     expect(html).not.toContain("Any artifact");
     expect(html).not.toContain("Total item count");
     expect(html).not.toContain("Upgrade level");
-    expect(namedItemEditorRequirement(requirement).upgrade).toEqual({ mode: "any", value: 0 });
     expect(html).toContain("Limit this item");
     expect(html).toContain('aria-valuetext="19"');
+    const saved = saveSheet(query, sheet);
+    if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
+    // The sheet offers no upgrade on an artifact but keeps the one a document
+    // carried: saved untouched, the query's own list comes back.
+    expect(saved.value.saved.changed).toBe(false);
+    expect(saved.value.saved.requirements).toBe(query.requirements);
+    expect(saved.value.saved.requirements[0]).toMatchObject({
+      item: "sandals_of_nature",
+      upgrade: { mode: "exact", value: 5 },
+      maxDepth: 19,
+    });
     const repeats = fromQueryJson(
       '{"requirements":[{"item":"ethereal_chains"},{"item":"ethereal_chains","max_depth":14}]}',
-    ).requirements;
-    expect(boardItems(repeats)).toHaveLength(2);
-    const alternatives = joinAlternatives(repeats, 0, 1);
-    expect(boardItems(alternatives)).toHaveLength(1);
+    );
+    expect(boardOf(repeats).items).toHaveLength(2);
+    const alternatives = edited(repeats, [{ type: "join", source: 1, target: 2 }]);
+    expect(boardOf(alternatives).items).toHaveLength(1);
     expect(
-      alternatives.every((r) => r.item === "ethereal_chains" && r.identityGroup === undefined),
+      alternatives.requirements.every(
+        (r) => r.item === "ethereal_chains" && r.identityGroup === undefined,
+      ),
     ).toBe(true);
   });
 
   it("searches artifact OR groups and preserves individual floor limits", () => {
-    const state = fromQueryJson(
-      '{"requirements":[{"item":"unstable_spellbook","max_depth":14},{"item":"ethereal_chains","max_depth":4}]}',
+    const state = edited(
+      fromQueryJson(
+        '{"requirements":[{"item":"unstable_spellbook","max_depth":14},{"item":"ethereal_chains","max_depth":4}]}',
+      ),
+      [{ type: "join", source: 2, target: 1 }],
     );
-    state.requirements = joinAlternatives(state.requirements, 1, 0);
     const document = toQueryDocument(state);
-    expect(canStack(state.requirements, boardItems(state.requirements)[0])).toBe(false);
+    expect(boardOf(state).items[0].chips[0].stack.can_grow).toBe(false);
     expect(
       fromQueryJson(JSON.stringify(document))
         .requirements.map((r) => r.maxDepth)
@@ -197,7 +216,7 @@ describe("artifact search and scout", () => {
     });
     expect(artifact?.accessibility.type).toBe("choice");
     for (const entry of result.items.filter((entry) => entry.category === "artifact")) {
-      expect(itemsForKind("artifact").find((item) => item.id === entry.id)).toMatchObject({
+      expect(itemsByCategory.artifact.find((item) => item.id === entry.id)).toMatchObject({
         name: entry.name,
         sprite: entry.spriteIndex,
       });

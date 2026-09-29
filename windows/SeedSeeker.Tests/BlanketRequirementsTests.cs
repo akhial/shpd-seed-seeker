@@ -31,39 +31,50 @@ public sealed class BlanketRequirementsTests
             Assert.Equal(new[] { false, false, false, true }, restored.Requirements.Select(r => r.Blanket));
             Assert.Equal(3, restored.Requirements.Last().Upgrade);
             Assert.Equal(ScoutItemSource.WandmakerReward, restored.Requirements.Last().Source);
-            Assert.Null(QueryRelationships.Validate(restored));
+            Assert.Null(new BoardEditor().Problem(restored));
         }
     }
 
+    /// <summary>What the window sends when a blanket chip is dragged, stacked or joined, through the real board.</summary>
     [Fact]
     public void BlanketsStaySeparateFromStacksAndOrdinaryAlternatives()
     {
-        var requirements = new[] { Wand(), Wand(true), Wand(true) };
-        var board = QueryRelationships.BoardItems(requirements);
-        Assert.Equal(3, board.Count);
-        Assert.False(QueryRelationships.CanStack(requirements, board[1]));
-        Assert.Equal(3, QueryRelationships.SetStackCount(requirements, board[1], 3).Count);
-        Assert.Equal(requirements, QueryRelationships.JoinAlternatives(requirements, 0, 1));
-        var grouped = QueryRelationships.JoinAlternatives(requirements, 1, 2);
-        Assert.Equal(2, QueryRelationships.BoardCount(grouped));
-        Assert.All(grouped, r => Assert.Null(r.IdentityGroup));
-        var query = new QuerySettings { Requirements = new(grouped) };
-        Assert.Null(QueryRelationships.Validate(query));
+        var editor = new BoardEditor();
+        var query = new QuerySettings { Requirements = [Wand(), Wand(true), Wand(true)] };
+        editor.Load(query);
+        var (ordinary, first, second) = (query.Requirements[0].Key, query.Requirements[1].Key, query.Requirements[2].Key);
+        var board = editor.View(query);
+        Assert.Equal(3, board.Entries.Count);
+        Assert.Equal(new BoardCounts(1, 2), board.Counts);
+        Assert.False(board.ChipOf(first)!.Stack.CanGrow);
+        Assert.False(editor.Edit(query, BoardEdit.SetCount(first, 3)).Changed);
+        // An ordinary chip joins nothing in the blanket section.
+        Assert.DoesNotContain(first, board.ChipOf(ordinary)!.Join);
+        Assert.Equal(DropEffect.None, board.Drop(ordinary, DropKind.Chip, first).Effect);
+        Assert.False(editor.Edit(query, BoardEdit.Join(ordinary, first)).Changed);
+        query.Requirements = new(editor.Edit(query, BoardEdit.Join(first, second)).Rows!);
+        Assert.Equal(new BoardCounts(1, 1), editor.View(query).Counts);
+        Assert.All(query.Requirements, r => Assert.Null(r.IdentityGroup));
+        Assert.Null(editor.Problem(query));
         Assert.NotNull(NativeEngine.TryEncodeShareLink(ResultsExport.EncodeQueryDocument(query)));
-        Assert.Equal(3, QueryRelationships.BoardCount(QueryRelationships.Detach(grouped, 1)));
+        query.Requirements = new(editor.Edit(query, BoardEdit.Detach(first)).Rows!);
+        Assert.Equal(new BoardCounts(1, 2), editor.View(query).Counts);
     }
 
     [Fact]
     public void InvalidBlanketsAreRejectedBeforeSearching()
     {
-        Assert.NotNull(QueryRelationships.Validate(new() { Requirements = [Wand(true)] }));
+        // The list as it stands, not as a load would put it: a lone label is not dissolved first.
+        static string? Problem(params ItemRequirement[] requirements) =>
+            new BoardEditor().Problem(new QuerySettings { Requirements = new(requirements) });
+        Assert.Equal("Add at least one ordinary requirement.", Problem(Wand(true)));
         var ordinary = Wand(); ordinary.AlternativeGroup = 1;
         var blanket = Wand(true); blanket.AlternativeGroup = 1;
-        Assert.NotNull(QueryRelationships.Validate(new() { Requirements = [ordinary, blanket] }));
-        blanket.AlternativeGroup = null; blanket.IdentityGroup = 1;
-        Assert.NotNull(QueryRelationships.Validate(new() { Requirements = [Wand(), blanket] }));
-        blanket.IdentityGroup = null; blanket.SelectTrinket = true;
-        Assert.NotNull(QueryRelationships.Validate(new() { Requirements = [Wand(), blanket] }));
+        Assert.NotNull(Problem(ordinary, blanket));
+        blanket = Wand(true); blanket.IdentityGroup = 1;
+        Assert.NotNull(Problem(Wand(), blanket));
+        blanket = Wand(true); blanket.SelectTrinket = true;
+        Assert.NotNull(Problem(Wand(), blanket));
     }
 
     [Fact]

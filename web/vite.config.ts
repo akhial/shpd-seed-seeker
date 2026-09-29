@@ -11,5 +11,6 @@ export default defineConfig({
   plugins: lazyPlugins(() => [react()]),
   test: {
     environment: "node",
+    setupFiles: ["src/engine/test-setup.ts"],
   },
 });

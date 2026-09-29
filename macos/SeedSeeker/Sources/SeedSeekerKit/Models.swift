@@ -77,9 +77,8 @@ public enum ItemKind: Int, Codable, CaseIterable, Sendable {
     // saved queries from older builds keep their meaning.
     case weapon, armor, wand, ring, meleeWeapon, thrownWeapon, trinket, artifact
 
-    public var label: String { ["Weapons", "Armor", "Wands", "Rings", "Melee weapons", "Thrown weapons", "Trinket", "Artifacts"][rawValue] }
-    public var singularLabel: String { ["weapon", "armor", "wand", "ring", "melee weapon", "thrown weapon", "trinket", "artifact"][rawValue] }
-    public var modifierLabel: String? { family == .weapon ? "Enchantment" : family == .armor ? "Glyph" : nil }
+    /// Whether the family has effects (enchantments or glyphs) to ask for.
+    public var takesEffects: Bool { family == .weapon || family == .armor }
     /// The non-curse effects of this family — enchantments or glyphs — in the
     /// shared catalog asset's order.
     public var enchantmentNames: [String] { ItemCatalog.enchantmentsFor(self) }
@@ -124,13 +123,6 @@ public struct CatalogItem: Codable, Hashable, Identifiable, Sendable {
         self.id = id; self.name = name; self.kind = kind; self.spriteIndex = spriteIndex
         self.tier = tier; self.typeIconIndex = typeIconIndex
     }
-
-    /// Whether this is a tipped dart. Every shop stocks tipped darts and any
-    /// dart can be tipped by hand, so the item picker never offers them —
-    /// though a scouted world still lists the ones it rolled. The engine's
-    /// catalog keeps the `_dart` suffix unambiguous (the plain dart has no
-    /// entry), and its wasm cross-check test pins the suffix to the tipped set.
-    public var isTippedDart: Bool { id.hasSuffix("_dart") }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, spriteIndex, tier, typeIconIndex
@@ -322,15 +314,6 @@ public enum EffectFilter: Hashable, Sendable {
         let curses = ItemCatalog.cursesFor(kind)
         return !names.isEmpty && names.allSatisfy(curses.contains)
     }
-
-    /// Human description: "Blazing", "Blocking/Projecting", "any enchantment".
-    public func label(for kind: ItemKind) -> String? {
-        switch self {
-        case .any: nil
-        case .anyEnchantment: "any \((kind.modifierLabel ?? "enchantment").lowercased())"
-        case .oneOf(let names): names.joined(separator: "/")
-        }
-    }
 }
 
 /// Membership in a combined-level group: the members' *levels* must add up to
@@ -405,7 +388,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         guard valid else { throw ModelValidationError.upgrade }
         // `modifier` is the classic single-effect spelling; `effect` wins when both are given.
         let requested = effect.isAny ? modifier.map { EffectFilter.oneOf([$0]) } ?? .any : effect
-        guard kind.modifierLabel != nil || requested.isAny else { throw ModelValidationError.modifier }
+        guard kind.takesEffects || requested.isAny else { throw ModelValidationError.modifier }
         guard let effect = requested.normalized(for: kind) else { throw ModelValidationError.effect }
         guard !requireUncursed || !effect.isCursesOnly(for: kind) else {
             throw ModelValidationError.uncursedCurse
@@ -537,37 +520,6 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         try values.encodeIfPresent(alternativeGroup, forKey: .alternativeGroup)
         try values.encodeIfPresent(levelSum, forKey: .levelSum)
     }
-
-    public var title: String {
-        if let item { return item.name }
-        return switch tierMatch {
-        case .any: "Any \(kind.singularLabel)"
-        case .exactly: "Any Tier \(tier) \(kind.singularLabel)"
-        case .atLeast: "Any Tier \(tier)+ \(kind.singularLabel)"
-        case .atMost: "Any Tier \(tier) or lower \(kind.singularLabel)"
-        }
-    }
-    public var description: String {
-        var text = switch upgradeMatch {
-        case .any: "Any upgrade"
-        case .exactly: "+\(upgrade) exactly"
-        case .atLeast: "+\(upgrade) or higher"
-        }
-        if let effect = effect.label(for: kind) { text += " • \(effect)" }
-        if requireUncursed { text += " • uncursed" }
-        if selectTrinket { text += " • choose at +3" }
-        if trinketTransmutations > 0 { text += " • Transmute ≤\(trinketTransmutations)" }
-        if artifactTransmutations > 0 { text += " • Transmute ≤\(artifactTransmutations)" }
-        if excludeResin { text += " • excluded from Auto resin" }
-        if let source { text += " • \(source.label)" }
-        // The board says the relationships — a stack through its ×N badge, a
-        // combined level through its Σ badge — so the line names only what the
-        // chip itself cannot show. The group numbers are an encoding detail and
-        // were never anything a reader could act on.
-        if let levelSum { text += " • levels ≥ \(levelSum.atLeast) together" }
-        if let maximumDepth { text += " • by floor \(maximumDepth)" }
-        return text
-    }
 }
 
 extension Array where Element == ItemRequirement {
@@ -688,10 +640,6 @@ public struct ArcaneResinFilter: Codable, Hashable, Sendable {
                   includeMageWand: try values.decodeIfPresent(Bool.self, forKey: .includeMageWand) ?? false)
     }
     public var isValid: Bool { maximumDepth.map { (1...SearchLimits.maxDepth).contains($0) } ?? true }
-    public var summary: String {
-        ([uncursed ? "uncursed wands" : "any wands"] +
-         [maximumDepth.map { "≤ floor \($0)" }, source?.label, includeMageWand ? "Mage +2" : nil].compactMap { $0 }).joined(separator: " · ")
-    }
 }
 
 public struct SearchRequest: Codable, Sendable {

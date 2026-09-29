@@ -1,0 +1,52 @@
+{
+  "about": "Saving the new chip appends it with its copy.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":false,\"copy_depth\":6,\"copy_depth_memory\":6,\"count\":2,\"effect_mode\":\"specific\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"query_resin\":null,\"requirement\":{\"effect\":\"Blazing\",\"item\":\"spear\",\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "next_key": 3,
+    "op": "save",
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "rat_skull",
+        "key": 2,
+        "kind": "trinket"
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": true,
+      "focus": 3,
+      "next_key": 5,
+      "rekeyed": [],
+      "resin": null,
+      "rows": [
+        {
+          "key": 1,
+          "kind": "wand"
+        },
+        {
+          "item": "rat_skull",
+          "key": 2,
+          "kind": "trinket"
+        },
+        {
+          "effect": "Blazing",
+          "item": "spear",
+          "key": 3,
+          "kind": "weapon"
+        },
+        {
+          "item": "spear",
+          "key": 4,
+          "kind": "weapon",
+          "max_depth": 6
+        }
+      ]
+    }
+  }
+}

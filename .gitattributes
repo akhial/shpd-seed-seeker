@@ -2,3 +2,7 @@
 crates/seedfinder-core/tests/fixtures/map-contents.json linguist-generated=true
 crates/seedfinder-core/tests/fixtures/vault-flames.json linguist-generated=true
 crates/seedfinder-core/tests/fixtures/vault-sentries.json linguist-generated=true
+
+# The editor's golden fixtures are compared as text; keep them LF on every
+# checkout.
+crates/seedfinder-core/tests/fixtures/editor/*.json text eol=lf

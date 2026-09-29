@@ -1,0 +1,156 @@
+{
+  "about": "The copies of a stack limited to floor 10, which snaps down to floor 9 (floor 10 is an empty boss floor).",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "key": 1,
+        "max_depth": 10,
+        "type": "set_copy_depth"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 1,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Ring of Might, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade, floors 1–9",
+              "details": [
+                "any upgrade",
+                "floors 1–9"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤9",
+                  "tooltip": null
+                }
+              ],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, floors 1–9"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 9,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Ring of Might",
+        "problem": null
+      }
+    ],
+    "next_key": 3,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring",
+        "max_depth": 9
+      }
+    ]
+  }
+}

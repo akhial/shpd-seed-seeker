@@ -92,8 +92,11 @@ import dev.seedseeker.app.engine.NativeSeedFinder
 import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SearchWorkers
 import dev.seedseeker.app.engine.SeedCode
-import dev.seedseeker.app.model.BoardItem
-import dev.seedseeker.app.model.ItemKind
+import dev.seedseeker.app.model.ArcaneResinFilter
+import dev.seedseeker.app.model.BoardAnswer
+import dev.seedseeker.app.model.BoardEdit
+import dev.seedseeker.app.model.BoardViews
+import dev.seedseeker.app.model.EditorSheet
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.Challenge
 import dev.seedseeker.app.model.DeepLink
@@ -102,15 +105,14 @@ import dev.seedseeker.app.model.floorValidationProblem
 import dev.seedseeker.app.model.PresetQuery
 import dev.seedseeker.app.model.PresetStorage
 import dev.seedseeker.app.model.QueryPreset
+import dev.seedseeker.app.model.RequirementEditor
+import dev.seedseeker.app.model.ResinCondition
 import dev.seedseeker.app.model.ResultsExport
+import dev.seedseeker.app.model.SavedResin
 import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.SeedResult
-import dev.seedseeker.app.model.applyEdit
-import dev.seedseeker.app.model.boardItems
-import dev.seedseeker.app.model.copyDepthOf
-import dev.seedseeker.app.model.removeItem
-import dev.seedseeker.app.model.removeMember
+import dev.seedseeker.app.model.SheetSave
 import dev.seedseeker.app.model.slotCount
 import dev.seedseeker.app.model.toPresetQuery
 import dev.seedseeker.app.model.validationProblem
@@ -199,17 +201,16 @@ internal fun SeedFinderApp(
     var destination by remember { mutableStateOf(Destination.FINDER) }
     var aboutReturnDestination by remember { mutableStateOf(Destination.FINDER) }
     var settingsReturnDestination by remember { mutableStateOf(Destination.FINDER) }
-    var requirements by remember { mutableStateOf(initialQuery.requirements) }
-    var nextRequirementKey by remember {
-        mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
-    }
-    var addingBlanket by remember { mutableStateOf(false) }
+    var requirements by remember { mutableStateOf(RequirementEditor.loaded(initialQuery.requirements, firstKey = 1L)) }
+    var nextRequirementKey by remember { mutableLongStateOf(initialQuery.requirements.size + 1L) }
+    /** A list loaded from elsewhere, keyed on from [nextRequirementKey] in the editor's canonical encoding. */
+    fun load(loaded: List<ItemRequirement>): List<ItemRequirement> =
+        RequirementEditor.loaded(loaded, nextRequirementKey).also { nextRequirementKey += loaded.size }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
     var floorRequirements by remember { mutableStateOf(initialQuery.floorRequirements) }
     var arcaneResinAuto by remember { mutableStateOf(initialQuery.arcaneResinAuto) }
     var arcaneResin by remember { mutableStateOf(initialQuery.arcaneResin) }
     var arcaneResinFilter by remember { mutableStateOf(initialQuery.arcaneResinFilter) }
-    var showResinSheet by remember { mutableStateOf(false) }
     var autoApplyTrinket by remember { mutableStateOf(initialQuery.autoApplyTrinket) }
     var maximumDepth by remember { mutableStateOf(initialQuery.maximumDepth) }
     var requireBlacksmith by remember { mutableStateOf(initialQuery.requireBlacksmith) }
@@ -238,13 +239,14 @@ internal fun SeedFinderApp(
     // Device-local, so unlike the query state above nothing an import, a
     // preset or a share link carries ever writes it.
     var workerCount by remember { mutableStateOf(workerPreference.load()) }
-    // The board anchor the editor is open on, plus the stack shape it showed;
-    // null means the sheet is building a new chip.
-    var editingIndex by remember { mutableStateOf<Int?>(null) }
-    var editingCount by remember { mutableStateOf(1) }
-    var editingTotal by remember { mutableStateOf<Int?>(null) }
-    var editingCopyDepth by remember { mutableStateOf<Int?>(null) }
-    var showRequirementSheet by remember { mutableStateOf(false) }
+    // The requirement sheet and the Arcane Resin sheet, as the requirement
+    // editor opened them; null while closed. Not kept across a recreated
+    // activity: the list comes back from storage keyed afresh, and a draft
+    // still naming the old keys would save beside its row.
+    var requirementSheet by remember { mutableStateOf<EditorSheet?>(null) }
+    var resinSheet by remember { mutableStateOf<EditorSheet?>(null) }
+    // The chip a sheet's save landed in, for the board to bring into view.
+    var boardFocus by remember { mutableStateOf<Long?>(null) }
     val search = controller.snapshot
     val results = displayedResults(search.results)
     val foundCount = search.results.size
@@ -279,7 +281,7 @@ internal fun SeedFinderApp(
         if (!controller.ready) return@LaunchedEffect
         val query = controller.snapshot.pending?.request?.toPresetQuery() ?: controller.snapshot.query
         if (query != null) {
-            requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            requirements = load(query.requirements)
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
             floorRequirements = query.floorRequirements
@@ -330,7 +332,7 @@ internal fun SeedFinderApp(
                     transferError = "Stop the search before importing results."
                     return@onSuccess
                 }
-                requirements = imported.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                requirements = load(imported.query.requirements)
                 autoApplyTrinket = imported.query.autoApplyTrinket
                 arcaneResin = imported.query.arcaneResin
                 floorRequirements = imported.query.floorRequirements
@@ -410,7 +412,7 @@ internal fun SeedFinderApp(
             return@LaunchedEffect
         }
         runCatching { DeepLink.decode(code) }.onSuccess { query ->
-            requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            requirements = load(query.requirements)
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
             floorRequirements = query.floorRequirements
@@ -496,12 +498,20 @@ internal fun SeedFinderApp(
         }
     }
 
+    // The board as the requirement editor folds and words it, asked for once
+    // per change of the list or the resin, never per frame: this body also
+    // recomposes on every search progress tick.
+    val boardResin = ResinCondition.of(arcaneResin, arcaneResinAuto, arcaneResinFilter)
+    val boardViews = remember { BoardViews() }
+    val board = remember(requirements, boardResin) { boardViews.of(requirements, boardResin) }
+    val boardProblem = board.problems.firstOrNull()?.message
     // Why the query cannot run yet — no requirements, an unattainable combined
-    // upgrade total, … — shown in the header instead of silently disabling Search.
+    // level, … — shown in the header instead of silently disabling Search.
     val validationMessage = floorRequirements.floorValidationProblem(maximumDepth)
         ?: requirements.validationProblem(arcaneResin, arcaneResinAuto, floorRequirements.isNotEmpty())
+        ?: boardProblem
     // Null while the query is not runnable.
-    val currentRequest = runCatching {
+    val currentRequest = if (boardProblem != null) null else runCatching {
         SearchRequest(
             requirements = requirements,
             autoApplyTrinket = autoApplyTrinket,
@@ -516,6 +526,73 @@ internal fun SeedFinderApp(
             wandmakerQuest = wandmakerQuest,
         )
     }.getOrNull()
+    /**
+     * Sends [edits] to the requirement editor and adopts the list it answers
+     * when they changed it; null when the editor could not answer, which the
+     * snackbar reports while the list stays as it was.
+     */
+    fun editRequirements(vararg edits: BoardEdit): BoardAnswer? {
+        val answer = runCatching {
+            RequirementEditor.board(requirements, edits.asList(), boardResin, nextRequirementKey)
+        }.getOrElse { failure ->
+            scope.launch { snackbarHostState.showSnackbar(failure.message ?: "The requirements could not be edited.") }
+            return null
+        }
+        nextRequirementKey = maxOf(nextRequirementKey, answer.nextKey)
+        // A drop leaves its chip where the finger let go; there is nothing to follow.
+        boardFocus = null
+        // The board already says why a join is refused while the chip is held;
+        // a detach or a drop in the bin can only be refused once it is sent,
+        // when a stack left behind needs a label and all four are in use.
+        answer.refused?.let { reason -> scope.launch { snackbarHostState.showSnackbar(reason) } }
+        answer.rows?.let { rows ->
+            boardViews.keep(rows, boardResin, answer.board)
+            requirements = rows
+        }
+        return answer
+    }
+
+    /**
+     * Opens the requirement editor's sheet on the row [key], on a new chip of
+     * the [blanket] section when [key] is null, or with [openResin] on the
+     * query's Arcane Resin; null when the editor could not, which the
+     * snackbar reports.
+     */
+    fun openSheet(key: Long? = null, blanket: Boolean = false, openResin: Boolean = false): EditorSheet? =
+        runCatching {
+            RequirementEditor.open(
+                requirements, key, blanket, boardResin,
+                // Only a new ordinary chip may turn into the query's resin.
+                offerResin = key == null && !blanket,
+                openResin = openResin,
+            )
+        }.getOrElse { failure ->
+            scope.launch { snackbarHostState.showSnackbar(failure.message ?: "The requirement could not be opened.") }
+            null
+        }
+
+    fun clearResin() {
+        arcaneResin = 0
+        arcaneResinAuto = false
+        arcaneResinFilter = ArcaneResinFilter()
+    }
+
+    /** Adopts what a sheet's save stored: the list, the key counter, the resin, and the chip it landed in. */
+    fun adopt(saved: SheetSave.Saved) {
+        nextRequirementKey = maxOf(nextRequirementKey, saved.nextKey)
+        saved.rows?.let { requirements = it }
+        when (val resin = saved.resin) {
+            is SavedResin.Set -> {
+                arcaneResin = resin.condition.amount
+                arcaneResinAuto = resin.condition.auto
+                arcaneResinFilter = resin.condition.filter
+            }
+            SavedResin.Clear -> clearResin()
+            null -> Unit
+        }
+        boardFocus = saved.focus
+    }
+
     fun scoutSeed(seed: String) {
         val formatted = SeedCode.formatInput(seed)
         scoutInput = formatted
@@ -593,6 +670,7 @@ internal fun SeedFinderApp(
         when (shown) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
+                board = board,
                 autoApplyTrinket = autoApplyTrinket,
                 arcaneResin = arcaneResin,
                 arcaneResinFilter = arcaneResinFilter,
@@ -628,7 +706,7 @@ internal fun SeedFinderApp(
                     destination = Destination.SEARCH_SETTINGS
                 },
                 onApplyPreset = { preset ->
-                    requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                    requirements = load(preset.query.requirements)
                     autoApplyTrinket = preset.query.autoApplyTrinket
                     floorRequirements = preset.query.floorRequirements
                     arcaneResin = preset.query.arcaneResin
@@ -670,27 +748,15 @@ internal fun SeedFinderApp(
                     userPresets = userPresets.filterNot { it.id == preset.id }
                     presetStorage.save(userPresets)
                 },
-                onEditResin = { showResinSheet = true },
-                onRemoveResin = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
-                onAdd = { blanket ->
-                    addingBlanket = blanket
-                    editingIndex = null
-                    editingCount = 1
-                    editingTotal = null
-                    editingCopyDepth = null
-                    showRequirementSheet = true
-                },
-                // The tapped chip is what the editor opens on, but the stack it
-                // shows belongs to the whole board item behind it.
-                onEdit = { item, index ->
-                    editingIndex = index
-                    editingCount = item.stackCount
-                    editingTotal = item.total
-                    editingCopyDepth = requirements.copyDepthOf(item)
-                    showRequirementSheet = true
-                },
-                onRequirementsChange = { requirements = it },
-                onRemove = { item -> requirements = requirements.removeItem(item) },
+                onEditResin = { resinSheet = openSheet(openResin = true) },
+                onRemoveResin = { clearResin() },
+                onAdd = { blanket -> requirementSheet = openSheet(blanket = blanket) },
+                // The tapped chip is what the editor opens on; the stack it
+                // shows is the whole board entry's.
+                onEdit = { key -> requirementSheet = openSheet(key) },
+                onBoardChange = { edit -> editRequirements(edit) },
+                boardFocus = boardFocus,
+                onBoardFocused = { boardFocus = null },
                 validationMessage = validationMessage,
                 onSearch = {
                     if (currentRequest != null) {
@@ -745,7 +811,14 @@ internal fun SeedFinderApp(
                         text.toString()
                     }
                 },
-                onShareQuery = {
+                onShareQuery = share@{
+                    // As for Start: the query's own checks, then the list's
+                    // first problem. An empty query (the codec's own check
+                    // below) has neither floors nor a list problem.
+                    (floorRequirements.floorValidationProblem(maximumDepth) ?: boardProblem)?.let {
+                        linkError = it
+                        return@share
+                    }
                     runCatching {
                         DeepLink.encodeLink(
                             PresetQuery(
@@ -870,39 +943,43 @@ internal fun SeedFinderApp(
         }
       }
 
-        if (showResinSheet) {
-            ArcaneResinSheet(arcaneResin, arcaneResinFilter, auto = arcaneResinAuto,
-                onDismiss = { showResinSheet = false },
-                onSave = { amount, filter, auto -> arcaneResin = amount; arcaneResinAuto = auto; arcaneResinFilter = filter; showResinSheet = false },
-                onRemove = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(); showResinSheet = false })
-        }
-        if (showRequirementSheet) {
-            RequirementSheet(
-                onAddResin = if (editingIndex == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
-                editing = editingIndex?.let(requirements::get),
-                otherRequirements = requirements.filterIndexed { index, _ -> index != editingIndex },
-                blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
-                initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,
-                editingCount = editingCount,
-                editingTotal = editingTotal,
-                editingCopyDepth = editingCopyDepth,
-                onDismiss = { showRequirementSheet = false },
-                onSave = { saved, count, total, copyDepth ->
-                    requirements = requirements.applyEdit(editingIndex, saved, count, total, copyDepth)
-                    showRequirementSheet = false
+        resinSheet?.let { sheet ->
+            ArcaneResinSheet(
+                sheet, requirements, nextRequirementKey,
+                onDismiss = { resinSheet = null },
+                onSaved = { saved ->
+                    adopt(saved)
+                    resinSheet = null
                 },
-                // As from the board's drop zone: a lone chip goes with its
-                // copies, a member leaves the cluster and its stack behind.
-                onRemove = editingIndex?.let { index ->
+                // Offered by the sheet only while it edits the query's resin.
+                onRemove = {
+                    clearResin()
+                    resinSheet = null
+                },
+            )
+        }
+        requirementSheet?.let { sheet ->
+            RequirementSheet(
+                sheet, requirements, nextRequirementKey,
+                onDismiss = { requirementSheet = null },
+                // A save the editor refuses keeps the sheet open on its reasons.
+                onSaved = { saved ->
+                    adopt(saved)
+                    requirementSheet = null
+                },
+                // The chip with its whole stack: a lone chip's entry, or a
+                // member with its own copies. The board's drop zone instead
+                // takes the one item in hand.
+                onRemove = sheet.form.rowKey?.let { key ->
                     {
-                        val item = requirements.boardItems().first { index in it.members }
-                        requirements = if (item.cluster != null) {
-                            requirements.removeMember(index)
-                        } else {
-                            requirements.removeItem(item)
-                        }
-                        showRequirementSheet = false
+                        editRequirements(BoardEdit.Remove(key))
+                        requirementSheet = null
                     }
+                },
+                // Arcane Resin is the query's own condition, on a sheet of its own.
+                onPickResin = {
+                    requirementSheet = null
+                    resinSheet = openSheet(openResin = true)
                 },
             )
         }

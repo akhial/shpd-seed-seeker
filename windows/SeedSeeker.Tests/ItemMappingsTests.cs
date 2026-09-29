@@ -51,7 +51,7 @@ public sealed class ItemMappingsTests
         w.Bytes(Encoding.UTF8.GetBytes(version)); w.U8(11); w.Bytes(Encoding.UTF8.GetBytes("AAA-AAA-AAA"));
         w.Bytes(Enumerable.Range(0, 12).Select(x => (byte)x)); w.U8(0); w.U16(0);
         if (version == "SSC3") return w.Finish();
-        w.U8(17); foreach (var item in ItemCatalog.For(ItemKind.Trinket)) w.Text(item.Id);
+        w.U8(17); foreach (var item in ItemCatalog.All.Where(item => item.Kind == ItemKind.Trinket)) w.Text(item.Id);
         if (version == "SSC4") return w.Finish();
         w.U8(0);
         if (version == "SSC5") return w.Finish();

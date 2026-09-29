@@ -1,0 +1,323 @@
+{
+  "about": "Problems in order: each row's own in list order, then those between rows, blaming every row of the group.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "key": 2,
+        "kind": "wand",
+        "max_depth": 30
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 4,
+          "group": 1
+        }
+      },
+      {
+        "blanket": true,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "armor"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 1,
+      "ordinary": 2
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
+              },
+              "total": {
+                "compact_text": "Σ≥3",
+                "text": "Σ ≥ 3",
+                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+              }
+            },
+            "can_detach": false,
+            "copies": [
+              3
+            ],
+            "description": "Ring of Might",
+            "details": [],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [
+              2
+            ],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Might",
+            "problem": "A stack must share one combined level.",
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 3"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "≤2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": 3,
+              "total_text": "Σ ≥ 3"
+            },
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          3
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Ring of Might",
+        "problem": "A stack must share one combined level."
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any wand, any upgrade, floors 1–30",
+            "details": [
+              "any upgrade",
+              "floors 1–30"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1
+            ],
+            "key": 2,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Any wand",
+            "problem": "Requirement floor must be 1 through 24.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "plain",
+                "text": "F≤30",
+                "tooltip": null
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "name": "Any wand",
+        "problem": "Requirement floor must be 1 through 24."
+      },
+      {
+        "blanket": true,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Any armor, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "armor",
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 4,
+            "kind": "armor",
+            "lifted": null,
+            "name": "Any armor",
+            "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Any armor",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r4",
+        "label": null,
+        "members": [
+          4
+        ],
+        "name": "Any armor",
+        "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection."
+      }
+    ],
+    "next_key": 5,
+    "problems": [
+      {
+        "keys": [
+          2
+        ],
+        "message": "Requirement floor must be 1 through 24.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          4
+        ],
+        "message": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          1,
+          3
+        ],
+        "message": "A stack must share one combined level.",
+        "scope": "group"
+      }
+    ],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "key": 2,
+        "kind": "wand",
+        "max_depth": 30
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 4,
+          "group": 1
+        }
+      },
+      {
+        "blanket": true,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "armor"
+      }
+    ]
+  }
+}

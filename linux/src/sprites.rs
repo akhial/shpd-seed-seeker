@@ -786,7 +786,7 @@ fn animate(area: &gtk::DrawingArea, period: f64) {
 
 fn draw_trinket_match(context: &cairo::Context, width: i32, height: i32) {
     // Center a rounded square inside each flexible deck column.
-    let edge = f64::from(width.min(height).min(24)) - 1.0;
+    let edge = f64::from(width.min(height).min(30)) - 1.0;
     let x = (f64::from(width) - edge) / 2.0;
     let y = (f64::from(height) - edge) / 2.0;
     let radius = 4.0_f64.min(edge / 2.0);
@@ -814,9 +814,11 @@ fn draw_trinket_match(context: &cairo::Context, width: i32, height: i32) {
     let _ = context.restore();
 }
 
-/// A responsive trinket tile. The aspect frame gives all four choices identical
-/// square geometry; drawing the name lets it shrink without imposing a minimum
-/// width on the pane. Artwork uses the same nearest-neighbour atlas as items.
+/// A trinket's artwork. A primary tile — one of the four starting choices —
+/// also draws the name beneath the art, so the name can shrink with the tile
+/// instead of imposing a minimum width on the pane; the caller frames it.
+/// A deck tile is a 24px sprite, ringed green when it matches. Artwork uses
+/// the same nearest-neighbour atlas as items.
 #[must_use]
 pub fn trinket_tile(
     definition: &'static ItemDefinition,
@@ -825,7 +827,7 @@ pub fn trinket_tile(
 ) -> gtk::Widget {
     let area = gtk::DrawingArea::builder()
         .content_width(0)
-        .content_height(if primary { 0 } else { 24 })
+        .content_height(if primary { 0 } else { 32 })
         .hexpand(true)
         .accessible_role(gtk::AccessibleRole::Img)
         .tooltip_text(definition.name)
@@ -836,23 +838,27 @@ pub fn trinket_tile(
         definition.name.to_owned()
     };
     area.update_property(&[gtk::accessible::Property::Label(&description)]);
-    if primary {
-        area.add_css_class("trinket-choice");
-        if matched {
-            area.add_css_class("trinket-match");
-        }
-    }
     area.set_draw_func(move |area, context, width, height| {
         if !primary && matched {
             draw_trinket_match(context, width, height);
         }
-        let art_height = if primary { height * 3 / 4 } else { height };
-        let size = (width - 8)
-            .min(art_height - 8)
-            .min(if primary { 48 } else { 24 })
-            .max(1);
+        // A primary tile draws its art in the band between the "Applied"
+        // badge across its top and the name in its lower quarter.
+        let art_top = if primary { height * 18 / 100 } else { 0 };
+        let art_height = if primary {
+            height * 3 / 4 - art_top
+        } else {
+            height
+        };
+        let size = if primary {
+            (width - 16).min(art_height).min(48)
+        } else {
+            (width - 8).min(art_height - 8).min(24)
+        }
+        .max(1);
         if let Some(atlas) = atlas() {
             let _ = context.save();
+            context.translate(0.0, f64::from(art_top));
             draw(
                 &atlas,
                 area,
@@ -887,20 +893,7 @@ pub fn trinket_tile(
             }
         }
     });
-    if primary {
-        // GTK 4.22 requests height-for-width here even for a zero-size child:
-        // its natural height is allocated width / ratio, so the row cannot
-        // collapse while its minimum width stays small enough for narrow panes.
-        gtk::AspectFrame::builder()
-            .ratio(1.0)
-            .obey_child(false)
-            .child(&area)
-            .hexpand(true)
-            .build()
-            .upcast()
-    } else {
-        area.upcast()
-    }
+    area.upcast()
 }
 
 #[cfg(test)]

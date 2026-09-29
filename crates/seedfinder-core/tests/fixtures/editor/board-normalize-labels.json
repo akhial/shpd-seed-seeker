@@ -1,0 +1,276 @@
+{
+  "about": "A hand-written stack labelled 7 and combined level labelled 9: normalizing moves both onto free labels in range, and their problems go.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "type": "normalize"
+      }
+    ],
+    "rows": [
+      {
+        "identity_group": 7,
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "identity_group": 7,
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 9
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 9
+        }
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 2
+    },
+    "focus": null,
+    "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2
+            ],
+            "description": "Any wand, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              3
+            ],
+            "key": 1,
+            "kind": "wand",
+            "lifted": {
+              "description": "Any wand, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": null,
+              "kind": "wand",
+              "name": "Any wand",
+              "tags": [],
+              "title": "Any wand",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3",
+                "tooltip": null
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Any wand",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
+              },
+              "total": {
+                "compact_text": "Σ≥3",
+                "text": "Σ ≥ 3",
+                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+              }
+            },
+            "can_detach": false,
+            "copies": [
+              4
+            ],
+            "description": "Ring of Might",
+            "details": [],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [
+              1
+            ],
+            "key": 3,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 3"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "≤2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": 3,
+              "total_text": "Σ ≥ 3"
+            },
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          4
+        ],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Ring of Might",
+        "problem": null
+      }
+    ],
+    "next_key": 5,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "identity_group": 1,
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      }
+    ]
+  }
+}

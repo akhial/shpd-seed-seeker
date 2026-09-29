@@ -557,6 +557,12 @@ object JniBindings {
     @JvmStatic external fun resultsEncode(request: ByteArray): ByteArray
     @JvmStatic external fun resultsDecode(contents: ByteArray): ByteArray
 
+    // Requirement editor (docs/requirement-editor.md): UTF-8 JSON in, UTF-8
+    // JSON out. A request the editor cannot read is answered `{"error": …}`;
+    // only a panic inside the editor throws IllegalStateException.
+    @JvmStatic external fun requirementBoard(request: ByteArray): ByteArray
+    @JvmStatic external fun requirementEditor(request: ByteArray): ByteArray
+
     /** The engine's own constants as UTF-8 JSON; see [EngineInfo]. */
     @JvmStatic external fun engineInfo(): ByteArray
 }
