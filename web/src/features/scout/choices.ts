@@ -22,6 +22,15 @@ export function isAlternateScoutChoice(
   );
 }
 
+/**
+ * Whether Scout draws `item` dimmed: an alternate choice the match did not
+ * take, or an item the query excludes outright (Smith rewards under
+ * "Exclude smith rewards"), which is never matched.
+ */
+export function isDimmedScoutItem(item: ScoutItem, choices: ReadonlyMap<number, number>): boolean {
+  return item.excluded === true || isAlternateScoutChoice(item, choices);
+}
+
 /** Scout items are fixed dungeon loot; runtime drops and transmutation outcomes are absent. */
 export function availableArtifactIds(
   items: readonly ScoutItem[],

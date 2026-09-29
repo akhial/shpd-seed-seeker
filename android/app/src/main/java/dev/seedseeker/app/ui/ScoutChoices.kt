@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.R
+import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.isMapDepthSupported
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ScoutAccessibility
@@ -39,6 +40,14 @@ internal fun matchedScoutChoices(items: List<ScoutItem>, matched: Set<Int>): Map
 
 internal fun isAlternateScoutChoice(access: ScoutAccessibility, matched: Boolean, choices: Map<Int, Int>): Boolean =
     !matched && access is ScoutAccessibility.Choice && choices[access.group]?.let { it != access.option } == true
+
+/**
+ * Whether Scout draws the world item at [index] dimmed: an alternate choice the
+ * match did not take, or an item the query excludes outright (Smith rewards
+ * under "Exclude smith rewards"), which is never matched.
+ */
+internal fun isDimmedScoutItem(index: Int, access: ScoutAccessibility, matches: ScoutMatches?, choices: Map<Int, Int>): Boolean =
+    index in matches?.excluded.orEmpty() || isAlternateScoutChoice(access, index in matches?.items.orEmpty(), choices)
 
 /** Scout items contain fixed dungeon loot, not runtime drops or transmutation outcomes. */
 internal fun availableScoutArtifacts(items: List<ScoutItem>, matched: Set<Int>): Set<String> {

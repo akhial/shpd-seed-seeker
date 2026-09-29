@@ -85,6 +85,10 @@ public sealed class ArcaneResinTests
         Assert.Equal(new[] { 2, 5 }, older.Matched.Order());
         Assert.Empty(older.ResinDonors);
         Assert.Empty(NativeEngine.DecodeScoutMatches("""{"matched":[],"resinDonors":[]}""", 0).ResinDonors);
+        Assert.Empty(older.Excluded);
+        var excluded = NativeEngine.DecodeScoutMatches("""{"matched":[2],"excluded":[7,8],"matchedRequirements":1,"totalRequirements":1}""", 1);
+        Assert.Equal(new[] { 7, 8 }, excluded.Excluded.Order());
+        Assert.Equal(new[] { 2 }, excluded.Matched.Order());
     }
     [Fact]
     public void AutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate()

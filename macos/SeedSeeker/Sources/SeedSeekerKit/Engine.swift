@@ -86,6 +86,10 @@ public struct ScoutMatches: Sendable {
     /// donors rather than keeps. Empty without resin, and for engines whose
     /// envelope predates the key.
     public let resinDonors: Set<Int>
+    /// Items the query forbids every requirement to use — the Blacksmith's
+    /// rewards while Smith rewards are excluded — so none is in `matched`.
+    /// Empty for engines whose envelope predates the key.
+    public let excluded: Set<Int>
     public let transmutedTrinkets: Set<Int>
     public let transmutedArtifacts: [Int: Set<Int>]
     /// How many conditions the marks satisfy, and how many there are. An
@@ -96,9 +100,10 @@ public struct ScoutMatches: Sendable {
     public let matchedRequirements: Int
     public let totalRequirements: Int
 
-    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = [], transmutedArtifacts: [Int: Set<Int>] = [:], resinDonors: Set<Int> = []) {
+    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = [], transmutedArtifacts: [Int: Set<Int>] = [:], resinDonors: Set<Int> = [], excluded: Set<Int> = []) {
         self.matched = matched
         self.resinDonors = resinDonors.intersection(matched)
+        self.excluded = excluded
         self.transmutedTrinkets = transmutedTrinkets
         self.transmutedArtifacts = transmutedArtifacts
         self.matchedRequirements = matchedRequirements
@@ -123,7 +128,7 @@ public struct ScoutMatches: Sendable {
     }
 
     /// Reads the engine's scout-matches envelope. Keys added after the first
-    /// release (`resinDonors`, `transmutedTrinkets`, `transmutedArtifacts`)
+    /// release (`resinDonors`, `excluded`, `transmutedTrinkets`, `transmutedArtifacts`)
     /// decode as empty when an older engine leaves them out.
     static func decode(_ packet: Data) throws -> ScoutMatches {
         guard let document = (try? JSONSerialization.jsonObject(with: packet)) as? [String: Any],
@@ -138,7 +143,8 @@ public struct ScoutMatches: Sendable {
         }
         return ScoutMatches(matched: Set(matched), matchedRequirements: matchedRequirements,
                             totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []), transmutedArtifacts: artifacts,
-                            resinDonors: Set(document["resinDonors"] as? [Int] ?? []))
+                            resinDonors: Set(document["resinDonors"] as? [Int] ?? []),
+                            excluded: Set(document["excluded"] as? [Int] ?? []))
     }
 
     /// Marks the world `seed` generates under `challenges` against `query`.

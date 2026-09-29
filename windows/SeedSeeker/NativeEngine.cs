@@ -361,7 +361,9 @@ public sealed class NativeEngine
     /// Decodes the engine's scout match envelope. <c>resinDonors</c> — the
     /// matched wands the query consumes as Arcane Resin — is a subset of
     /// <c>matched</c>; envelopes from before it existed simply lack the key,
-    /// which reads as no donors.
+    /// which reads as no donors. <c>excluded</c> — the items the query forbids
+    /// every requirement to use, such as Smith rewards while they are
+    /// excluded — reads as none when missing in the same way.
     /// </summary>
     internal static ScoutMatches DecodeScoutMatches(string json, int slots)
     {
@@ -371,6 +373,7 @@ public sealed class NativeEngine
         return new(matched, (int?)document["matchedRequirements"] ?? matched.Count,
             (int?)document["totalRequirements"] ?? slots) {
                 ResinDonors = Indices(document["resinDonors"]),
+                Excluded = Indices(document["excluded"]),
                 TransmutedTrinkets = (document["transmutedTrinkets"] as JsonArray ?? []).Select(value => (int)value!).ToHashSet(),
                 TransmutedArtifacts = (document["transmutedArtifacts"] as JsonArray ?? []).Select(value => ((int)value!["depth"]!, (int)value!["index"]!)).ToHashSet()
             };

@@ -432,7 +432,7 @@ fun ScoutScreen(
                                         ScoutItemCard(scoutItem = indexedItem.value, ringGems = world.ringGems,
                                             matches = matches?.items?.contains(indexedItem.index) == true,
                                             resinDonor = matches?.resinDonors?.contains(indexedItem.index) == true,
-                                            dimmed = isAlternateScoutChoice(indexedItem.value.accessibility, indexedItem.index in matches?.items.orEmpty(), matchedChoices),
+                                            dimmed = isDimmedScoutItem(indexedItem.index, indexedItem.value.accessibility, matches, matchedChoices),
                                             modifier = Modifier.padding(bottom = 8.dp))
                                     }
                                     is ScoutListRow.Heading -> Unit // Emitted as a sticky header above.

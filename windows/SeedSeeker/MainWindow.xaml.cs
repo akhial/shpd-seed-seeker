@@ -2078,7 +2078,7 @@ public sealed partial class MainWindow : Window
                 {
                     if (entry.Item.Item.Kind != ItemKind.Trinket)
                         group.Add(ScoutRow.From(entry.Item, matches.Matched.Contains(entry.Index), world.Gems,
-                            ScoutChoices.Dimmed(entry.Item, matches.Matched.Contains(entry.Index), matchedChoices),
+                            ScoutChoices.Dimmed(entry.Item, entry.Index, matches, matchedChoices),
                             matches.ResinDonors.Contains(entry.Index)));
                     else if (entry.Index == trinkets[0].Index)
                         group.Add(ScoutRow.Catalyst(entry.Item, world.TrinketOrder ?? trinkets.Select(x => x.Item.Item).ToList(),

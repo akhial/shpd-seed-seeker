@@ -19,6 +19,9 @@ use crate::{ScoutMatchError, production_scout_matches};
 /// `transmutedTrinkets` contains separate zero-based indices into the 13-card
 /// tail. It never changes the generated item indices; older clients ignore it.
 /// `resinDonors` lists the subset of `matched` consumed as Arcane Resin donors.
+/// `excluded` lists the items the query forbids every slot to use (today the
+/// Blacksmith's rewards under `exclude_blacksmith_rewards`); none is ever in
+/// `matched`. Older clients ignore it; newer ones read a missing key as empty.
 /// The keys are camelCase like every other bridge-built document (the
 /// browser's own scout output and `engine_info`); only the persisted formats
 /// — query documents and results files — are `snake_case`.
@@ -32,6 +35,8 @@ pub fn scout_matches_document(request: &[u8], query: &[u8]) -> Result<String, Sc
         "matched": marks.matched_indices(),
         "resinDonors": marks.resin_donors.iter().enumerate()
             .filter_map(|(index, &donor)| donor.then_some(index)).collect::<Vec<_>>(),
+        "excluded": marks.excluded.iter().enumerate()
+            .filter_map(|(index, &excluded)| excluded.then_some(index)).collect::<Vec<_>>(),
         "transmutedTrinkets": marks.transmuted_trinkets.iter().enumerate()
             .filter_map(|(index, &matched)| matched.then_some(index)).collect::<Vec<_>>(),
         "transmutedArtifacts": marks.transmuted_artifacts.iter().map(|&(depth, index)| json!({"depth":depth,"index":index})).collect::<Vec<_>>(),
@@ -47,6 +52,7 @@ mod tests {
     use shpd_seedfinder_core::catalog::item;
     use shpd_seedfinder_core::challenges::Challenges;
     use shpd_seedfinder_core::json_query;
+    use shpd_seedfinder_core::model::ItemSource;
     use shpd_seedfinder_core::seed::DungeonSeed;
     use shpd_seedfinder_core::wire::decode_scout_world;
 
@@ -67,6 +73,7 @@ mod tests {
         assert_eq!(envelope["matched"], json!([]));
         assert_eq!(envelope["transmutedTrinkets"], json!([10]));
         assert_eq!(envelope["resinDonors"], json!([]));
+        assert_eq!(envelope["excluded"], json!([]));
         assert_eq!(envelope["matchedRequirements"], 1);
     }
 
@@ -112,5 +119,37 @@ mod tests {
 
         assert!(scout_matches_document(b"AAA-AAA-AA0", &query).is_err());
         assert!(scout_matches_document(b"AAA-AAA-AAA", b"bad").is_err());
+    }
+
+    #[test]
+    fn excluded_smith_rewards_are_listed_and_never_matched() {
+        let world = production_scout_world(DungeonSeed::MIN, Challenges::NONE).unwrap();
+        let smith: Vec<usize> = world
+            .items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| item.source == ItemSource::BlacksmithReward)
+            .map(|(index, _)| index)
+            .collect();
+        assert!(!smith.is_empty(), "the seed's Blacksmith offers rewards");
+        let reward = item(world.items[smith[0]].item).stable_id;
+        let envelope = |exclude: bool| -> Value {
+            let document = json!({
+                "exclude_blacksmith_rewards": exclude,
+                "requirements": [{"item": reward}],
+            });
+            let query = query_request(&json_query::decode(&document.to_string()).unwrap());
+            serde_json::from_str(&scout_matches_document(b"AAA-AAA-AAA", &query).unwrap()).unwrap()
+        };
+        let excluded = envelope(true);
+        assert_eq!(excluded["excluded"], json!(smith));
+        for index in excluded["matched"].as_array().unwrap() {
+            let index = usize::try_from(index.as_u64().unwrap()).unwrap();
+            assert!(!smith.contains(&index));
+        }
+        // With the option off the rewards are ordinary candidates again.
+        let allowed = envelope(false);
+        assert_eq!(allowed["excluded"], json!([]));
+        assert_eq!(allowed["matchedRequirements"], 1);
     }
 }

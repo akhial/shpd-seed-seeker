@@ -689,6 +689,12 @@ export interface ScoutItem {
   matched: boolean;
   /** Matched as a surplus wand consumed for Arcane Resin. */
   resinDonor?: boolean;
+  /**
+   * Forbidden to every requirement by the query (a Blacksmith reward while
+   * Smith rewards are excluded), so never matched. Missing in cached worker
+   * responses from before the flag, which read as not excluded.
+   */
+  excluded?: boolean;
 }
 
 export interface ScoutRequest {

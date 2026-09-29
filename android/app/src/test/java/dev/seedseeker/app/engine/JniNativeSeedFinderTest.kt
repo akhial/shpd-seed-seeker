@@ -213,6 +213,21 @@ class JniNativeSeedFinderTest {
         )
     }
 
+    @Test
+    fun scoutMatchesReadsExcludedItemsAndTreatsAMissingKeyAsNone() {
+        val bindings = RecordingBindings()
+        val finder = JniNativeSeedFinder(bindings)
+        val request = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1)), excludeBlacksmithRewards = true)
+
+        assertEquals(emptySet<Int>(), finder.scoutMatches("AAA-AAA-AAB", 0, request).excluded)
+        bindings.scoutMatchEnvelope =
+            """{"matched":[1],"excluded":[5,6,7],"matchedRequirements":1,"totalRequirements":1}"""
+        assertEquals(
+            ScoutMatches(items = setOf(1), matchedSlots = 1, totalSlots = 1, excluded = setOf(5, 6, 7)),
+            finder.scoutMatches("AAA-AAA-AAB", 0, request),
+        )
+    }
+
 
 
     private class RecordingBindings : NativeBindings {

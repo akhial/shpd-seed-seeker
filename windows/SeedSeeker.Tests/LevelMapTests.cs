@@ -222,4 +222,42 @@ public sealed class LevelMapTests
         Assert.False(ScoutChoices.Dimmed(items[3], false, choices));
         Assert.Equal("A", ScoutChoices.Letter(0)); Assert.Equal("B", ScoutChoices.Letter(27));
     }
+
+    [Fact]
+    public void ExcludedItemsAreDimmedLikeAlternateChoices()
+    {
+        var item = new ScoutItem(ItemCatalog.Find("sword")!, 13, 0, null, false, ScoutItemSource.BlacksmithReward, 1, 0, 0);
+        ScoutItem[] items = [item, item with { AccessibilityValue = 1 }, item with { Source = ScoutItemSource.Heap, AccessibilityTag = 0 }];
+        var marks = new ScoutMatches(new HashSet<int>(), 0, 1) { Excluded = new HashSet<int> { 0, 1 } };
+        var choices = ScoutChoices.Matched(items, marks.Matched);
+        // Nothing is chosen, so only the exclusion dims the two rewards.
+        Assert.True(ScoutChoices.Dimmed(items[0], 0, marks, choices));
+        Assert.True(ScoutChoices.Dimmed(items[1], 1, marks, choices));
+        Assert.False(ScoutChoices.Dimmed(items[2], 2, marks, choices));
+        // An alternate choice still dims without any exclusion.
+        var chosen = new ScoutMatches(new HashSet<int> { 0 }, 1, 1);
+        Assert.True(ScoutChoices.Dimmed(items[1], 1, chosen, ScoutChoices.Matched(items, chosen.Matched)));
+        Assert.False(ScoutChoices.Dimmed(items[0], 0, chosen, ScoutChoices.Matched(items, chosen.Matched)));
+    }
+
+    [Fact]
+    public void ExcludedSmithRewardsComeFromTheEngineAndAreNeverMatched()
+    {
+        var world = new NativeEngine().Scout("AAA-AAA-AAA", 0);
+        var smith = world.Items.Select((item, index) => (item, index)).Where(x => x.item.Source == ScoutItemSource.BlacksmithReward)
+            .Select(x => x.index).ToHashSet();
+        Assert.NotEmpty(smith);
+        var query = new QuerySettings { AutoApplyTrinket = false, ExcludeBlacksmithRewards = true,
+            Requirements = [new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_haste"), UpgradeMatch = UpgradeMatch.Any }] };
+        var marks = NativeEngine.ScoutMatches(world.Seed, 0, query);
+        Assert.True(smith.SetEquals(marks.Excluded));
+        Assert.False(marks.Matched.Overlaps(smith));
+        var choices = ScoutChoices.Matched(world.Items, marks.Matched);
+        Assert.All(smith, index => Assert.True(ScoutChoices.Dimmed(world.Items[index], index, marks, choices)));
+        query.ExcludeBlacksmithRewards = false;
+        var allowed = NativeEngine.ScoutMatches(world.Seed, 0, query);
+        Assert.Empty(allowed.Excluded);
+        var allowedChoices = ScoutChoices.Matched(world.Items, allowed.Matched);
+        Assert.All(smith, index => Assert.False(ScoutChoices.Dimmed(world.Items[index], index, allowed, allowedChoices)));
+    }
 }
