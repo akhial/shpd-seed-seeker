@@ -79,6 +79,7 @@ public sealed partial class MainWindow : Window
     private string? pendingLink;
     /// <summary>Only the latest copy may reset the checkmark back to the link glyph.</summary>
     private int copyLinkFeedback;
+    private int copySearchFeedback;
     private const int ResultCap = SearchLimits.ResultCap;
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Seed Seeker", "query.json");
     private static readonly string PresetsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Seed Seeker", "presets.json");
@@ -332,7 +333,7 @@ public sealed partial class MainWindow : Window
     {
         BuildFarmingFloors();
         BuildBoard(); NoRequirements.Visibility = boardView.Counts.Ordinary == 0 && !query.NeedsResin && query.FloorRequirements.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
+        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = CopySearchButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
     private void BuildFarmingFloors()
@@ -1712,7 +1713,7 @@ public sealed partial class MainWindow : Window
         StartButton.Style = (Style)Application.Current.Resources[running ? "DefaultButtonStyle" : "AccentButtonStyle"];
         PresetPicker.IsEnabled = !running;
         SavePresetButton.IsEnabled = !running;
-        CopyLinkButton.IsEnabled = !running && query.HasRequirements;
+        CopyLinkButton.IsEnabled = CopySearchButton.IsEnabled = !running && query.HasRequirements;
         DeletePresetButton.IsEnabled = !running
             && PresetPicker.SelectedItem is QueryPreset { IsBuiltIn: false };
         searchRunning = running;
@@ -1825,6 +1826,12 @@ public sealed partial class MainWindow : Window
                 return;
             }
             ApplyQuery(imported.Query);
+            // A copied search restores the query alone, as a link does.
+            if (imported.BareQuery)
+            {
+                SearchStatus.Text = $"Search loaded from {source}.";
+                return;
+            }
             var snapshot = imported.Query.Clone();
             searchedQuery = snapshot;
             // Imported results carry no traversal state, so the previous
@@ -1896,6 +1903,19 @@ public sealed partial class MainWindow : Window
         CopyLinkIcon.Glyph = "";
         await Task.Delay(1200);
         if (generation == copyLinkFeedback) CopyLinkIcon.Glyph = "";
+    }
+
+    private async void CopySearch_Click(object sender, RoutedEventArgs e)
+    {
+        if (boardEditor.Problem(query) is string problem) { await ShowTransferMessage(problem); return; }
+        string document;
+        try { document = ResultsExport.EncodeCopiedQuery(query); }
+        catch (ResultsExportException ex) { await ShowTransferMessage(ex.Message); return; }
+        Copy(document);
+        var generation = ++copySearchFeedback;
+        CopySearchIcon.Glyph = "\uE73E";
+        await Task.Delay(1200);
+        if (generation == copySearchFeedback) CopySearchIcon.Glyph = "\uE8C8";
     }
 
     private async Task ShowTransferMessage(string message)

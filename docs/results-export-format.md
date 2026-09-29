@@ -269,3 +269,24 @@ re-exporting reproduces the file. Imports are refused while a search is
 running — including when a search started while the file picker was open.
 The informational `app_version` field is not compared against the running
 app; a file is importable regardless of which app version wrote it.
+
+## Copied searches (bare query documents)
+
+Every app can also copy the query being edited, without results, as a
+pretty-printed canonical query document: **Copy** in the web query header,
+**Copy Link ▾ → Copy Search as JSON** in the macOS toolbar, the **Copy search**
+button beside the preset controls on Windows, **Copy Search** in the Linux main
+menu, and **More options → Copy search** on Android and iOS. The engine writes
+that text (`results_export::encode_query_document`, reached through FFI
+`seedfinder_query_document`, WASM `encode_query_document` and JNI
+`queryDocument`), so every platform copies the same bytes. It is also a valid
+`seed-seeker --items` file for the CLI.
+
+The results decoder accepts such a document back: a JSON object with no
+`format` field and a `requirements` list is read as a bare query, validated
+exactly like an embedded `query` (including the A–D group limits), and returned
+with no seeds and `"bare_query": true` in the bridge document. Importers apply
+a bare query the way they open a share link — the editor takes the query, and
+the results list and export snapshot are left to the search that produced them
+(iOS and Android clear the displayed list, as they do for links). An object with
+a `format` other than `"seed-seeker-results"` is still rejected.

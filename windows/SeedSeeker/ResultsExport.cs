@@ -25,7 +25,8 @@ public static class ResultsExport
     public const string SuggestedFileName = "seed-seeker-results";
 
     /// <param name="Dropped">Exported entries the engine's dedupe-and-cap step removed.</param>
-    public sealed record Imported(QuerySettings Query, IReadOnlyList<string> Seeds, int Dropped, string? FileShpdVersion, IReadOnlyList<string?>? Trinkets = null);
+    /// <param name="BareQuery">A pasted query document rather than a results file: it has no seeds.</param>
+    public sealed record Imported(QuerySettings Query, IReadOnlyList<string> Seeds, int Dropped, string? FileShpdVersion, IReadOnlyList<string?>? Trinkets = null, bool BareQuery = false);
 
     /// <summary>Stable document names, indexed by the matching enum value.</summary>
     private static readonly string[] KindNames = ["weapon", "armor", "wand", "ring", "melee_weapon", "thrown_weapon", "trinket", "artifact"];
@@ -57,7 +58,7 @@ public static class ResultsExport
     {
         var decoded = NativeEngine.TryDecodeResultsFile(text)
             ?? throw new ResultsExportException(
-                "This is not a Seed Seeker results file, or its query is not one this version can run.");
+                "This is not a Seed Seeker results file or search, or its query is not one this version can run.");
         if (JsonNode.Parse(decoded) is not JsonObject document || document["query"] is not JsonObject queryValue)
             throw new ResultsExportException("This results file could not be read.");
         var seeds = new List<string>();
@@ -65,8 +66,18 @@ public static class ResultsExport
             if (entry is JsonValue seedValue && seedValue.TryGetValue(out string? seed)) seeds.Add(seed);
         return new Imported(DecodeQuery(queryValue), seeds, IntField(document, "dropped") ?? 0,
             TolerantString(document, "shpd_version"),
-            (document["trinkets"] as JsonArray)?.Select(value => value?.GetValue<string>()).ToArray());
+            (document["trinkets"] as JsonArray)?.Select(value => value?.GetValue<string>()).ToArray(),
+            document["bare_query"] is JsonValue bare && bare.TryGetValue(out bool isBare) && isBare);
     }
+
+    /// <summary>
+    /// The query as the pretty-printed JSON document "Copy search" puts on the
+    /// clipboard: the file the CLI reads, and one <see cref="Decode"/> accepts back.
+    /// </summary>
+    /// <exception cref="ResultsExportException">With a user-facing message.</exception>
+    public static string EncodeCopiedQuery(QuerySettings query) =>
+        NativeEngine.TryFormatQueryDocument(EncodeQueryDocument(query))
+            ?? throw new ResultsExportException("This query could not be copied.");
 
     /// <summary>Reads informational envelope strings; wrong types are ignored, not errors.</summary>
     private static string? TolerantString(JsonObject document, string key) =>
