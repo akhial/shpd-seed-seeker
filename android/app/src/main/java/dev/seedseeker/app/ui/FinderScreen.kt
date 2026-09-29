@@ -1386,7 +1386,8 @@ private fun PresetRow(preset: QueryPreset, onApply: () -> Unit, onDelete: () -> 
         modifier = modifier.fillMaxWidth().pressScale(interaction, pressed = 0.96f),
     ) {
         Row(Modifier.padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            // The first few requirements, fanned like a hand of cards.
+            // The first few requirements, fanned like a hand of cards, the
+            // first on top.
             Box(Modifier.width(56.dp).height(36.dp)) {
                 preset.query.requirements.filterNot { it.blanket }.take(3).forEachIndexed { index, requirement ->
                     SpriteTile(
@@ -1394,6 +1395,7 @@ private fun PresetRow(preset: QueryPreset, onApply: () -> Unit, onDelete: () -> 
                         wildcardKind = requirement.kind,
                         tileSize = 30,
                         modifier = Modifier
+                            .zIndex(-index.toFloat())
                             .padding(start = (index * 12).dp, top = 3.dp)
                             .rotate((index - 1) * 8f),
                     )
