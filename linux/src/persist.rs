@@ -181,14 +181,18 @@ fn decode_state(contents: &str) -> Option<AppState> {
 /// Rebuilds editor state from a decoded document. Floor limits saved before
 /// the empty boss floors were removed may hold 5/10/15 and snap to the
 /// equivalent limit below; a requirement the engine would reject is dropped
-/// rather than loaded into the editor.
+/// rather than loaded into the editor, and what remains is brought into the
+/// editor's canonical encoding, so no group the dropped rows leave behind
+/// lingers.
 fn restore(query: &SearchQuery) -> AppState {
     let mut state = AppState::from_query(query);
     state.max_depth = normalize_floor_limit(state.max_depth.clamp(1, MAX_SEARCH_DEPTH));
-    state.requirements.retain_mut(|requirement| {
+    state.requirements.retain_mut(|row| {
+        let requirement = &mut row.requirement;
         requirement.max_depth = requirement.max_depth.map(normalize_floor_limit);
-        requirement.to_core().validate().is_ok()
+        requirement.validate().is_ok()
     });
+    state.normalize();
     state
 }
 
@@ -209,17 +213,18 @@ mod tests {
     use serde_json::json;
     use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, WeaponCategory, WeaponEffect};
     use shpd_seedfinder_core::challenges::Challenges;
-    use shpd_seedfinder_core::json_query;
+    use shpd_seedfinder_core::editor::{self, Row};
     use shpd_seedfinder_core::model::ItemSource;
     use shpd_seedfinder_core::query::{
         EffectRequirement, Requirement, TierRequirement, UpgradeRequirement,
     };
     use shpd_seedfinder_core::quests::WandmakerQuestType;
+    use shpd_seedfinder_core::{deep_link, json_query};
 
     use super::{
         SavedPreset, clamp_workers, decode_presets, decode_state, decode_workers, save_document,
     };
-    use crate::state::{AppState, UiRequirement};
+    use crate::state::AppState;
 
     /// One saved state written to disk and read back.
     fn round_trip(state: &AppState) -> AppState {
@@ -228,30 +233,49 @@ mod tests {
 
     /// The engine predicates of every row, which carry no session row keys.
     fn predicates(state: &AppState) -> Vec<Requirement> {
-        state.requirements.iter().map(|r| r.to_core()).collect()
+        state
+            .requirements
+            .iter()
+            .map(|row| row.requirement)
+            .collect()
     }
 
     fn populated_state() -> AppState {
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            item: Some(ItemId::Greatsword),
-            upgrade: UpgradeRequirement::AtLeast(2),
-            effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing)),
-            require_uncursed: true,
-            select_trinket: false,
-            trinket_transmutations: 0,
-            artifact_transmutations: 0,
-            source: Some(ItemSource::SacrificialFire),
-            identity_group: Some(3),
-            max_depth: Some(21),
-            ..UiRequirement::new(key)
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                item: Some(ItemId::Greatsword),
+                upgrade: UpgradeRequirement::AtLeast(2),
+                effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing)),
+                require_uncursed: true,
+                select_trinket: false,
+                trinket_transmutations: 0,
+                artifact_transmutations: 0,
+                source: Some(ItemSource::SacrificialFire),
+                max_depth: Some(21),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+        });
+        // A stack of two thrown weapons: the tier-4 anchor and a bare copy.
+        let key = state.claim_key();
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                weapon_category: Some(WeaponCategory::Thrown),
+                tier: TierRequirement::Exact(4),
+                identity_group: Some(3),
+                ..Requirement::any(ItemKind::Weapon)
+            },
         });
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            weapon_category: Some(WeaponCategory::Thrown),
-            tier: TierRequirement::Exact(4),
-            ..UiRequirement::new(key)
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                identity_group: Some(3),
+                ..Requirement::any(ItemKind::Weapon)
+            },
         });
         state.max_depth = 13;
         state.require_blacksmith = true;
@@ -264,13 +288,11 @@ mod tests {
     #[test]
     fn trinket_transmutation_limit_survives_persistence() {
         let state = decode_state(r#"{"auto_apply_trinket":true,"requirements":[{"item":"rat_skull","trinket_transmutations":11}]}"#).unwrap();
-        assert_eq!(state.requirements[0].trinket_transmutations, 11);
-        assert_eq!(state.requirements[0].to_core().trinket_transmutations, 11);
+        assert_eq!(state.requirements[0].requirement.trinket_transmutations, 11);
         assert_eq!(
             save_document(&state)["requirements"][0]["trinket_transmutations"],
             11
         );
-        assert_eq!(state.requirements[0].subtitle(), "Transmute ≤11");
     }
 
     #[test]
@@ -321,46 +343,58 @@ mod tests {
         // An "any of these" slot of two weapons.
         for (item, upgrade) in [(ItemId::Spear, 3), (ItemId::Shuriken, 2)] {
             let key = state.claim_key();
-            state.requirements.push(UiRequirement {
-                item: Some(item),
-                upgrade: UpgradeRequirement::Exact(upgrade),
-                alternative_group: Some(1),
-                ..UiRequirement::new(key)
+            state.requirements.push(Row {
+                key,
+                requirement: Requirement {
+                    item: Some(item),
+                    upgrade: UpgradeRequirement::Exact(upgrade),
+                    alternative_group: Some(1),
+                    ..Requirement::any(ItemKind::Weapon)
+                },
             });
         }
         // Armor with one of two glyphs, then any enchantment.
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            kind: ItemKind::Armor,
-            effect: EffectRequirement::OneOf(
-                EffectSet::from_effects([
-                    Effect::Armor(ArmorEffect::Stone),
-                    Effect::Armor(ArmorEffect::Brimstone),
-                ])
-                .unwrap(),
-            ),
-            ..UiRequirement::new(key)
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                effect: EffectRequirement::OneOf(
+                    EffectSet::from_effects([
+                        Effect::Armor(ArmorEffect::Stone),
+                        Effect::Armor(ArmorEffect::Brimstone),
+                    ])
+                    .unwrap(),
+                ),
+                ..Requirement::any(ItemKind::Armor)
+            },
         });
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            effect: EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap()),
-            require_uncursed: true,
-            select_trinket: false,
-            trinket_transmutations: 0,
-            artifact_transmutations: 0,
-            ..UiRequirement::new(key)
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                effect: EffectRequirement::OneOf(
+                    EffectSet::enchantments(ItemKind::Weapon).unwrap(),
+                ),
+                require_uncursed: true,
+                select_trinket: false,
+                trinket_transmutations: 0,
+                artifact_transmutations: 0,
+                ..Requirement::any(ItemKind::Weapon)
+            },
         });
         // Two Rings of Might adding up to +4.
         for _ in 0..2 {
             let key = state.claim_key();
-            state.requirements.push(UiRequirement {
-                kind: ItemKind::Ring,
-                item: Some(ItemId::RingMight),
-                level_sum: Some(LevelSum {
-                    group: 1,
-                    minimum_total: 4,
-                }),
-                ..UiRequirement::new(key)
+            state.requirements.push(Row {
+                key,
+                requirement: Requirement {
+                    item: Some(ItemId::RingMight),
+                    level_sum: Some(LevelSum {
+                        group: 1,
+                        minimum_total: 4,
+                    }),
+                    ..Requirement::any(ItemKind::Ring)
+                },
             });
         }
         assert!(state.to_query().is_ok());
@@ -411,7 +445,10 @@ mod tests {
     fn the_blacksmith_switch_is_saved_as_the_user_left_it() {
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement::new(key));
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement::any(ItemKind::Weapon),
+        });
         state.require_blacksmith = true;
         state.max_depth = 24;
         // The search drops a filter every seed satisfies; the saved
@@ -425,14 +462,16 @@ mod tests {
         let mut state = AppState::default();
         state.max_depth = 15;
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            kind: ItemKind::Wand,
-            max_depth: Some(10),
-            ..UiRequirement::new(key)
+        state.requirements.push(Row {
+            key,
+            requirement: Requirement {
+                max_depth: Some(10),
+                ..Requirement::any(ItemKind::Wand)
+            },
         });
         let restored = round_trip(&state);
         assert_eq!(restored.max_depth, 14);
-        assert_eq!(restored.requirements[0].max_depth, Some(9));
+        assert_eq!(restored.requirements[0].requirement.max_depth, Some(9));
     }
 
     #[test]
@@ -459,11 +498,98 @@ mod tests {
     }
 
     #[test]
+    fn a_restored_list_is_rekeyed_and_left_without_stale_groups() {
+        // A stack label on one named item, and a stack whose copy the engine
+        // rejects: both labels say nothing once the rows load.
+        let restored = decode_state(
+            r#"{"requirements":[
+            {"item":"greatsword","upgrade":2,"identity_group":3},
+            {"kind":"wand","upgrade":2,"identity_group":1},
+            {"kind":"wand","identity_group":1,"tier":{"exact":3}}
+        ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            restored
+                .requirements
+                .iter()
+                .map(|row| (row.key, row.requirement.identity_group))
+                .collect::<Vec<_>>(),
+            [(1, None), (2, None)]
+        );
+        // What loads is canonical: saving it again changes nothing more.
+        let mut again = round_trip(&restored);
+        assert!(
+            !again
+                .apply(&[shpd_seedfinder_core::editor::Edit::Normalize])
+                .changed
+        );
+        assert_eq!(predicates(&again), predicates(&restored));
+    }
+
+    #[test]
+    fn hand_edited_stack_labels_past_four_load_into_range_and_search() {
+        // Linux never writes a stack or combined-level label above 4, but the
+        // engine reads any up to 255, so a hand-edited saved state or preset
+        // may hold one. Loading moves each onto a free label in range, and
+        // the chips, Start and Copy Link find nothing wrong.
+        let document = json!({ "requirements": [
+            { "kind": "wand", "upgrade": 3, "identity_group": 7 },
+            { "kind": "wand", "identity_group": 7 },
+            { "item": "ring_might", "level_sum": { "at_least": 3, "group": 9 } },
+            { "item": "ring_might", "level_sum": { "at_least": 3, "group": 9 } },
+        ]});
+        let labels = |state: &AppState| {
+            state
+                .requirements
+                .iter()
+                .map(|row| {
+                    let requirement = row.requirement;
+                    (
+                        requirement.identity_group,
+                        requirement.level_sum.map(|sum| sum.group),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let state = decode_state(&document.to_string()).expect("the engine reads the labels");
+        assert_eq!(
+            labels(&state),
+            [
+                (Some(1), None),
+                (Some(1), None),
+                (None, Some(1)),
+                (None, Some(1))
+            ]
+        );
+        assert!(editor::problems(&state.requirements).is_empty());
+        let query = state
+            .to_query()
+            .expect("a hand-edited stack still searches");
+        assert_eq!(query.requirements.len(), 4);
+        // Copy Link shares it too: a share link holds labels up to 4 only.
+        let link = deep_link::encode_link(&query).expect("a hand-edited stack still shares");
+        assert_eq!(deep_link::decode_text(&link), Ok(query.clone()));
+
+        // A preset holding the list loads the same way.
+        let presets =
+            decode_presets(&json!([{ "name": "Hand-edited", "query": document }]).to_string());
+        assert_eq!(presets.len(), 1);
+        assert_eq!(labels(&presets[0].state), labels(&state));
+        assert_eq!(presets[0].state.to_query(), Ok(query));
+        // So does an imported results file, which carries the query too.
+        let imported = AppState::load(
+            &json_query::decode_unvalidated(&document.to_string()).expect("a readable query"),
+        );
+        assert_eq!(labels(&imported), labels(&state));
+    }
+
+    #[test]
     fn selected_trinkets_survive_persistence() {
         let state =
             decode_state(r#"{"requirements":[{"item":"mimic_tooth","select_trinket":true}]}"#)
                 .unwrap();
-        assert!(state.requirements[0].select_trinket);
+        assert!(state.requirements[0].requirement.select_trinket);
         assert_eq!(
             save_document(&state)["requirements"][0]["select_trinket"],
             true
@@ -478,7 +604,7 @@ mod tests {
             r#"{"requirements":[{"kind":"artifact"},{"item":"sandals_of_nature","upgrade":{"exact":5},"source":"imp_reward","max_depth":19,"uncursed":true}]}"#,
         ).expect("artifact state is readable");
         assert_eq!(restored.requirements.len(), 1);
-        let requirement = restored.requirements[0];
+        let requirement = restored.requirements[0].requirement;
         assert_eq!(requirement.kind, ItemKind::Artifact);
         assert_eq!(requirement.item, Some(ItemId::SandalsOfNature));
         assert_eq!(requirement.upgrade, UpgradeRequirement::Exact(5));
@@ -497,11 +623,17 @@ mod tests {
             decode_state(r#"{"requirements":[{"kind":"trinket"},{"item":"mimic_tooth"}]}"#)
                 .expect("known trinkets are readable even when a row is invalid");
         assert_eq!(restored.requirements.len(), 1);
-        assert_eq!(restored.requirements[0].kind, ItemKind::Trinket);
-        assert_eq!(restored.requirements[0].item, Some(ItemId::MimicTooth));
+        assert_eq!(restored.requirements[0].requirement.kind, ItemKind::Trinket);
+        assert_eq!(
+            restored.requirements[0].requirement.item,
+            Some(ItemId::MimicTooth)
+        );
         let saved_again = round_trip(&restored);
         assert_eq!(saved_again.requirements.len(), 1);
-        assert_eq!(saved_again.requirements[0].item, Some(ItemId::MimicTooth));
+        assert_eq!(
+            saved_again.requirements[0].requirement.item,
+            Some(ItemId::MimicTooth)
+        );
     }
 
     #[test]
