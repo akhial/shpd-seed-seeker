@@ -714,13 +714,16 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// What a single pulse cannot say: several effects at once, shown as their
     /// count, and "any enchantment", which settles on no colour. A single
-    /// effect — enchantment or curse — needs no badge of its own: the sprite is
-    /// already pulsing that very colour, and the tooltip names it.
+    /// effect — enchantment or curse — on a named item needs no badge of its
+    /// own: the sprite is already pulsing that very colour, and the tooltip
+    /// names it. A wildcard's grayscale silhouette never pulses, so its one
+    /// effect wears a dot of that colour.
     /// </summary>
     private static UIElement? EffectBadge(ChipFace chip) => chip.Effect switch
     {
         { AnyEnchantment: true } => Dot(Rainbow()),
         { Effects.Count: > 1 } effect => new EffectCountView(effect.Effects, effect.Label),
+        { Effects: [var effect] } when chip.Item is null => Dot(new SolidColorBrush(ItemGlow.ForEffect(effect)!.Color)),
         _ => null,
     };
 

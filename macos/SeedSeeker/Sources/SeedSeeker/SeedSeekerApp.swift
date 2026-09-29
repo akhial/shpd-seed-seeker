@@ -1238,7 +1238,7 @@ private struct ChipView: View {
                 .lineLimit(1).truncationMode(.tail)
                 .frame(maxWidth: 150, alignment: .leading)
             ForEach(face.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
-            effectBadge(face.effect)
+            effectBadge(face.effect, wildcard: face.catalogItem == nil)
             ForEach(face.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
             if face.uncursed {
                 Text("✓")
@@ -1260,11 +1260,13 @@ private struct ChipView: View {
 
     // MARK: The effect badge
 
-    /// A single effect wants no badge of its own: the sprite is already
-    /// pulsing that very colour — black, for a curse — and the tooltip names
-    /// it. What is left for a badge is what one pulse cannot say: several
-    /// effects at once, or "any enchantment", which settles on no colour.
-    @ViewBuilder private func effectBadge(_ effect: ChipEffect?) -> some View {
+    /// A single effect on a named item wants no badge of its own: the sprite
+    /// is already pulsing that very colour — black, for a curse — and the
+    /// tooltip names it. What is left for a badge is what one pulse cannot
+    /// say: several effects at once, "any enchantment", which settles on no
+    /// colour, and a wildcard's one effect, since its grayscale silhouette
+    /// never pulses.
+    @ViewBuilder private func effectBadge(_ effect: ChipEffect?, wildcard: Bool) -> some View {
         if let effect {
             if effect.anyEnchantment {
                 Circle()
@@ -1276,6 +1278,13 @@ private struct ChipView: View {
                     .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16)
                     .overlay(Capsule().strokeBorder(
                         AngularGradient(colors: effectColours(effect.effects), center: .center), lineWidth: 2.5))
+            } else if wildcard, let glow = effectGlow(effect.effects.first) {
+                let (red, green, blue) = glow.components
+                let colour = Color(.sRGB, red: red, green: green, blue: blue)
+                Circle()
+                    .fill(colour)
+                    .frame(width: 11, height: 11)
+                    .shadow(color: colour, radius: 2.5)
             }
         }
     }

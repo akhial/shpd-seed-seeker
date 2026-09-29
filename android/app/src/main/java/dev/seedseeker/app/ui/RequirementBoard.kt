@@ -663,7 +663,7 @@ private fun RequirementChip(
         Spacer(Modifier.width(metrics.spriteGap))
         ChipTitle(face.name)
         ChipTags(face.tags)
-        EffectBadge(face.effect)
+        EffectBadge(face.effect, wildcard = face.item == null)
         ChipTags(face.trailingTags)
         if (face.uncursed) {
             Spacer(Modifier.width(5.dp))
@@ -902,12 +902,14 @@ private fun StackBadge(
 }
 
 /**
- * What one pulse of the sprite cannot say. A single effect wants no badge — the
- * sprite is already pulsing that very colour, black for a curse — but several
- * at once do, and so does "any enchantment", which settles on no colour at all.
+ * What one pulse of the sprite cannot say. A single effect on a named item
+ * wants no badge — the sprite is already pulsing that very colour, black for a
+ * curse — but several at once do, and so does "any enchantment", which settles
+ * on no colour at all. A [wildcard]'s grayscale silhouette never pulses, so its
+ * single effect wears a dot of that colour.
  */
 @Composable
-private fun EffectBadge(effect: EffectView?) {
+private fun EffectBadge(effect: EffectView?, wildcard: Boolean) {
     when {
         effect == null -> Unit
         effect.anyEnchantment -> {
@@ -917,6 +919,10 @@ private fun EffectBadge(effect: EffectView?) {
         effect.effects.size > 1 -> {
             Spacer(Modifier.width(5.dp))
             EffectCountBadge(ItemGlows.forEffects(effect.effects), effect.label)
+        }
+        wildcard -> ItemGlows.forEffects(effect.effects).firstOrNull()?.let { glow ->
+            Spacer(Modifier.width(5.dp))
+            EffectDot(glow, effect.label)
         }
     }
 }
@@ -963,6 +969,27 @@ private fun AnyEnchantmentDot(description: String) {
             .size(LocalChipMetrics.current.dotSize)
             .clip(CircleShape)
             .background(Brush.sweepGradient(*RAINBOW))
+            .semantics { contentDescription = description },
+    )
+}
+
+/** A wildcard's one effect: a dot of its glow colour, haloed as on the web. */
+@Composable
+private fun EffectDot(glow: Glow, description: String) {
+    Box(
+        Modifier
+            .size(LocalChipMetrics.current.dotSize)
+            .drawBehind {
+                drawCircle(
+                    Brush.radialGradient(
+                        0.5f to glow.color.copy(alpha = 0.6f),
+                        1f to Color.Transparent,
+                        radius = size.minDimension,
+                    ),
+                    radius = size.minDimension,
+                )
+                drawCircle(glow.color)
+            }
             .semantics { contentDescription = description },
     )
 }
