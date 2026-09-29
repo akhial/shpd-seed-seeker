@@ -311,15 +311,16 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(back.chip(1)?.countBadge?.text, "×2")
         XCTAssertEqual(back.chip(1)?.copies, [2])
 
-        // Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, and
-        // the member stays in the group, one item fewer.
+        // Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves,
+        // landing last as a new Frost saved from the sheet would, and the
+        // member stays in the group, one item fewer.
         let member = [try requirement(1, item: "wand_frost", alternativeGroup: 1, identityGroup: 1),
                       try requirement(2, item: "wand_disintegration", alternativeGroup: 1),
                       try requirement(3, kind: .wand, identityGroup: 1)]
         XCTAssertEqual(RequirementBoard.of(member).chip(1)?.countBadge?.text, "×2")
         let detached = try XCTUnwrap(RequirementBoard.apply([.detach(1)], to: member))
         XCTAssertEqual(detached.focus, 3)
-        XCTAssertEqual(detached.rows.map(\.key), [1, 3, 2])
+        XCTAssertEqual(detached.rows.map(\.key), [1, 2, 3])
         XCTAssertEqual(detached.item(holding: 3)?.id, "r3")
         XCTAssertEqual(detached.item(holding: 1)?.members, [1, 2])
         XCTAssertTrue(detached.items.allSatisfy { $0.chips.allSatisfy { $0.countBadge == nil } })
