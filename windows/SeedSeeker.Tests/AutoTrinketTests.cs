@@ -13,7 +13,7 @@ public sealed class AutoTrinketTests
     {
         var query = Query();
         Assert.True(query.Clone().AutoApplyTrinket);
-        Assert.All(BuiltInPresets.All, preset => Assert.True(preset.Query.AutoApplyTrinket));
+        Assert.Equal([true, true, false, true, true], BuiltInPresets.All.Select(preset => preset.Query.AutoApplyTrinket));
         Assert.False(ResultsExport.DecodeQueryDocument("""{"requirements":[{"item":"runic_blade"}]}""").AutoApplyTrinket);
         var restored = ResultsExport.Decode(ResultsExport.Encode(query, ["SRU-YSU-QHS", "EYY-RUL-LQG"], "test", ["parchment_scrap", null]));
         Assert.True(restored.Query.AutoApplyTrinket);

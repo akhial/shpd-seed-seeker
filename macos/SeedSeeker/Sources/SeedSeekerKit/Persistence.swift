@@ -93,83 +93,88 @@ public struct QueryPreset: Codable, Hashable, Identifiable, Sendable {
 extension SavedQuery: Hashable {}
 
 public enum BuiltInPresets {
-    public static let all: [QueryPreset] = [staff21, staff22, wandBonanza, ringOfWealth21, tier4Weapon26]
+    // Every preset but Ring of Wealth, which names its own trinket, keeps
+    // `SavedQuery`'s default of applying the chosen trinket automatically.
+    // The ids are fresh rather than the retired presets' (…272101 to
+    // …272105), so an id a user hid or stored never lands on a different
+    // query.
+    public static let all: [QueryPreset] = [disintegrate, guerillaAssassin, ringOfWealth, necromancer, bloodBerserker]
 
-    /// The floor limit the vault presets carry: floor 19 is the last floor the
-    /// Imp — and so the vault holding its levelled prizes — can appear on, so a
-    /// deeper scan only costs time.
-    private static let vaultFloorLimit = 19
-
-    public static let staff21 = QueryPreset(
-        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272101")!,
-        name: "+21 Staff",
+    public static let disintegrate = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272106")!,
+        name: "DISINTEGRATE",
         query: SavedQuery(requirements: [
-            try! ItemRequirement(key: 1, item: nil, upgrade: 3, kind: .wand,
-                                 upgradeMatch: .exactly, identityGroup: 1),
-            try! ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .wand,
-                                 upgradeMatch: .any, identityGroup: 1),
-            try! ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .wand,
-                                 upgradeMatch: .any, identityGroup: 1),
-            try! ItemRequirement(key: 4, item: nil, upgrade: 1, kind: .wand,
-                                 upgradeMatch: .atLeast),
+            try! ItemRequirement(key: 1, item: ItemCatalog.findById("wand_disintegration"), upgrade: 3,
+                                 kind: .wand, upgradeMatch: .atLeast),
+            try! ItemRequirement(key: 2, item: ItemCatalog.findById("wand_disintegration"), upgrade: 0,
+                                 kind: .wand, upgradeMatch: .any),
+            try! ItemRequirement(key: 3, item: ItemCatalog.findById("wand_disintegration"), upgrade: 0,
+                                 kind: .wand, upgradeMatch: .any),
+            try! ItemRequirement(key: 4, item: ItemCatalog.findById("eye_of_newt"), upgrade: 0,
+                                 kind: .trinket, upgradeMatch: .any, trinketTransmutations: 1),
+            try! ItemRequirement(key: 5, item: ItemCatalog.findById("ring_energy"), upgrade: 2,
+                                 kind: .ring, upgradeMatch: .atLeast),
+        ], maximumDepth: 19))
+
+    public static let guerillaAssassin = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272107")!,
+        name: "Guerilla Assassin",
+        query: SavedQuery(requirements: [
+            try! ItemRequirement(key: 1, item: ItemCatalog.findById("assassins_blade"), upgrade: 3,
+                                 modifier: "Blooming", kind: .weapon, upgradeMatch: .exactly,
+                                 maximumDepth: 7),
+            try! ItemRequirement(key: 2, item: nil, upgrade: 0, modifier: "Camouflage",
+                                 kind: .armor, upgradeMatch: .any),
+            try! ItemRequirement(key: 3, item: ItemCatalog.findById("ring_arcana"), upgrade: 2,
+                                 kind: .ring, upgradeMatch: .atLeast),
         ]))
 
-    /// The +21 stack anchored one level higher, on the +4 wand v4.0.0's Imp
-    /// vault lays out among its prizes.
-    public static let staff22 = QueryPreset(
-        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272104")!,
-        name: "+22 Staff",
-        query: SavedQuery(requirements: [
-            try! ItemRequirement(key: 1, item: nil, upgrade: 4, kind: .wand,
-                                 upgradeMatch: .exactly, identityGroup: 1),
-            try! ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .wand,
-                                 upgradeMatch: .any, identityGroup: 1),
-            try! ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .wand,
-                                 upgradeMatch: .any, identityGroup: 1),
-            try! ItemRequirement(key: 4, item: nil, upgrade: 1, kind: .wand,
-                                 upgradeMatch: .atLeast),
-        ], maximumDepth: vaultFloorLimit))
-
-    public static let wandBonanza = QueryPreset(
-        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272103")!,
-        name: "Wand Bonanza",
-        query: SavedQuery(requirements: [
-            try! ItemRequirement(key: 1, item: nil, upgrade: 3, kind: .wand,
-                                 upgradeMatch: .exactly),
-            try! ItemRequirement(key: 2, item: nil, upgrade: 2, kind: .wand,
-                                 upgradeMatch: .exactly, maximumDepth: 4),
-            try! ItemRequirement(key: 3, item: nil, upgrade: 2, kind: .wand,
-                                 upgradeMatch: .exactly, maximumDepth: 4),
-            try! ItemRequirement(key: 4, item: nil, upgrade: 2, kind: .wand,
-                                 upgradeMatch: .exactly),
-        ]))
-
-    public static let ringOfWealth21 = QueryPreset(
-        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272102")!,
-        name: "+21 Ring of Wealth",
+    /// Floor 17 must be a farming floor: dark, with a garden or secret garden.
+    public static let ringOfWealth = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272108")!,
+        name: "Ring of Wealth",
         query: SavedQuery(requirements: [
             try! ItemRequirement(key: 1, item: ItemCatalog.findById("ring_wealth"), upgrade: 4,
-                                 kind: .ring, upgradeMatch: .exactly, source: .impReward),
-            try! ItemRequirement(key: 2, item: ItemCatalog.findById("ring_wealth"), upgrade: 2,
                                  kind: .ring, upgradeMatch: .exactly),
-            try! ItemRequirement(key: 3, item: ItemCatalog.findById("ring_wealth"), upgrade: 0,
-                                 kind: .ring, upgradeMatch: .any),
+            try! ItemRequirement(key: 2, item: ItemCatalog.findById("dried_rose"), upgrade: 0,
+                                 kind: .artifact, upgradeMatch: .any, maximumDepth: 9),
+            try! ItemRequirement(key: 3, item: nil, upgrade: 3, kind: .armor,
+                                 tier: 4, tierMatch: .atMost, upgradeMatch: .exactly,
+                                 maximumDepth: 4),
+            try! ItemRequirement(key: 4, item: nil, upgrade: 3, kind: .weapon,
+                                 tier: 4, tierMatch: .atMost, upgradeMatch: .exactly,
+                                 maximumDepth: 9),
+            try! ItemRequirement(key: 5, item: ItemCatalog.findById("dimensional_sundial"), upgrade: 0,
+                                 kind: .trinket, upgradeMatch: .any, trinketTransmutations: 1),
+        ], autoApplyTrinket: false, floorRequirements: [
+            FloorRequirement(depth: 17, feeling: "dark", anyRooms: ["garden", "secret_garden"]),
         ]))
 
-    /// A tier-4 weapon at the +5 only the vault reaches, with two more of the
-    /// same weapon to pour into it.
-    public static let tier4Weapon26 = QueryPreset(
-        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272105")!,
-        name: "+26 Tier 4 Weapon",
+    public static let necromancer = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272109")!,
+        name: "Necromancer",
         query: SavedQuery(requirements: [
-            try! ItemRequirement(key: 1, item: nil, upgrade: 5, kind: .weapon,
-                                 tier: 4, tierMatch: .exactly, upgradeMatch: .exactly,
-                                 identityGroup: 1),
-            try! ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .weapon,
-                                 upgradeMatch: .any, identityGroup: 1),
-            try! ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .weapon,
-                                 upgradeMatch: .any, identityGroup: 1),
-        ], maximumDepth: vaultFloorLimit))
+            try! ItemRequirement(key: 1, item: ItemCatalog.findById("wand_corruption"), upgrade: 3,
+                                 kind: .wand, upgradeMatch: .exactly),
+            try! ItemRequirement(key: 2, item: nil, upgrade: 3, kind: .weapon,
+                                 tier: 5, tierMatch: .exactly, upgradeMatch: .exactly),
+            try! ItemRequirement(key: 3, item: ItemCatalog.findById("plate_armor"), upgrade: 3,
+                                 kind: .armor, upgradeMatch: .exactly),
+        ], maximumDepth: 14, wandmakerQuest: .corpseDust))
+
+    public static let bloodBerserker = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272110")!,
+        name: "Blood Berserker",
+        query: SavedQuery(requirements: [
+            try! ItemRequirement(key: 1, item: nil, upgrade: 3, modifier: "Vampiric", kind: .weapon,
+                                 tier: 5, tierMatch: .exactly, upgradeMatch: .exactly),
+            try! ItemRequirement(key: 2, item: ItemCatalog.findById("plate_armor"), upgrade: 3,
+                                 modifier: "Thorns", kind: .armor, upgradeMatch: .exactly),
+            try! ItemRequirement(key: 3, item: ItemCatalog.findById("ring_arcana"), upgrade: 4,
+                                 kind: .ring, upgradeMatch: .exactly),
+            try! ItemRequirement(key: 4, item: ItemCatalog.findById("chalice_of_blood"), upgrade: 0,
+                                 kind: .artifact, upgradeMatch: .any),
+        ]))
 }
 
 extension Array where Element == ItemRequirement {

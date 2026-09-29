@@ -2,17 +2,16 @@
 
 //! Presets bundled with every installation.
 
-use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
+use shpd_seedfinder_core::catalog::{self, ArmorEffect, Effect, ItemId, ItemKind, WeaponEffect};
 use shpd_seedfinder_core::editor::Row;
-use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
+use shpd_seedfinder_core::floor_filters::{FloorRequirement, RoomType};
+use shpd_seedfinder_core::level_prelude::Feeling;
+use shpd_seedfinder_core::query::{
+    EffectRequirement, Requirement, TierRequirement, UpgradeRequirement,
+};
+use shpd_seedfinder_core::quests::WandmakerQuestType;
 
 use crate::state::AppState;
-
-/// The floor limit the vault presets carry: floor 19 is the last floor the
-/// Imp — and so the vault holding its levelled prizes — can appear on, so a
-/// deeper scan only costs time.
-const VAULT_FLOOR_LIMIT: u8 = 19;
 
 /// One read-only query shipped with the application.
 #[derive(Clone, Debug)]
@@ -25,249 +24,238 @@ pub struct BuiltInPreset {
 #[must_use]
 pub fn built_in() -> [BuiltInPreset; 5] {
     [
-        staff_21(),
-        staff_22(),
-        wand_bonanza(),
-        ring_of_wealth_21(),
-        tier_4_weapon_26(),
+        disintegrate(),
+        guerilla_assassin(),
+        ring_of_wealth(),
+        necromancer(),
+        blood_berserker(),
     ]
 }
 
-fn wand_bonanza() -> BuiltInPreset {
+fn preset(
+    name: &'static str,
+    requirements: impl IntoIterator<Item = Requirement>,
+) -> BuiltInPreset {
     let mut state = AppState::default();
-    for (upgrade, max_depth) in [
-        (UpgradeRequirement::Exact(3), None),
-        (UpgradeRequirement::Exact(2), Some(4)),
-        (UpgradeRequirement::Exact(2), Some(4)),
-        (UpgradeRequirement::Exact(2), None),
-    ] {
+    for requirement in requirements {
         let key = state.claim_key();
-        state.requirements.push(Row {
-            key,
-            requirement: Requirement {
-                upgrade,
-                max_depth,
-                ..Requirement::any(ItemKind::Wand)
-            },
-        });
+        state.requirements.push(Row { key, requirement });
     }
-    BuiltInPreset {
-        name: "Wand Bonanza",
-        state,
+    BuiltInPreset { name, state }
+}
+
+fn named(item: ItemId) -> Requirement {
+    Requirement {
+        item: Some(item),
+        ..Requirement::any(catalog::item(item).kind)
     }
 }
 
-fn staff_21() -> BuiltInPreset {
-    let mut state = AppState::default();
-    for (upgrade, identity_group) in [
-        (UpgradeRequirement::Exact(3), Some(1)),
-        (UpgradeRequirement::Any, Some(1)),
-        (UpgradeRequirement::Any, Some(1)),
-        (UpgradeRequirement::AtLeast(1), None),
-    ] {
-        let key = state.claim_key();
-        state.requirements.push(Row {
-            key,
-            requirement: Requirement {
-                upgrade,
-                identity_group,
-                ..Requirement::any(ItemKind::Wand)
+fn disintegrate() -> BuiltInPreset {
+    let wand = named(ItemId::WandDisintegration);
+    let mut preset = preset(
+        "DISINTEGRATE",
+        [
+            Requirement {
+                upgrade: UpgradeRequirement::AtLeast(3),
+                ..wand
             },
-        });
-    }
-    BuiltInPreset {
-        name: "+21 Staff",
-        state,
-    }
+            wand,
+            wand,
+            Requirement {
+                trinket_transmutations: 1,
+                ..named(ItemId::EyeOfNewt)
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::AtLeast(2),
+                ..named(ItemId::RingEnergy)
+            },
+        ],
+    );
+    preset.state.max_depth = 19;
+    preset
 }
 
-/// The +21 stack anchored one level higher, on the +4 wand v4.0.0's Imp
-/// vault lays out among its prizes.
-fn staff_22() -> BuiltInPreset {
-    let mut state = AppState::default();
-    for (upgrade, identity_group) in [
-        (UpgradeRequirement::Exact(4), Some(1)),
-        (UpgradeRequirement::Any, Some(1)),
-        (UpgradeRequirement::Any, Some(1)),
-        (UpgradeRequirement::AtLeast(1), None),
-    ] {
-        let key = state.claim_key();
-        state.requirements.push(Row {
-            key,
-            requirement: Requirement {
-                upgrade,
-                identity_group,
-                ..Requirement::any(ItemKind::Wand)
+fn guerilla_assassin() -> BuiltInPreset {
+    preset(
+        "Guerilla Assassin",
+        [
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(3),
+                effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blooming)),
+                max_depth: Some(7),
+                ..named(ItemId::AssassinsBlade)
             },
-        });
-    }
-    state.max_depth = VAULT_FLOOR_LIMIT;
-    BuiltInPreset {
-        name: "+22 Staff",
-        state,
-    }
+            Requirement {
+                effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Camouflage)),
+                ..Requirement::any(ItemKind::Armor)
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::AtLeast(2),
+                ..named(ItemId::RingArcana)
+            },
+        ],
+    )
 }
 
-fn ring_of_wealth_21() -> BuiltInPreset {
-    let mut state = AppState::default();
-    for (upgrade, source) in [
-        (UpgradeRequirement::Exact(4), Some(ItemSource::ImpReward)),
-        (UpgradeRequirement::Exact(2), None),
-        (UpgradeRequirement::Any, None),
-    ] {
-        let key = state.claim_key();
-        state.requirements.push(Row {
-            key,
-            requirement: Requirement {
-                item: Some(ItemId::RingWealth),
-                upgrade,
-                source,
-                ..Requirement::any(ItemKind::Ring)
+/// Early gear for a wealth run, and the dark garden floor 17 farms on. It
+/// already names its trinket, so automatic trinket selection is off.
+fn ring_of_wealth() -> BuiltInPreset {
+    let mut preset = preset(
+        "Ring of Wealth",
+        [
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(4),
+                ..named(ItemId::RingWealth)
             },
-        });
-    }
-    BuiltInPreset {
-        name: "+21 Ring of Wealth",
-        state,
-    }
-}
-
-/// A tier-4 weapon at the +5 only the vault reaches, with two more of the
-/// same weapon to pour into it.
-fn tier_4_weapon_26() -> BuiltInPreset {
-    let mut state = AppState::default();
-    for (tier, upgrade) in [
-        (TierRequirement::Exact(4), UpgradeRequirement::Exact(5)),
-        (TierRequirement::Any, UpgradeRequirement::Any),
-        (TierRequirement::Any, UpgradeRequirement::Any),
-    ] {
-        let key = state.claim_key();
-        state.requirements.push(Row {
-            key,
-            requirement: Requirement {
-                tier,
-                upgrade,
-                identity_group: Some(1),
+            Requirement {
+                max_depth: Some(9),
+                ..named(ItemId::DriedRose)
+            },
+            Requirement {
+                tier: TierRequirement::AtMost(4),
+                upgrade: UpgradeRequirement::Exact(3),
+                max_depth: Some(4),
+                ..Requirement::any(ItemKind::Armor)
+            },
+            Requirement {
+                tier: TierRequirement::AtMost(4),
+                upgrade: UpgradeRequirement::Exact(3),
+                max_depth: Some(9),
                 ..Requirement::any(ItemKind::Weapon)
             },
-        });
-    }
-    state.max_depth = VAULT_FLOOR_LIMIT;
-    BuiltInPreset {
-        name: "+26 Tier 4 Weapon",
-        state,
-    }
+            Requirement {
+                trinket_transmutations: 1,
+                ..named(ItemId::DimensionalSundial)
+            },
+        ],
+    );
+    preset.state.auto_apply_trinket = false;
+    preset.state.floor_requirements.push(FloorRequirement {
+        depth: 17,
+        feeling: Some(Feeling::Dark),
+        rooms: Vec::new(),
+        any_rooms: vec![RoomType::SpecialGarden, RoomType::SecretGarden],
+    });
+    preset
+}
+
+fn necromancer() -> BuiltInPreset {
+    let mut preset = preset(
+        "Necromancer",
+        [
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(3),
+                ..named(ItemId::WandCorruption)
+            },
+            Requirement {
+                tier: TierRequirement::Exact(5),
+                upgrade: UpgradeRequirement::Exact(3),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(3),
+                ..named(ItemId::PlateArmor)
+            },
+        ],
+    );
+    preset.state.max_depth = 14;
+    preset.state.wandmaker_quest = Some(WandmakerQuestType::CorpseDust);
+    preset
+}
+
+fn blood_berserker() -> BuiltInPreset {
+    preset(
+        "Blood Berserker",
+        [
+            Requirement {
+                tier: TierRequirement::Exact(5),
+                upgrade: UpgradeRequirement::Exact(3),
+                effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Vampiric)),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(3),
+                effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
+                ..named(ItemId::PlateArmor)
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(4),
+                ..named(ItemId::RingArcana)
+            },
+            named(ItemId::ChaliceOfBlood),
+        ],
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
-    use shpd_seedfinder_core::model::ItemSource;
-    use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
+    use shpd_seedfinder_core::json_query;
 
-    use super::{VAULT_FLOOR_LIMIT, built_in};
+    use super::built_in;
+    use crate::state::is_farming_requirement;
 
-    #[test]
-    fn staff_matches_requested_requirements() {
-        let [staff, _, _, _, _] = built_in();
-        assert_eq!(staff.name, "+21 Staff");
-        assert_eq!(staff.state.requirements.len(), 4);
-        assert!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.kind == ItemKind::Wand)
-        );
-        assert_eq!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.upgrade)
-                .collect::<Vec<_>>(),
-            [
-                UpgradeRequirement::Exact(3),
-                UpgradeRequirement::Any,
-                UpgradeRequirement::Any,
-                UpgradeRequirement::AtLeast(1),
-            ]
-        );
-        assert_eq!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.identity_group)
-                .collect::<Vec<_>>(),
-            [Some(1), Some(1), Some(1), None]
-        );
-    }
-
-    #[test]
-    fn staff_22_asks_for_the_vault_wand() {
-        let [_, staff, _, _, _] = built_in();
-        assert_eq!(staff.name, "+22 Staff");
-        assert_eq!(staff.state.max_depth, VAULT_FLOOR_LIMIT);
-        assert!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.kind == ItemKind::Wand)
-        );
-        assert_eq!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.upgrade)
-                .collect::<Vec<_>>(),
-            [
-                UpgradeRequirement::Exact(4),
-                UpgradeRequirement::Any,
-                UpgradeRequirement::Any,
-                UpgradeRequirement::AtLeast(1),
-            ]
-        );
-        assert_eq!(
-            staff
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.identity_group)
-                .collect::<Vec<_>>(),
-            [Some(1), Some(1), Some(1), None]
-        );
-    }
+    /// Each preset as the shared query-document format writes it, so the
+    /// literals above are checked against the queries they were taken from.
+    const DOCUMENTS: [(&str, &str); 5] = [
+        (
+            "DISINTEGRATE",
+            r#"{"auto_apply_trinket":true,"max_depth":19,"requirements":[
+                {"item":"wand_disintegration","kind":"wand","upgrade":{"at_least":3}},
+                {"item":"wand_disintegration","kind":"wand"},
+                {"item":"wand_disintegration","kind":"wand"},
+                {"item":"eye_of_newt","kind":"trinket","trinket_transmutations":1},
+                {"item":"ring_energy","kind":"ring","upgrade":{"at_least":2}}]}"#,
+        ),
+        (
+            "Guerilla Assassin",
+            r#"{"auto_apply_trinket":true,"requirements":[
+                {"effect":"Blooming","item":"assassins_blade","kind":"weapon","max_depth":7,"upgrade":3},
+                {"effect":"Camouflage","kind":"armor"},
+                {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}"#,
+        ),
+        (
+            "Ring of Wealth",
+            r#"{
+                "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],
+                "requirements":[
+                {"item":"ring_wealth","kind":"ring","upgrade":4},
+                {"item":"dried_rose","kind":"artifact","max_depth":9},
+                {"kind":"armor","max_depth":4,"tier":{"at_most":4},"upgrade":3},
+                {"kind":"weapon","max_depth":9,"tier":{"at_most":4},"upgrade":3},
+                {"item":"dimensional_sundial","kind":"trinket","trinket_transmutations":1}]}"#,
+        ),
+        (
+            "Necromancer",
+            r#"{"auto_apply_trinket":true,"max_depth":14,"wandmaker_quest":"corpse_dust","requirements":[
+                {"item":"wand_corruption","kind":"wand","upgrade":3},
+                {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+                {"item":"plate_armor","kind":"armor","upgrade":3}]}"#,
+        ),
+        (
+            "Blood Berserker",
+            r#"{"auto_apply_trinket":true,"requirements":[
+                {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},
+                {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
+                {"item":"ring_arcana","kind":"ring","upgrade":4},
+                {"item":"chalice_of_blood","kind":"artifact"}]}"#,
+        ),
+    ];
 
     #[test]
-    fn tier_4_weapon_stacks_three_copies_on_a_plus_five() {
-        let [_, _, _, _, weapon] = built_in();
-        assert_eq!(weapon.name, "+26 Tier 4 Weapon");
-        assert_eq!(weapon.state.max_depth, VAULT_FLOOR_LIMIT);
-        assert_eq!(weapon.state.requirements.len(), 3);
-        assert!(
-            weapon
-                .state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.kind == ItemKind::Weapon
-                    && row.requirement.identity_group == Some(1))
-        );
+    fn every_preset_is_the_query_it_was_taken_from() {
+        let presets = built_in();
         assert_eq!(
-            weapon
-                .state
-                .requirements
-                .iter()
-                .map(|row| (row.requirement.tier, row.requirement.upgrade))
-                .collect::<Vec<_>>(),
-            [
-                (TierRequirement::Exact(4), UpgradeRequirement::Exact(5)),
-                (TierRequirement::Any, UpgradeRequirement::Any),
-                (TierRequirement::Any, UpgradeRequirement::Any),
-            ]
+            presets.each_ref().map(|preset| preset.name),
+            DOCUMENTS.map(|(name, _)| name)
         );
+        for (preset, (name, document)) in presets.iter().zip(DOCUMENTS) {
+            assert_eq!(
+                preset.state.unvalidated_query(),
+                json_query::decode_unvalidated(document).expect(name),
+                "{name}"
+            );
+        }
     }
 
     /// A preset loads as the board writes it: the editor finds nothing to
@@ -288,8 +276,6 @@ mod tests {
         }
     }
 
-    /// The vault presets sit at the engine's upgrade ceilings, so a preset is
-    /// only shipped once the engine accepts the query it builds.
     #[test]
     fn every_preset_builds_a_runnable_query() {
         for preset in built_in() {
@@ -302,82 +288,15 @@ mod tests {
         }
     }
 
+    /// The wealth preset's floor is the one the farming toggle writes, so
+    /// the toggle shows it selected.
     #[test]
-    fn wand_bonanza_matches_requested_requirements() {
-        let [_, _, preset, _, _] = built_in();
-        assert_eq!(preset.name, "Wand Bonanza");
-        assert!(
-            preset
-                .state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.kind == ItemKind::Wand && row.requirement.item.is_none())
-        );
-        assert_eq!(
-            preset
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.upgrade)
-                .collect::<Vec<_>>(),
-            [
-                UpgradeRequirement::Exact(3),
-                UpgradeRequirement::Exact(2),
-                UpgradeRequirement::Exact(2),
-                UpgradeRequirement::Exact(2),
-            ]
-        );
-        assert_eq!(
-            preset
-                .state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.max_depth)
-                .collect::<Vec<_>>(),
-            [None, Some(4), Some(4), None]
-        );
-        assert!(
-            preset
-                .state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.identity_group.is_none())
-        );
-    }
-
-    #[test]
-    fn ring_of_wealth_matches_requested_requirements() {
-        let [_, _, _, ring, _] = built_in();
-        assert_eq!(ring.name, "+21 Ring of Wealth");
-        assert!(
-            ring.state
-                .requirements
-                .iter()
-                .all(|row| row.requirement.item == Some(ItemId::RingWealth))
-        );
-        assert_eq!(
-            ring.state.requirements[0].requirement.upgrade,
-            UpgradeRequirement::Exact(4)
-        );
-        assert_eq!(
-            ring.state.requirements[0].requirement.source,
-            Some(ItemSource::ImpReward)
-        );
-        assert_eq!(
-            ring.state
-                .requirements
-                .iter()
-                .map(|row| row.requirement.max_depth)
-                .collect::<Vec<_>>(),
-            [None, None, None]
-        );
-        assert_eq!(
-            ring.state.requirements[1].requirement.upgrade,
-            UpgradeRequirement::Exact(2)
-        );
-        assert_eq!(
-            ring.state.requirements[2].requirement.upgrade,
-            UpgradeRequirement::Any
-        );
+    fn ring_of_wealth_farms_the_floor_the_toggle_selects() {
+        let [_, _, wealth, _, _] = built_in();
+        assert_eq!(wealth.name, "Ring of Wealth");
+        assert!(matches!(
+            wealth.state.floor_requirements.as_slice(),
+            [floor] if floor.depth == 17 && is_farming_requirement(floor)
+        ));
     }
 }

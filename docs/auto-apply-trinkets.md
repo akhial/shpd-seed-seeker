@@ -2,7 +2,7 @@
 
 The **AutoTrinket** option (**Search settings → Quests and items** on Android;
 **Search scope** on web, Linux, macOS and Windows) is on by default for new queries
-and built-in presets. Saved queries, shared links and imports retain their
+and every built-in preset but Ring of Wealth. Saved queries, shared links and imports retain their
 recorded setting, including the legacy off default when the flag is absent.
 It asks the engine to select a helpful trinket from the seed's four initial catalyst offers
 before generating any floors. Each seed gets one initial search. Only a match
