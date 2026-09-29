@@ -452,6 +452,19 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-lifted-never-normalized",
+        "A list never normalized, drawn as written: Mace +1 alone beside a hand-written Mace ×2 (an anchor and a bare copy under a stack label). The edits run on the canonical rows, where that stack is two plain repeats of the Mace +1, so Mace +1 lifts a bare Mace although its copies are empty, and Mace ×2 moves itself (lifted null).",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 3, "kind": "melee_weapon", "item": "mace", "upgrade": 1},
+                {"key": 1, "kind": "melee_weapon", "item": "mace", "identity_group": 1},
+                {"key": 2, "kind": "weapon", "identity_group": 1},
+                {"key": 9, "kind": "wand", "item": "wand_frost"},
+            ],
+        }),
+    );
+    fixtures.add(
         "board-remove-one-as-drawn",
         "The bin on that lone Mace +1: a removal takes only what the board draws under the chip, so the hand-written Mace ×2 stays (as plain repeats once normalized) with Wand of Frost.",
         Board,

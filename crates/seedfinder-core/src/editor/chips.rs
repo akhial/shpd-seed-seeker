@@ -261,8 +261,12 @@ pub struct ChipView {
     /// a bare copy of it — its item, or its kind for a wildcard stack, with
     /// that copy's floor limit — which [`super::Edit::Join`] and
     /// [`super::Edit::Detach`] move while the chip keeps its constraints.
-    /// `None` when the chip has no copies: the chip itself moves. The
-    /// moving chip draws [`ChipView::moving_face`].
+    /// `None` when the chip has no copies: the chip itself moves. It is
+    /// decided on the canonical rows the edits run on, so on a list never
+    /// normalized it may be `Some` with `copies` empty (a stack normalizing
+    /// folds into the chip, a row it rewrites) and `None` with copies (a
+    /// stack that folds into another chip). The moving chip draws
+    /// [`ChipView::moving_face`].
     pub lifted: Option<ChipFace>,
     /// The keys of the hidden copies behind the chip's badge. Members whose
     /// stacks are alike share theirs.

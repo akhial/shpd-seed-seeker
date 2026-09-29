@@ -7,7 +7,9 @@
 //! weapon" titles, "effect: A/B" sets, "any glyph" on armor.
 
 use super::super::testing::{Rng, mixed_rows, named, random_edit, random_rows, row, with};
-use super::super::{Edit, STACK_MAX, apply, board_items, join_candidates, problems, stack_view};
+use super::super::{
+    Edit, EditResult, STACK_MAX, apply, board_items, join_candidates, problems, stack_view,
+};
 use super::*;
 use crate::catalog::{ArmorEffect, WeaponCategory, WeaponEffect};
 use crate::model::ItemSource;
@@ -1106,6 +1108,88 @@ fn a_drag_lifts_a_bare_copy_and_leaves_the_chip_its_constraints() {
     );
 }
 
+/// A list never normalized is drawn as written, but a drag moves what the
+/// canonical rows the edits run on carry, and the lifted face says so.
+#[test]
+fn a_list_never_normalized_lifts_what_its_canonical_rows_carry() {
+    // Mace +1 drawn alone beside a hand-written Mace ×2, which normalizing
+    // folds into it as plain repeats: a drag of the +1 chip carries a bare
+    // Mace, and the chip stays behind.
+    let rows = [
+        with(named(3, ItemId::Mace), |r| {
+            r.upgrade = UpgradeRequirement::Exact(1);
+        }),
+        with(named(1, ItemId::Mace), |r| r.identity_group = Some(1)),
+        with(row(2, ItemKind::Weapon), |r| r.identity_group = Some(1)),
+        named(9, ItemId::WandFrost),
+    ];
+    let board = view(&rows);
+    let plus_one = chip(&board, 3);
+    assert!(plus_one.copies.is_empty());
+    assert_eq!(
+        lifted_of(&rows, 3),
+        Some(lifted_face("Mace", &[], "Mace, any upgrade"))
+    );
+    let result = apply(
+        &rows,
+        None,
+        &[Edit::Join {
+            source: 3,
+            target: 9,
+        }],
+    );
+    let after = view(&result.rows);
+    let landed = chip(&after, result.focus.expect("the joined item"));
+    assert_eq!(Some(landed.face()), plus_one.lifted);
+    assert_eq!(texts(&chip(&after, 3).tags), ["+1"]);
+    // The hand-written stack folds away once normalized and moves itself,
+    // as drawn: no lifted face, and the join lands the chip.
+    assert_eq!(chip(&board, 1).copies, [2]);
+    assert_eq!(lifted_of(&rows, 1), None);
+    let result = apply(
+        &rows,
+        None,
+        &[Edit::Join {
+            source: 1,
+            target: 9,
+        }],
+    );
+    assert_eq!(result.focus, Some(1));
+    assert_eq!(chip(&view(&result.rows), 1).face(), chip(&board, 1).face());
+
+    // A cluster of one tied to Frost's stack draws "Any wand", but the
+    // canonical rows make it a plain Frost repeat, which is what moves.
+    let rows = [
+        with(named(1, ItemId::WandFrost), |r| r.identity_group = Some(1)),
+        with(row(2, ItemKind::Wand), |r| {
+            r.identity_group = Some(1);
+            r.alternative_group = Some(5);
+        }),
+        named(9, ItemId::RingMight),
+    ];
+    let board = view(&rows);
+    assert_eq!(chip(&board, 2).name, "Any wand");
+    assert!(chip(&board, 2).copies.is_empty());
+    assert_eq!(
+        lifted_of(&rows, 2),
+        Some(lifted_face(
+            "Wand of Frost",
+            &[],
+            "Wand of Frost, any upgrade"
+        ))
+    );
+    let result = apply(
+        &rows,
+        None,
+        &[Edit::Join {
+            source: 2,
+            target: 9,
+        }],
+    );
+    let landed = chip(&view(&result.rows), result.focus.expect("the item")).face();
+    assert_eq!(Some(landed), chip(&board, 2).lifted);
+}
+
 #[test]
 fn a_hidden_copys_problem_shows_on_its_entry_and_its_anchor() {
     // A hand-written repeat past the last floor folds into the spear's stack.
@@ -1814,14 +1898,20 @@ fn shown(board: &BoardView, key: u64) -> Option<&ChipView> {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One drag, every way it can land.
 fn a_drag_carries_the_item_its_lifted_face_shows() {
     // Generated lists, valid rows or not, as given or after a random edit,
-    // their cluster members often stacked (1,024 cases): a chip with copies
-    // lifts a face, one without none; the face is the item's that lands —
-    // the new member after every join its chip offers, the lone chip after
-    // a detach where it folds into no other chip.
+    // their cluster members often stacked (1,024 cases). On a canonical
+    // list a chip with copies lifts a face and one without none; on one
+    // never normalized the face follows the canonical rows the edits run
+    // on. A lifted face is the item's that lands — the new member after
+    // every join its chip offers, the lone chip after a detach where it
+    // folds into no other chip — and a chip without one moves itself: every
+    // join lands the chip, and a detach lands it or folds it into an alike
+    // chip.
     let mut rng = Rng::new(0x0011_f7ed_face);
-    let (mut joins, mut detaches) = (0, 0);
+    let (mut joins, mut whole, mut rewritten) = (0, 0, 0);
+    let mut detaches = 0;
     for case in 0..1024 {
         let mut rows = mixed_rows(&mut rng);
         if case % 2 == 1 {
@@ -1841,56 +1931,60 @@ fn a_drag_carries_the_item_its_lifted_face_shows() {
             }
         }
         let context = format!("case {case}: {rows:?}");
+        let canonical = apply(&rows, None, &[Edit::Normalize]).rows == rows;
         let board = view(&rows);
         let before = visible(&board);
         for chip in board.items.iter().flat_map(|item| &item.chips) {
-            assert_eq!(chip.lifted.is_none(), chip.copies.is_empty(), "{context}");
+            if canonical {
+                assert_eq!(chip.lifted.is_none(), chip.copies.is_empty(), "{context}");
+            } else if chip.lifted.is_some() && chip.copies.is_empty() {
+                rewritten += 1;
+            }
             assert_eq!(
                 chip.moving_face(),
                 chip.lifted.clone().unwrap_or_else(|| chip.face()),
                 "{context}"
             );
-            let Some(lifted) = &chip.lifted else {
-                continue;
-            };
             let context = format!("{}: {context}", chip.key);
-            let landed = |edit: Edit| {
-                let result = apply(&rows, None, &[edit]);
+            let carried = chip.moving_face();
+            let landed = |result: &EditResult| {
                 let focus = result.focus.filter(|_| result.refused.is_none())?;
-                let after = view(&result.rows);
-                after
-                    .items
-                    .iter()
-                    .flat_map(|item| &item.chips)
-                    .find(|chip| chip.key == focus)
-                    .map(ChipView::face)
+                shown(&view(&result.rows), focus).cloned()
             };
             for &target in &chip.join {
-                let face = landed(Edit::Join {
+                let edit = Edit::Join {
                     source: chip.key,
                     target,
-                })
-                .expect("the joined item shows");
+                };
+                let chip_landed =
+                    landed(&apply(&rows, None, &[edit])).expect("the joined item shows");
                 joins += 1;
-                assert_eq!(&face, lifted, "onto {target}: {context}");
-            }
-            if chip.can_detach {
-                let result = apply(&rows, None, &[Edit::Detach { key: chip.key }]);
-                if result.refused.is_some() || result.focus.is_some_and(|key| before.contains(&key))
-                {
-                    continue;
+                assert_eq!(chip_landed.face(), carried, "onto {target}: {context}");
+                if chip.lifted.is_none() {
+                    whole += 1;
+                    assert_eq!(chip_landed.key, chip.key, "onto {target}: {context}");
                 }
+            }
+            if !chip.can_detach {
+                continue;
+            }
+            let result = apply(&rows, None, &[Edit::Detach { key: chip.key }]);
+            if result.refused.is_some() {
+                continue;
+            }
+            let chip_landed = landed(&result).expect("the item shows");
+            if chip.lifted.is_none() && chip_landed.key != chip.key {
+                assert!(chip_landed.copies.contains(&chip.key), "folded: {context}");
+            } else if chip.lifted.is_none() || !before.contains(&chip_landed.key) {
                 detaches += 1;
-                let face = landed(Edit::Detach { key: chip.key }).expect("the item shows");
-                assert_eq!(&face, lifted, "detached: {context}");
+                assert_eq!(chip_landed.face(), carried, "detached: {context}");
             }
         }
     }
-    assert!(joins > 1000, "{joins} joins compared");
-    assert!(
-        detaches > 100,
-        "{joins} joins, {detaches} detaches compared"
-    );
+    assert!(joins > 10_000, "{joins} joins compared");
+    assert!(whole > 5000, "{whole} whole chips joined");
+    assert!(detaches > 150, "{detaches} detaches compared");
+    assert!(rewritten > 100, "{rewritten} rewritten chips lifted");
 }
 
 #[test]

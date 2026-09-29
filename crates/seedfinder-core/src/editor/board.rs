@@ -1607,30 +1607,32 @@ const fn unlabelled_chip(requirement: Requirement) -> Requirement {
 
 /// The requirement of the item a drag of the visible row `key` carries, as
 /// [`Edit::Join`] and [`Edit::Detach`] move it ([`lift`]): a bare copy of
-/// the chip, or `None` when the chip has no copies and moves itself.
+/// the chip, or `None` when the chip moves itself, just as it is drawn.
 ///
-/// The edits read the list in its canonical encoding, and so does this. A
-/// chip only a list never normalized gives copies may have none there, or
-/// fold into another chip's stack; the row itself then moves, which this
-/// names too.
+/// The edits read the list in its canonical encoding, and so does this, so
+/// on a list never normalized the answer need not follow the stack drawn.
+/// A chip drawn without copies may have some there, folded in from another
+/// stack, and carries a bare copy; one drawn with copies may have none
+/// there, or fold into another chip's stack, and moves itself. A row the
+/// canonical encoding rewrites (a bare copy that becomes a plain repeat) or
+/// a chip counting levels alone (a combined level of one) also moves as the
+/// canonical row, which this names since it is not what the chip draws.
 pub(crate) fn lifted(rows: &[Row], key: u64) -> Option<Requirement> {
     let written = Board::new(rows);
-    let index = index_of(rows, key)?;
-    if written.stack(index)?.copies.is_empty() {
-        return None;
-    }
+    let written_index = index_of(rows, key)?;
+    let counting = written.stack(written_index)?.total.is_some();
     let next = canonical(rows);
     let board = Board::new(&next);
-    let Some((index, item)) = board.member(&next, key) else {
-        return Some(unlabelled_chip(rows[index].requirement));
-    };
-    let chip = &next[index].requirement;
-    Some(
-        match item.stack(index).and_then(|stack| stack.copies.last()) {
-            Some(&last) => carried_copy(chip, &next[last].requirement),
-            None => unlabelled_chip(*chip),
-        },
-    )
+    if let Some((index, item)) = board.member(&next, key)
+        && let Some(&last) = item.stack(index).and_then(|stack| stack.copies.last())
+    {
+        return Some(carried_copy(
+            &next[index].requirement,
+            &next[last].requirement,
+        ));
+    }
+    let moved = unlabelled_chip(next[index_of(&next, key)?].requirement);
+    (counting || moved != unlabelled_chip(rows[written_index].requirement)).then_some(moved)
 }
 
 /// Takes one item off the chip at `index` of `item`, as [`Edit::RemoveOne`]

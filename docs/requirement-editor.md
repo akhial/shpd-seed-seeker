@@ -336,6 +336,8 @@ board showed them to be (`Wand of Disintegration` copies stay
 Disintegrations, not `Any wand`), and two alike member stacks under two
 labels act as the one stack the board shows. The drop policy and the join
 candidates still answer for the list as written, and agree with the edit.
+A chip's `lifted` face is decided on those canonical rows too, so it names
+the item a drag really carries even where the chip as drawn differs.
 
 A removal never deletes a row the board did not show under the chip:
 `remove` takes the chip with its stack as drawn (or its whole entry), and
@@ -399,7 +401,7 @@ normalized as any edit's rows are, which may merge alike stacks.
 | `problem` | The row's own first problem, else the first problem between rows blaming it; a chip also speaks for its own hidden copies (every member sharing a stack for the copies they share). |
 | `badges` | The badges the chip shows at rest: `count` when it asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. A cluster member's badges are its own and are drawn on its chip, inside the cluster's outline. |
 | `remaining_badges` | The badges the chip keeps while one item is lifted away — what a drag's origin shows: `{"count", "total"}` like `badges`, the chip's own stack one item fewer, with the combined level a `remove_one` of the chip leaves, so it agrees with every drop (each moves that one item, a bare copy, leaving the chip its requirements). One copy fewer: Ring of Energy +4 ×3 leaves `×2`, a ×2 chip `{"count": null, "total": null}`; a combined level is capped at what the rest can reach, and dropped when one ring is left; a member leaves its own stack one fewer (Frost of `{Frost ×2 \| Disintegration}` leaves both `null`), and one sharing its stack with alike members leaves what `remove_one` leaves it (Frost of `{Frost ×3 \| Disintegration ×3}` leaves `×2`); the count is the chip's own even where a `remove_one` would fold what is left into another chip, which only a list never normalized allows (a Mace stacked with a bare copy, beside a lone Mace, leaves both `null`: a join onto the lone Mace leaves that one Mace apart); a `remove_one` refused for want of a stack label leaves `badges`. `null` when the chip has no copies (`copies` is empty): the whole chip leaves, as Disintegration does. |
-| `lifted` | The FACE of the item a drag of the chip carries: when the chip has copies, a bare copy of it — the chip's item (`Ring of Energy` for Ring of Energy +4 ×3), or its kind for a wildcard stack (`Any wand` for Any wand +3 ×2), with the floor limit of the copy it is (`Mace` `F≤9`) and nothing else, so its `details` read `any upgrade`. It is the face the item has once it lands: the new member after a join, the lone chip after a detach. `null` when the chip has no copies (`copies` is empty): the chip itself moves, and draws its own face. |
+| `lifted` | The FACE of the item a drag of the chip carries: when the chip has copies, a bare copy of it — the chip's item (`Ring of Energy` for Ring of Energy +4 ×3), or its kind for a wildcard stack (`Any wand` for Any wand +3 ×2), with the floor limit of the copy it is (`Mace` `F≤9`) and nothing else, so its `details` read `any upgrade`. It is the face the item has once it lands: the new member after a join, the lone chip after a detach. `null` when the chip has no copies: the chip itself moves — every join lands it, and a detach lands it or folds it into an alike chip — and draws its own face. It is decided on the canonical rows the edits run on, so on a list never normalized it may be non-null while `copies` is empty (a lone Mace +1 beside a hand-written `Mace ×2` that normalizing folds into it lifts `Mace`; a hand-written cluster of one drawn `Any wand` whose stack label ties it to Wand of Frost lifts `Wand of Frost`), and `null` while `copies` is not (that `Mace ×2` moves itself). |
 | `copies` | The keys of the hidden copies behind the chip's badge, in list order; members whose stacks are alike share theirs. |
 | `stack` | What the chip's count, combined-level and copy-floor steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `count_max` (the count stepper's upper bound: `max` while the chip can grow, else its `count`, which it may only shed copies from; never above `max`), `total`, `can_count_levels` (a lone named ring stack only), `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
 | `in_cluster`, `can_detach` | A cluster member, which "On its own" (`detach`) applies to. |
@@ -660,7 +662,7 @@ project:
 | --- | --- |
 | `Row { key, requirement }`, `MAX_KEY`, `STACK_MAX` | Rows and their bounds. |
 | `apply(rows, next_key, edits) -> EditResult`, `Edit`, `EditResult`, `Refusal` | Board edits with key repair, no-op and refusal semantics as above. |
-| `board_view(rows, resin) -> BoardView` and its views (`ItemView`, `ChipView`, `ChipFace`, `StackView`, `Badges`, `Tag`, `EffectBadge`, `Relation`, `Counts`, `ResinChip`) | Everything a board draws. `ChipView::lifted` is the `ChipFace` a drag of the chip carries (`None` without copies); `ChipView::face()` is the chip's own face, and `ChipView::moving_face()` the one a moving chip draws — `lifted`, else its own. `ChipFace::of(requirement, counting_levels)` builds a face. |
+| `board_view(rows, resin) -> BoardView` and its views (`ItemView`, `ChipView`, `ChipFace`, `StackView`, `Badges`, `Tag`, `EffectBadge`, `Relation`, `Counts`, `ResinChip`) | Everything a board draws. `ChipView::lifted` is the `ChipFace` a drag of the chip carries (`None` when the chip moves itself, as drawn); `ChipView::face()` is the chip's own face, and `ChipView::moving_face()` the one a moving chip draws — `lifted`, else its own. `ChipFace::of(requirement, counting_levels)` builds a face. |
 | `board_items`, `BoardItem`, `ChipStack`, `ItemKey`, `join_candidates`, `drop_action`, `DropTarget`, `DropAction` | The fold itself — every entry's members, each with its `ChipStack` (its copies and combined level) — and the drop policy (`DropAction::RemoveOne` for the remove target). |
 | `problems(rows)`, `row_problems(requirement)`, `Problem`, `ProblemScope` | The problem list. |
 | `open`, `change`, `form`, `save`, `Draft`, `Change`, `Form`, `SaveResult`, `ResinOutcome`, `ResinState`, `ResinAmount` | The sheet. |
@@ -772,9 +774,10 @@ its round trip — the reported list and its round trip, onto a stacked
 chip, a stacked cluster and a combined level, a combined level losing a
 ring, a member moving one item, across categories, a hand-written stack,
 refused for want of a label), detaches (a member alone, a bare copy of a
-member's stack, with and without constraints) and removals (one member, a
-whole stack, one item of a member's stack and of a lone combined level,
-the bin on a lone chip of a list never normalized),
+member's stack, with and without constraints), the lifted faces of a list
+never normalized, removals (one member, a whole stack, one item of a
+member's stack and of a lone combined level, the bin on a lone chip of a
+list never normalized),
 copy floors, combined levels (their copies' floors kept both ways and
 given to new copies), a member stepped down to ×1, saves (new and
 unchanged), problems, key repair, label compaction and labels moved into
