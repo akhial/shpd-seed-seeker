@@ -14,7 +14,7 @@ public sealed class FloorFeelingTests
         w.U8(0); w.U16(0);
         if (version != "SSC3")
         {
-            var deck = ItemCatalog.For(ItemKind.Trinket).ToList();
+            var deck = ItemCatalog.All.Where(item => item.Kind == ItemKind.Trinket).ToList();
             w.U8(deck.Count);
             foreach (var item in deck) w.Text(item.Id);
         }

@@ -8,7 +8,7 @@ public sealed class ArtifactTests
     [Fact]
     public void ScoutArtifactsShowRoundedGameLevels()
     {
-        foreach (var item in ItemCatalog.For(ItemKind.Artifact))
+        foreach (var item in ItemCatalog.All.Where(item => item.Kind == ItemKind.Artifact))
         {
             var expected = item.Id switch { "sandals_of_nature" => 7,
                 "ethereal_chains" or "timekeepers_hourglass" => 6, _ => 5 };
@@ -29,39 +29,74 @@ public sealed class ArtifactTests
     [Fact]
     public void ArtifactCatalogAndEditorBoundsMatchNamedArtifacts()
     {
-        var items = ItemCatalog.For(ItemKind.Artifact).ToList();
+        var items = ItemCatalog.All.Where(item => item.Kind == ItemKind.Artifact).ToList();
         Assert.Equal(11, items.Count);
         Assert.Equal(11, items.Select(item => item.Id).Distinct().Count());
         Assert.All(items, item => Assert.Null(item.Tier));
-        Assert.True(ItemKind.Artifact.RequiresNamedItem());
-        Assert.Equal(5, Sandals().UpgradeCeiling);
         Assert.Empty(ItemCatalog.Modifiers(ItemKind.Artifact));
-        Assert.Contains("+5", Sandals().Description);
-        Assert.Contains("by floor 19", Sandals().Description);
+        var query = new QuerySettings { Requirements = [Sandals()] };
+        var chip = new BoardEditor().View(query).Entries.Single().Chips.Single();
+        Assert.Equal(["exactly +5", "uncursed", "Imp reward", "floors 1–19"], chip.Details);
+        // The sheet always names one of them, never stacks one, and allows up to ten transmutations.
+        var sheet = RequirementSheet.Open(query, chip.Key).Form;
+        Assert.Equal(items.Select(item => item.Id).Order(), sheet.Item.Options.Select(option => option.Value!).Order());
+        Assert.Equal("sandals_of_nature", sheet.Item.Value);
+        Assert.False(sheet.Stack.Visible);
+        Assert.True(sheet.Transmutations.Visible);
+        Assert.Equal(10, sheet.Transmutations.Max);
+    }
+
+    [Fact]
+    public void AnArtifactsUpgradeSurvivesItsSheet()
+    {
+        // No control shows an artifact's upgrade; the sheet keeps it all the same.
+        var query = new QuerySettings { Requirements = [Sandals()] };
+        new BoardEditor().Load(query);
+        var key = query.Requirements[0].Key;
+        var untouched = RequirementSheet.Open(query, key).Save(query)!;
+        Assert.Null(untouched.Rows);
+        Assert.False(untouched.ApplyTo(query));
+
+        var sheet = RequirementSheet.Open(query, key);
+        Assert.False(sheet.Form.Upgrade.Visible);
+        sheet.Change(SheetChange.SetTransmutationsEnabled(true));
+        var saved = sheet.Save(query)!;
+        Assert.True(saved.ApplyTo(query));
+        var sandals = Assert.Single(query.Requirements);
+        Assert.Equal((UpgradeMatch.Exactly, 5, 1), (sandals.UpgradeMatch, sandals.Upgrade, sandals.ArtifactTransmutations));
+        Assert.Equal((ScoutItemSource.ImpReward, (int?)19, true), (sandals.Source, sandals.MaximumDepth, sandals.RequireUncursed));
     }
 
     [Fact]
     public void ArtifactsCannotBeWildcardsOrStacks()
     {
+        var editor = new BoardEditor();
         var unnamed = new QuerySettings { Requirements = [new() { Kind = ItemKind.Artifact }] };
-        Assert.Equal("Choose a named artifact.", QueryRelationships.Validate(unnamed));
+        Assert.Equal("Select an artifact.", editor.Problem(unnamed));
         Assert.Null(NativeEngine.TryEncodeShareLink(ResultsExport.EncodeQueryDocument(unnamed)));
         var query = new QuerySettings { Requirements = [Sandals()] };
-        var item = Assert.Single(QueryRelationships.BoardItems(query.Requirements));
-        Assert.False(QueryRelationships.CanStack(query.Requirements, item));
-        Assert.Single(QueryRelationships.SetStackCount(query.Requirements, item, 3));
+        editor.Load(query);
+        var item = Assert.Single(editor.View(query).Entries);
+        Assert.False(item.Chips[0].Stack.CanGrow);
+        Assert.False(item.Chips[0].Stack.CanChangeCount);
+        Assert.False(editor.Edit(query, BoardEdit.SetCount(item.Members[0], 3)).Changed);
+        // The same artifact twice is two finds, never a stack of copies.
         var plain = new ItemRequirement { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose") };
-        var repeated = new[] { plain, plain.Clone(), Sandals() };
-        Assert.Equal(3, QueryRelationships.BoardItems(repeated).Count);
-        var joined = QueryRelationships.JoinAlternatives(repeated, 0, 2);
-        Assert.All(joined, requirement => Assert.Null(requirement.IdentityGroup));
+        var repeated = new QuerySettings { Requirements = [plain, plain.Clone(), Sandals()] };
+        editor.Load(repeated);
+        Assert.Equal(3, editor.View(repeated).Entries.Count);
+        var joined = editor.Edit(repeated, BoardEdit.Join(repeated.Requirements[0].Key, repeated.Requirements[2].Key));
+        Assert.All(joined.Rows!, requirement => Assert.Null(requirement.IdentityGroup));
     }
 
     [Fact]
     public void ArtifactConstraintsAndAlternativesSurviveDocumentsLinksAndSettings()
     {
         var alternative = new ItemRequirement { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose"), MaximumDepth = 9 };
-        var query = new QuerySettings { Requirements = new(QueryRelationships.JoinAlternatives([Sandals(), alternative], 1, 0)) };
+        var query = new QuerySettings { Requirements = [Sandals(), alternative] };
+        var editor = new BoardEditor();
+        editor.Load(query);
+        query.Requirements = new(editor.Edit(query, BoardEdit.Join(query.Requirements[1].Key, query.Requirements[0].Key)).Rows!);
         var document = ResultsExport.EncodeQueryDocument(query);
         Assert.Contains("\"kind\":\"artifact\"", document);
         var link = NativeEngine.TryEncodeShareLink(document);

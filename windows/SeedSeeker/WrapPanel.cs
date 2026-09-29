@@ -26,6 +26,8 @@ public sealed class WrapPanel : Panel
         {
             child.Measure(new Size(availableSize.Width, double.PositiveInfinity));
             var desired = child.DesiredSize;
+            // A collapsed or empty child takes no room, and no gap either.
+            if (desired.Width == 0 && desired.Height == 0) continue;
             // A row always keeps its first child, however wide it is.
             if (line.Width > 0 && line.Width + Spacing + desired.Width > availableSize.Width)
             {
@@ -45,6 +47,7 @@ public sealed class WrapPanel : Panel
         foreach (var child in Children)
         {
             var desired = child.DesiredSize;
+            if (desired.Width == 0 && desired.Height == 0) { child.Arrange(new Rect(x, y, 0, 0)); continue; }
             if (x > 0 && x + desired.Width > finalSize.Width)
             {
                 x = 0;

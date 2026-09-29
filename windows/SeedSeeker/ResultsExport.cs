@@ -130,7 +130,41 @@ public static class ResultsExport
         return output;
     }
 
-    private static JsonObject EncodeRequirement(ItemRequirement requirement)
+    /// <summary>
+    /// One row of the shared requirement editor (docs/requirement-editor.md):
+    /// the requirement exactly as the document writes it, plus the row's
+    /// <c>key</c> and the <c>alternative_group</c> a document writes as an
+    /// <c>any_of</c> entry instead. A key the list has not been given yet (0)
+    /// is the editor's to repair.
+    /// </summary>
+    internal static JsonObject EncodeRow(ItemRequirement requirement)
+    {
+        var row = EncodeRequirement(requirement);
+        row["key"] = Math.Max(0, requirement.Key);
+        if (requirement.AlternativeGroup is int group) row["alternative_group"] = group;
+        return row;
+    }
+
+    /// <summary>A row the shared requirement editor answered with; see <see cref="EncodeRow"/>.</summary>
+    /// <exception cref="ResultsExportException">When the row names catalog content this build does not know.</exception>
+    internal static ItemRequirement DecodeRow(JsonObject row)
+    {
+        var requirement = DecodeRequirement(row, IntField(row, "alternative_group"));
+        requirement.Key = row["key"] is JsonValue key && key.TryGetValue(out long value) ? value : 0;
+        return requirement;
+    }
+
+    /// <summary>The kind a document or the editor names, or null for a name this build does not know.</summary>
+    internal static ItemKind? KindNamed(string? name) => Array.IndexOf(KindNames, name) is var index and >= 0 ? (ItemKind)index : null;
+
+    /// <summary>The document's name for <paramref name="source"/>, or null for a value this build does not know.</summary>
+    internal static string? SourceName(ScoutItemSource source) => (int)source is var index and >= 0 && index < SourceNames.Length ? SourceNames[index] : null;
+
+    /// <summary>The source a document or the editor names, or null for any source or a name this build does not know.</summary>
+    internal static ScoutItemSource? SourceNamed(string? name) => Array.IndexOf(SourceNames, name) is var index and >= 0 ? (ScoutItemSource)index : null;
+
+    /// <summary>The requirement object a document writes, without the editor's row fields.</summary>
+    internal static JsonObject EncodeRequirement(ItemRequirement requirement)
     {
         var output = new JsonObject { ["kind"] = KindNames[(int)requirement.Kind] };
         if (requirement.Item is not null) output["item"] = requirement.Item.Id;

@@ -16,7 +16,11 @@ On first launch the app registers the `seedseeker://` link scheme for the curren
 
 ## Item artwork
 
-Scouted items and requirements render the real Shattered Pixel Dungeon sprites, pulsing with the game's enchantment and curse glow colours. The atlas geometry and the glow table mirror `web/src/shared/sprites/sprites.ts` and `web/src/shared/sprites/glow.ts`; the Fluent palette itself is unchanged, and the only new colours are the per-enchantment glows, which are item data from the game rather than app chrome.
+Scouted items and requirements render the real Shattered Pixel Dungeon sprites, pulsing with the game's enchantment and curse glow colours. The atlas geometry and the glow table mirror `web/src/shared/sprites/sprites.ts` and `web/src/shared/sprites/glow.ts`.
+
+## Colours
+
+The app keeps Fluent's controls and materials but takes its colours from the web app. `App.xaml` sets the accent to the web's green and defines the Shattered palette the web uses for tags and highlights: the game's yellow for qualifiers, counts and either/or capsules, its upgrade green for every "+N", a softer green for matches and applied trinkets, red for curses and Cancel Search, and violet for secrets and Arcane Resin. The dark theme uses the web's values; the light theme darkens each ink so it reads on a light background. Chip qualifiers, stack badges, Scout badges and the map's item card all draw the same monospace tag (`Palette.Tag`).
 
 Requirements with several selected effects show their count inside a stationary ring, with the effect colours evenly spaced and smoothly blended around its circumference.
 
@@ -61,8 +65,9 @@ files, and version 9 share links preserve blankets.
 
 ## Arcane Resin
 
-Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
-choose **Auto** to find enough resin to upgrade each kept wand to +3.
+Choose **Arcane Resin** in the item list when adding a Wand requirement, or
+click the resin chip to edit it. Set a minimum amount or choose **Auto** to
+find enough resin to upgrade each kept wand to +3.
 Extra stack copies are reserved for Blacksmith reforging: they need no resin
 upgrades and cannot also be consumed as resin donors.
 In a wand’s editor, **Exclude from Auto resin** keeps that wand reserved without
