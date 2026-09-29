@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.20.5" date="2026-09-29">
+    <release version="0.20.6" date="2026-09-29">
       <description>
-        <p>Replace the built-in presets with five build-focused presets across platforms.</p>
+        <p>Copy and paste searches across platforms, improve Android share links, and mark single wildcard effects with coloured dots.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
