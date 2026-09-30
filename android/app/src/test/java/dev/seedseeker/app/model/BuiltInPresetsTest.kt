@@ -41,12 +41,12 @@ class BuiltInPresetsTest {
         "necromancer" to """
             {"max_depth":14,"wandmaker_quest":"corpse_dust","auto_apply_trinket":true,"requirements":[
               {"item":"wand_corruption","kind":"wand","upgrade":3},
-              {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+              {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
               {"item":"plate_armor","kind":"armor","upgrade":3}]}
         """,
         "blood-berserker" to """
             {"auto_apply_trinket":true,"requirements":[
-              {"kind":"weapon","tier":{"exact":5},"upgrade":3,"effect":"Vampiric"},
+              {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3,"effect":"Vampiric"},
               {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
               {"item":"ring_arcana","kind":"ring","upgrade":4},
               {"item":"chalice_of_blood","kind":"artifact"}]}
@@ -156,14 +156,16 @@ class BuiltInPresetsTest {
         assertEquals(14, query.maximumDepth)
         assertEquals(WandmakerQuest.CORPSE_DUST, query.wandmakerQuest)
         assertEquals(listOf("wand_corruption", null, "plate_armor"), query.requirements.map { it.item?.id })
+        assertEquals(ItemKind.MELEE_WEAPON, query.requirements[1].kind)
         assertEquals(TierMatch.EXACT to 5, query.requirements[1].let { it.tierMatch to it.tier })
         assertTrue(query.requirements.all { it.upgradeMatch == UpgradeMatch.EXACT && it.upgrade == 3 })
     }
 
     @Test
-    fun bloodBerserkerPresetWantsAVampiricTierFiveWeaponAndThornsPlate() {
+    fun bloodBerserkerPresetWantsAVampiricTierFiveMeleeWeaponAndThornsPlate() {
         val (weapon, armor, ring, chalice) = BuiltInPresets.bloodBerserker.query.requirements
 
+        assertEquals(ItemKind.MELEE_WEAPON, weapon.kind)
         assertEquals(EffectFilter.named("Vampiric"), weapon.effect)
         assertEquals(TierMatch.EXACT to 5, weapon.tierMatch to weapon.tier)
         assertEquals(3, weapon.upgrade)

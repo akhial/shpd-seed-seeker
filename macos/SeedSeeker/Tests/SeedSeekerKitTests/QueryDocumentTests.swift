@@ -530,13 +530,13 @@ final class QueryDocumentTests: XCTestCase {
             ("Necromancer", """
                 {"auto_apply_trinket":true,"max_depth":14,"requirements":[\
                 {"item":"wand_corruption","kind":"wand","upgrade":3},\
-                {"kind":"weapon","tier":{"exact":5},"upgrade":3},\
+                {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3},\
                 {"item":"plate_armor","kind":"armor","upgrade":3}],\
                 "wandmaker_quest":"corpse_dust"}
                 """),
             ("Blood Berserker", """
                 {"auto_apply_trinket":true,"requirements":[\
-                {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},\
+                {"effect":"Vampiric","kind":"melee_weapon","tier":{"exact":5},"upgrade":3},\
                 {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},\
                 {"item":"ring_arcana","kind":"ring","upgrade":4},\
                 {"item":"chalice_of_blood","kind":"artifact"}]}

@@ -207,7 +207,7 @@ export const builtInPresets: Preset[] = [
         },
         {
           key: 2,
-          kind: "weapon",
+          kind: "melee_weapon",
           tier: { mode: "exact", value: 5 },
           upgrade: { mode: "exact", value: 3 },
           uncursed: false,
@@ -230,7 +230,7 @@ export const builtInPresets: Preset[] = [
       requirements: [
         {
           key: 1,
-          kind: "weapon",
+          kind: "melee_weapon",
           tier: { mode: "exact", value: 5 },
           upgrade: { mode: "exact", value: 3 },
           effect: "Vampiric",

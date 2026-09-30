@@ -490,7 +490,7 @@ public static class BuiltInPresets
             Id = "necromancer", Name = "Necromancer", IsBuiltIn = true,
             Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = 14, WandmakerQuest = WandmakerQuest.CorpseDust, Requirements = [
                 new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_corruption"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
-                new() { Kind = ItemKind.Weapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
+                new() { Kind = ItemKind.MeleeWeapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
                 new() { Kind = ItemKind.Armor, Item = ItemCatalog.Find("plate_armor"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
             ] },
         },
@@ -498,7 +498,7 @@ public static class BuiltInPresets
         {
             Id = "blood-berserker", Name = "Blood Berserker", IsBuiltIn = true,
             Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
-                new() { Kind = ItemKind.Weapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly,
+                new() { Kind = ItemKind.MeleeWeapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly,
                     Effect = EffectFilter.OneOf(["Vampiric"]) },
                 new() { Kind = ItemKind.Armor, Item = ItemCatalog.Find("plate_armor"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly,
                     Effect = EffectFilter.OneOf(["Thorns"]) },

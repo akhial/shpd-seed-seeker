@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { builtInPresets } from "./store";
-import { fromQueryJson } from "../features/query/query";
+import { fromQueryJson, toQueryJson } from "../features/query/query";
 import { validateQuery } from "../features/query/validation";
 
 /** Each preset as the shared query-document format writes it. */
@@ -36,13 +36,13 @@ const documents: [string, string][] = [
     "Necromancer",
     `{"auto_apply_trinket":true,"max_depth":14,"wandmaker_quest":"corpse_dust","requirements":[
       {"item":"wand_corruption","kind":"wand","upgrade":3},
-      {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+      {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
       {"item":"plate_armor","kind":"armor","upgrade":3}]}`,
   ],
   [
     "Blood Berserker",
     `{"auto_apply_trinket":true,"requirements":[
-      {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},
+      {"effect":"Vampiric","kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
       {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
       {"item":"ring_arcana","kind":"ring","upgrade":4},
       {"item":"chalice_of_blood","kind":"artifact"}]}`,
@@ -55,6 +55,22 @@ describe("built-in presets", () => {
       expect(validateQuery(preset.query).errors, preset.name).toEqual([]);
     }
   });
+
+  it.each(["Necromancer", "Blood Berserker"])(
+    "%s keeps its T5 melee filter when exported",
+    (name) => {
+      const preset = builtInPresets.find((entry) => entry.name === name)!;
+      const weapon = preset.query.requirements.find((entry) => entry.kind === "melee_weapon");
+      expect(weapon).toMatchObject({
+        kind: "melee_weapon",
+        tier: { mode: "exact", value: 5 },
+        upgrade: { mode: "exact", value: 3 },
+      });
+      expect(fromQueryJson(toQueryJson(preset.query)).requirements).toEqual(
+        preset.query.requirements,
+      );
+    },
+  );
 
   it("is the query each preset was taken from", () => {
     expect(builtInPresets.map((preset) => preset.name)).toEqual(documents.map(([name]) => name));

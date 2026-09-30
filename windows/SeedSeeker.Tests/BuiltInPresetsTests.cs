@@ -40,12 +40,12 @@ public sealed class BuiltInPresetsTests
         ("necromancer", "Necromancer", """
             {"max_depth":14,"wandmaker_quest":"corpse_dust","auto_apply_trinket":true,"requirements":[
                 {"item":"wand_corruption","kind":"wand","upgrade":3},
-                {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+                {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
                 {"item":"plate_armor","kind":"armor","upgrade":3}]}
             """),
         ("blood-berserker", "Blood Berserker", """
             {"auto_apply_trinket":true,"requirements":[
-                {"kind":"weapon","tier":{"exact":5},"upgrade":3,"effect":"Vampiric"},
+                {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3,"effect":"Vampiric"},
                 {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
                 {"item":"ring_arcana","kind":"ring","upgrade":4},
                 {"item":"chalice_of_blood","kind":"artifact"}]}
@@ -143,15 +143,17 @@ public sealed class BuiltInPresetsTests
         Assert.Equal(14, query.MaximumDepth);
         Assert.Equal(WandmakerQuest.CorpseDust, query.WandmakerQuest);
         Assert.Equal("wand_corruption", query.Requirements[0].Item?.Id);
+        Assert.Equal(ItemKind.MeleeWeapon, query.Requirements[1].Kind);
         Assert.Equal(TierMatch.Exactly, query.Requirements[1].TierMatch);
         Assert.Equal(5, query.Requirements[1].Tier);
     }
 
     [Fact]
-    public void BloodBerserkerWantsAVampiricTier5WeaponAndThornsPlate()
+    public void BloodBerserkerWantsAVampiricTier5MeleeWeaponAndThornsPlate()
     {
         var requirements = Preset("blood-berserker").Query.Requirements;
         Assert.Null(requirements[0].Item);
+        Assert.Equal(ItemKind.MeleeWeapon, requirements[0].Kind);
         Assert.Equal(TierMatch.Exactly, requirements[0].TierMatch);
         Assert.Equal(5, requirements[0].Tier);
         Assert.Equal("Vampiric", requirements[0].Effect.Single);

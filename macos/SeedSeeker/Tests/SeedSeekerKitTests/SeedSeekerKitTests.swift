@@ -75,7 +75,7 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertEqual(preset.query.maximumDepth, 14)
         XCTAssertEqual(preset.query.wandmakerQuest, .corpseDust)
         XCTAssertEqual(preset.query.requirements.map(\.item?.id), ["wand_corruption", nil, "plate_armor"])
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .weapon, .armor])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .meleeWeapon, .armor])
         XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.any, .exactly, .any])
         XCTAssertEqual(preset.query.requirements.map(\.tier), [0, 5, 0])
         XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .exactly])
@@ -89,7 +89,7 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertEqual(preset.query.maximumDepth, 24)
         XCTAssertEqual(preset.query.requirements.map(\.item?.id),
                        [nil, "plate_armor", "ring_arcana", "chalice_of_blood"])
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.weapon, .armor, .ring, .artifact])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.meleeWeapon, .armor, .ring, .artifact])
         XCTAssertEqual(preset.query.requirements.map(\.modifier), ["Vampiric", "Thorns", nil, nil])
         XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.exactly, .any, .any, .any])
         XCTAssertEqual(preset.query.requirements.map(\.tier), [5, 0, 0, 0])
