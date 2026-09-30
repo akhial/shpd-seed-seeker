@@ -156,7 +156,7 @@ public enum BuiltInPresets {
         query: SavedQuery(requirements: [
             try! ItemRequirement(key: 1, item: ItemCatalog.findById("wand_corruption"), upgrade: 3,
                                  kind: .wand, upgradeMatch: .exactly),
-            try! ItemRequirement(key: 2, item: nil, upgrade: 3, kind: .weapon,
+            try! ItemRequirement(key: 2, item: nil, upgrade: 3, kind: .meleeWeapon,
                                  tier: 5, tierMatch: .exactly, upgradeMatch: .exactly),
             try! ItemRequirement(key: 3, item: ItemCatalog.findById("plate_armor"), upgrade: 3,
                                  kind: .armor, upgradeMatch: .exactly),
@@ -166,7 +166,7 @@ public enum BuiltInPresets {
         id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272110")!,
         name: "Blood Berserker",
         query: SavedQuery(requirements: [
-            try! ItemRequirement(key: 1, item: nil, upgrade: 3, modifier: "Vampiric", kind: .weapon,
+            try! ItemRequirement(key: 1, item: nil, upgrade: 3, modifier: "Vampiric", kind: .meleeWeapon,
                                  tier: 5, tierMatch: .exactly, upgradeMatch: .exactly),
             try! ItemRequirement(key: 2, item: ItemCatalog.findById("plate_armor"), upgrade: 3,
                                  modifier: "Thorns", kind: .armor, upgradeMatch: .exactly),

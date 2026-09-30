@@ -2,7 +2,9 @@
 
 //! Presets bundled with every installation.
 
-use shpd_seedfinder_core::catalog::{self, ArmorEffect, Effect, ItemId, ItemKind, WeaponEffect};
+use shpd_seedfinder_core::catalog::{
+    self, ArmorEffect, Effect, ItemId, ItemKind, WeaponCategory, WeaponEffect,
+};
 use shpd_seedfinder_core::editor::Row;
 use shpd_seedfinder_core::floor_filters::{FloorRequirement, RoomType};
 use shpd_seedfinder_core::level_prelude::Feeling;
@@ -149,6 +151,7 @@ fn necromancer() -> BuiltInPreset {
                 ..named(ItemId::WandCorruption)
             },
             Requirement {
+                weapon_category: Some(WeaponCategory::Melee),
                 tier: TierRequirement::Exact(5),
                 upgrade: UpgradeRequirement::Exact(3),
                 ..Requirement::any(ItemKind::Weapon)
@@ -169,6 +172,7 @@ fn blood_berserker() -> BuiltInPreset {
         "Blood Berserker",
         [
             Requirement {
+                weapon_category: Some(WeaponCategory::Melee),
                 tier: TierRequirement::Exact(5),
                 upgrade: UpgradeRequirement::Exact(3),
                 effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Vampiric)),
@@ -192,7 +196,10 @@ fn blood_berserker() -> BuiltInPreset {
 mod tests {
     use shpd_seedfinder_core::json_query;
 
-    use super::built_in;
+    use super::{
+        Effect, ItemId, ItemKind, TierRequirement, UpgradeRequirement, WeaponCategory,
+        WeaponEffect, built_in,
+    };
     use crate::state::is_farming_requirement;
 
     /// Each preset as the shared query-document format writes it, so the
@@ -229,18 +236,87 @@ mod tests {
             "Necromancer",
             r#"{"auto_apply_trinket":true,"max_depth":14,"wandmaker_quest":"corpse_dust","requirements":[
                 {"item":"wand_corruption","kind":"wand","upgrade":3},
-                {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+                {"kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
                 {"item":"plate_armor","kind":"armor","upgrade":3}]}"#,
         ),
         (
             "Blood Berserker",
             r#"{"auto_apply_trinket":true,"requirements":[
-                {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},
+                {"effect":"Vampiric","kind":"melee_weapon","tier":{"exact":5},"upgrade":3},
                 {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
                 {"item":"ring_arcana","kind":"ring","upgrade":4},
                 {"item":"chalice_of_blood","kind":"artifact"}]}"#,
         ),
     ];
+
+    #[test]
+    fn tier_five_build_weapons_match_melee_but_not_thrown() {
+        use shpd_seedfinder_core::model::{Accessibility, ItemSource, WorldItem};
+
+        let [_, _, _, necromancer, berserker] = built_in();
+        for preset in [necromancer, berserker] {
+            let weapon = preset
+                .state
+                .requirements
+                .iter()
+                .find(|row| row.requirement.kind == ItemKind::Weapon)
+                .expect("build has a weapon requirement")
+                .requirement;
+            assert_eq!(
+                weapon.weapon_category,
+                Some(WeaponCategory::Melee),
+                "{}",
+                preset.name
+            );
+            assert_eq!(weapon.tier, TierRequirement::Exact(5), "{}", preset.name);
+            assert_eq!(
+                weapon.upgrade,
+                UpgradeRequirement::Exact(3),
+                "{}",
+                preset.name
+            );
+
+            let greatsword = WorldItem {
+                item: ItemId::Greatsword,
+                upgrade: 3,
+                effect: Some(Effect::Weapon(WeaponEffect::Vampiric)),
+                cursed: false,
+                depth: 1,
+                source: ItemSource::Heap,
+                accessibility: Accessibility::Independent,
+                secret: false,
+            };
+            assert!(
+                weapon.matches(&greatsword),
+                "{} accepts +3 T5 melee",
+                preset.name
+            );
+            assert!(
+                !weapon.matches(&WorldItem {
+                    item: ItemId::ThrowingHammer,
+                    ..greatsword
+                }),
+                "{} rejects +3 T5 thrown even with the same effect",
+                preset.name
+            );
+            assert!(
+                !weapon.matches(&WorldItem {
+                    item: ItemId::Sword,
+                    ..greatsword
+                }),
+                "{} still rejects lower-tier melee",
+                preset.name
+            );
+            assert!(
+                !weapon.matches(&WorldItem {
+                    upgrade: 2,
+                    ..greatsword
+                }),
+                "{} still requires exactly +3",
+                preset.name
+            );
+        }
+    }
 
     #[test]
     fn every_preset_is_the_query_it_was_taken_from() {
