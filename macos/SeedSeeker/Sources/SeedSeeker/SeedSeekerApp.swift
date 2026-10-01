@@ -2031,6 +2031,12 @@ private struct ToolbarActionLabelStyle: LabelStyle {
 
 /// Each action group owns one native glass surface, including its menu control.
 private struct ToolbarActionBubble<Content: View>: ToolbarContent {
+    /// The height of a row of plain label buttons. Menus report taller
+    /// intrinsic heights than buttons (a split menu by several points), so
+    /// sizing each bubble to its content left them at different heights;
+    /// pinning the row keeps every bubble the same.
+    private static var contentHeight: CGFloat { 18 }
+
     let content: Content
 
     init(@ViewBuilder content: () -> Content) { self.content = content() }
@@ -2042,6 +2048,7 @@ private struct ToolbarActionBubble<Content: View>: ToolbarContent {
                     .buttonStyle(.plain)
                     .menuStyle(.borderlessButton)
                     .fixedSize(horizontal: true, vertical: false)
+                    .frame(height: Self.contentHeight)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
                     .glassEffect(.regular, in: .capsule)
