@@ -262,19 +262,33 @@ private struct ContentView: View {
             .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
             .help("Clear the results, so the next search starts from scratch")
             .disabled(!controller.canClearResults)
-            // Clicking copies the link; the menu adds the query as JSON, which
-            // the CLI reads and Import › From Clipboard accepts back.
-            Menu {
-                Button("Copy Link", systemImage: "link") { copyQueryLink() }
-                Button("Copy Search as JSON", systemImage: "curlybraces") { copySearch() }
-            } label: {
-                Label(copied == .search ? "Copied" : "Copy Link",
-                      systemImage: copied == nil ? "link" : "checkmark")
-            } primaryAction: {
-                copyQueryLink()
+            // Clicking copies the link; the chevron's menu adds the query as
+            // JSON, which the CLI reads and Import › From Clipboard accepts
+            // back. A split `Menu(primaryAction:)` draws a taller native
+            // control that stretched this bubble past its neighbours, so the
+            // button and its menu are kept as two plain controls instead.
+            HStack(spacing: 0) {
+                Button {
+                    copyQueryLink()
+                } label: {
+                    Label(copied == .search ? "Copied" : "Copy Link",
+                          systemImage: copied == nil ? "link" : "checkmark")
+                }
+                .labelStyle(ToolbarActionLabelStyle())
+                .help("Copy a shareable link to the current query")
+                Menu {
+                    Button("Copy Link", systemImage: "link") { copyQueryLink() }
+                    Button("Copy Search as JSON", systemImage: "curlybraces") { copySearch() }
+                } label: {
+                    Label("More Copy Options", systemImage: "chevron.down")
+                        .labelStyle(.iconOnly)
+                        .padding(.horizontal, 4)
+                }
+                .menuIndicator(.hidden)
+                // Sized like the indicator Import's menu draws beside its title.
+                .controlSize(.small)
+                .help("Copy the current query as a link or as JSON")
             }
-            .labelStyle(ToolbarActionLabelStyle())
-            .help("Copy a shareable link to the current query, or the query as JSON")
             .disabled(controller.isRunning)
         }
     }
@@ -2017,6 +2031,12 @@ private struct ToolbarActionLabelStyle: LabelStyle {
 
 /// Each action group owns one native glass surface, including its menu control.
 private struct ToolbarActionBubble<Content: View>: ToolbarContent {
+    /// The height of a row of plain label buttons. Menus report taller
+    /// intrinsic heights than buttons (a split menu by several points), so
+    /// sizing each bubble to its content left them at different heights;
+    /// pinning the row keeps every bubble the same.
+    private static var contentHeight: CGFloat { 18 }
+
     let content: Content
 
     init(@ViewBuilder content: () -> Content) { self.content = content() }
@@ -2028,6 +2048,7 @@ private struct ToolbarActionBubble<Content: View>: ToolbarContent {
                     .buttonStyle(.plain)
                     .menuStyle(.borderlessButton)
                     .fixedSize(horizontal: true, vertical: false)
+                    .frame(height: Self.contentHeight)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 8)
                     .glassEffect(.regular, in: .capsule)
