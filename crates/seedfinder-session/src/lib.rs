@@ -69,6 +69,8 @@ fn production_search_start() -> u64 {
 }
 
 fn claim_production_search_start(next: &AtomicU64) -> u64 {
+    // Rust 1.99 renamed this to `try_update`, which is newer than our MSRV.
+    #[allow(deprecated)]
     next.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
         Some(advance_production_search_start(current))
     })

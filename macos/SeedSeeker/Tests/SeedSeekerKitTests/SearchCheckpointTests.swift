@@ -57,7 +57,8 @@ private actor CheckpointEngine: SeedFinderEngine {
     }
     func filterSeeds(_ request: SearchRequest, seeds: [String]) async throws -> [String] { seeds }
     func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
-        if let filterDelay { await Task.detached { try? await Task.sleep(for: filterDelay) }.value }
+        // Cancellable, so an interrupt ends a long refinement promptly.
+        if let filterDelay { try await Task.sleep(for: filterDelay) }
         return recipes
     }
     func scoutSeed(_ seed: String, challenges: Int) async throws -> ScoutWorld { throw SeedFinderEngineError.invalidArgument }
@@ -225,7 +226,7 @@ final class SearchCheckpointTests: XCTestCase {
     func testRepeatedInterruptionDuringRefinementPreservesOriginalResultGoal() async throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-        let engine = CheckpointEngine(fresh: CheckpointSession(initial: [results()[0]]), filterDelay: .milliseconds(80))
+        let engine = CheckpointEngine(fresh: CheckpointSession(initial: [results()[0]]), filterDelay: .seconds(60))
         let controller = SearchController(engine: engine, checkpointURL: url)
         controller.start(try query().searchRequest())
         try await waitForScan(controller)
