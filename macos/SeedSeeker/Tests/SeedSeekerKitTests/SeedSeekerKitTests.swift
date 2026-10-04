@@ -320,17 +320,16 @@ final class SeedSeekerKitTests: XCTestCase {
                                          upgradeMatch: .exactly)
         XCTAssertEqual(try marks([named, second]).matchedRequirements, 1)
 
-        // The world's only Wand of Corrosion is cursed.
-        let corrosion = try XCTUnwrap(ItemCatalog.findById("wand_corrosion"))
-        XCTAssertEqual(try marks([ItemRequirement(key: 1, item: corrosion, upgrade: 0,
-                                                  kind: .wand, upgradeMatch: .any)])
+        // The heap's Wand of Fireblast is cursed.
+        let fireblast = try XCTUnwrap(ItemCatalog.findById("wand_fireblast"))
+        XCTAssertEqual(try marks([ItemRequirement(key: 1, item: fireblast, upgrade: 0,
+                                                  kind: .wand, upgradeMatch: .any, source: .heap)])
                            .matchedRequirements, 1)
-        XCTAssertTrue(try marks([ItemRequirement(key: 1, item: corrosion, upgrade: 0, kind: .wand,
-                                                 upgradeMatch: .any, requireUncursed: true)])
+        XCTAssertTrue(try marks([ItemRequirement(key: 1, item: fireblast, upgrade: 0, kind: .wand,
+                                                 upgradeMatch: .any, source: .heap, requireUncursed: true)])
                           .matched.isEmpty)
 
-        // A crossbow is both a Smith reward and shop stock; excluding the
-        // reward leaves the shop's.
+        // Excluding the Smith's crossbow reward removes a source-filtered match.
         let crossbow = try XCTUnwrap(ItemCatalog.findById("crossbow"))
         let anyCrossbow = try ItemRequirement(key: 1, item: crossbow, upgrade: 0, kind: .weapon,
                                               upgradeMatch: .any, source: .blacksmithReward)

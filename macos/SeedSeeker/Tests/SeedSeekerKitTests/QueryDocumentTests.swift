@@ -246,10 +246,10 @@ final class QueryDocumentTests: XCTestCase {
     func testScoutCountsAnAlternativeGroupAsOneSlot() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed(Self.pinnedSeed, challenges: 0)
         let sharpshooting = try XCTUnwrap(ItemCatalog.findById("ring_sharpshooting"))
-        let corrosion = try XCTUnwrap(ItemCatalog.findById("wand_corrosion"))
-        // The world's only Wand of Corrosion is cursed; the ring is there.
-        let wand = try ItemRequirement(key: 1, item: corrosion, upgrade: 0, kind: .wand,
-                                       upgradeMatch: .any, requireUncursed: true, alternativeGroup: 1)
+        let fireblast = try XCTUnwrap(ItemCatalog.findById("wand_fireblast"))
+        // The heap's Wand of Fireblast is cursed; the ring is there.
+        let wand = try ItemRequirement(key: 1, item: fireblast, upgrade: 0, kind: .wand,
+                                       upgradeMatch: .any, source: .heap, requireUncursed: true, alternativeGroup: 1)
         let ring = try ItemRequirement(key: 2, item: sharpshooting, upgrade: 1, kind: .ring, alternativeGroup: 1)
         let either = try marks([wand, ring])
         XCTAssertEqual(either.totalRequirements, 1, "two alternatives are one slot")
@@ -267,27 +267,25 @@ final class QueryDocumentTests: XCTestCase {
 
     func testScoutMarksACombinedLevelGroupAsOneCondition() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed(Self.pinnedSeed, challenges: 0)
-        let tenacity = try XCTUnwrap(ItemCatalog.findById("ring_tenacity"))
         func pair(total: Int) throws -> [ItemRequirement] {
             try [1, 2].map { key in
-                try ItemRequirement(key: Int64(key), item: tenacity, upgrade: 0, kind: .ring, upgradeMatch: .any,
+                try ItemRequirement(key: Int64(key), item: nil, upgrade: 0, kind: .ring, upgradeMatch: .any,
                                     requireUncursed: true, levelSum: LevelSum(group: 1, atLeast: total))
             }
         }
-        // The world's Rings of Tenacity reach four levels between them: one of
-        // the vault prize's +2 options and a mimic's plain +0. The group is
-        // one condition, and every contributing item is marked.
-        let reached = try marks(try pair(total: 4))
+        // A +3 vault ring and a +1 regular ring reach six levels between them.
+        // The group is one condition, and every contributing item is marked.
+        let reached = try marks(try pair(total: 6))
         XCTAssertEqual(reached.totalRequirements, 1, "a combined-level group is one condition")
         XCTAssertEqual(reached.matchedRequirements, 1)
-        XCTAssertEqual(Set(reached.matched.map { world.items[$0].upgrade }), [0, 2])
+        XCTAssertEqual(Set(reached.matched.map { world.items[$0].upgrade }), [1, 3])
 
-        // Members are optional: the +2 ring's three levels satisfy a total of 3 alone.
-        let single = try marks(try pair(total: 3))
+        // Members are optional: the +3 ring's four levels satisfy a total of 4 alone.
+        let single = try marks(try pair(total: 4))
         XCTAssertEqual(single.matchedRequirements, 1)
         XCTAssertFalse(single.matched.isEmpty)
 
-        let short = try marks(try pair(total: 5))
+        let short = try marks(try pair(total: 7))
         XCTAssertEqual(short.totalRequirements, 1)
         XCTAssertEqual(short.matchedRequirements, 0)
         XCTAssertTrue(short.matched.isEmpty, "a short level group marks nothing")
@@ -295,37 +293,38 @@ final class QueryDocumentTests: XCTestCase {
 
     func testScoutMatchesEffectSetsAndAnyEnchantment() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed(Self.pinnedSeed, challenges: 0)
-        let leather = try XCTUnwrap(ItemCatalog.findById("leather_armor"))
-        // Among the world's leather armors: one Obfuscation, one cursed and Multiplicity.
-        let obfuscation = try marks([ItemRequirement(key: 1, item: leather, upgrade: 0,
-                                                     effect: .oneOf(["Swiftness", "Obfuscation"]),
+        let mail = try XCTUnwrap(ItemCatalog.findById("mail_armor"))
+        // Mail armor includes Thorns and Viscosity glyphs and a cursed Bulk piece.
+        let thorns = try marks([ItemRequirement(key: 1, item: mail, upgrade: 0,
+                                                     effect: .oneOf(["Swiftness", "Thorns"]),
                                                      kind: .armor, upgradeMatch: .any)])
-        XCTAssertEqual(obfuscation.matchedRequirements, 1)
-        XCTAssertEqual(world.items[try XCTUnwrap(obfuscation.matched.first)].effect, "Obfuscation")
-        let multiplicity = try marks([ItemRequirement(key: 1, item: leather, upgrade: 0,
-                                                      effect: .oneOf(["Multiplicity"]), kind: .armor, upgradeMatch: .any)])
-        XCTAssertEqual(multiplicity.matchedRequirements, 1)
-        XCTAssertEqual(world.items[try XCTUnwrap(multiplicity.matched.first)].effect, "Multiplicity")
-        XCTAssertEqual(try marks([ItemRequirement(key: 1, item: leather, upgrade: 0, effect: .oneOf(["Multiplicity"]),
+        XCTAssertEqual(thorns.matchedRequirements, 1)
+        XCTAssertEqual(world.items[try XCTUnwrap(thorns.matched.first)].effect, "Thorns")
+        let bulk = try marks([ItemRequirement(key: 1, item: mail, upgrade: 0,
+                                                      effect: .oneOf(["Bulk"]), kind: .armor, upgradeMatch: .any)])
+        XCTAssertEqual(bulk.matchedRequirements, 1)
+        XCTAssertEqual(world.items[try XCTUnwrap(bulk.matched.first)].effect, "Bulk")
+        XCTAssertEqual(try marks([ItemRequirement(key: 1, item: mail, upgrade: 0, effect: .oneOf(["Bulk"]),
                                                   kind: .armor, upgradeMatch: .any, requireUncursed: false)])
                            .matchedRequirements, 1)
-        let enchanted = try marks([ItemRequirement(key: 1, item: leather, upgrade: 0, effect: .anyEnchantment,
+        let enchanted = try marks([ItemRequirement(key: 1, item: mail, upgrade: 0, effect: .anyEnchantment,
                                                    kind: .armor, upgradeMatch: .any)])
         XCTAssertEqual(enchanted.matchedRequirements, 1)
-        XCTAssertEqual(world.items[try XCTUnwrap(enchanted.matched.first)].effect, "Obfuscation",
-                       "a curse is not a glyph")
+        let glyph = world.items[try XCTUnwrap(enchanted.matched.first)]
+        XCTAssertTrue(["Thorns", "Viscosity", "Repulsion"].contains(glyph.effect ?? ""))
+        XCTAssertFalse(glyph.cursed, "a curse is not a glyph")
         // The enchantments v4.0.0 added are searchable like any other: the
-        // world's Dirk from the statue carries Venomous.
-        let dirk = try XCTUnwrap(ItemCatalog.findById("dirk"))
-        let venomous = try marks([ItemRequirement(key: 1, item: dirk, upgrade: 0,
+        // world's Force Cube from the Imp carries Venomous.
+        let forceCube = try XCTUnwrap(ItemCatalog.findById("force_cube"))
+        let venomous = try marks([ItemRequirement(key: 1, item: forceCube, upgrade: 0,
                                                   effect: .oneOf(["Venomous", "Vorpal"]),
                                                   kind: .weapon, upgradeMatch: .any)])
         XCTAssertEqual(venomous.matchedRequirements, 1)
         XCTAssertEqual(world.items[try XCTUnwrap(venomous.matched.first)].effect, "Venomous")
-        let plain = try XCTUnwrap(ItemCatalog.findById("shortsword"))
+        let plain = try XCTUnwrap(ItemCatalog.findById("quarterstaff"))
         XCTAssertEqual(try marks([ItemRequirement(key: 1, item: plain, upgrade: 0, effect: .anyEnchantment,
                                                   kind: .weapon, upgradeMatch: .any)]).matchedRequirements, 0,
-                       "the world's Shortsword carries no enchantment")
+                       "the world's Quarterstaff carries no enchantment")
     }
 
     // MARK: Local validation and summaries

@@ -857,10 +857,8 @@ mod tests {
         assert_eq!(search_rng, scouting_rng);
     }
 
-    /// One official v4.0.1-BETA-3 vault, captured with the headless probe
-    /// (`tooling/oracle-4.0/.work/probe/VaultProbe.java` extended to print
-    /// mobs) after generating floors 1 through the Imp's depth and then
-    /// `Dungeon.branch = 1; Dungeon.newLevel()`.
+    /// An official v4.0.1 vault, captured with `tooling/oracle-4.0/run.sh`
+    /// after generating the main floors and entering the Imp's branch.
     struct VaultFixture {
         code: &'static str,
         depth: u8,
@@ -882,7 +880,7 @@ mod tests {
             code: "AAA-AAA-AAA",
             depth: 19,
             size: (63, 53),
-            map_hash: -1032072244,
+            map_hash: -1_032_072_244,
             heaps: 52,
             entrance: 2914,
             mobs: &[
@@ -987,7 +985,7 @@ mod tests {
             code: "AAA-AAA-AAB",
             depth: 18,
             size: (63, 53),
-            map_hash: 308219229,
+            map_hash: 308_219_229,
             heaps: 51,
             entrance: 1694,
             mobs: &[
@@ -1115,7 +1113,7 @@ mod tests {
             code: "AAA-AAA-ABG",
             depth: 17,
             size: (53, 63),
-            map_hash: -95361560,
+            map_hash: -95_361_560,
             heaps: 47,
             entrance: 2974,
             mobs: &[

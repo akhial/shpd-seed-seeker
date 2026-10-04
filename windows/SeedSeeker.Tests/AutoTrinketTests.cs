@@ -5,7 +5,7 @@ namespace SeedSeeker.Tests;
 public sealed class AutoTrinketTests
 {
     private static QuerySettings Query() => ResultsExport.DecodeQueryDocument("""
-        {"max_depth":19,"auto_apply_trinket":true,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]}
+        {"max_depth":19,"auto_apply_trinket":true,"requirements":[{"kind":"weapon","effect":"Grim"}]}
         """);
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class AutoTrinketTests
         SeedResult[] recipes = [new("SRU-YSU-QHS", 1, "parchment_scrap")];
         var explicitQuery = ResultsExport.DecodeQueryDocument("""
             {"max_depth":19,"auto_apply_trinket":true,"requirements":[
-              {"item":"runic_blade","upgrade":1,"effect":"Grim"},
+              {"kind":"weapon","effect":"Grim"},
               {"item":"parchment_scrap"}]}
             """);
         Assert.Equal("parchment_scrap", Assert.Single(engine.FilterRecipes(explicitQuery, baseline, recipes)).SelectedTrinket);

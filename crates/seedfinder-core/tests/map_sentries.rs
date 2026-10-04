@@ -227,7 +227,7 @@ fn check_laser(map: &LevelMap, sentry: &VaultSentryPattern, expected: &Value, co
             Some((sentry.initial_cooldown - 1 + u32::try_from(shot).unwrap()) * 1000)
         );
         assert_eq!(
-            u32::from(beam.loop_ms),
+            beam.loop_ms,
             (sentry.cooldown + u32::from(sentry.triggers) - 1) * 1000
         );
         let p = &beam.particles[0];

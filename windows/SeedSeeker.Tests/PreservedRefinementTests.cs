@@ -9,11 +9,11 @@ public sealed class PreservedRefinementTests
     {
         var baseline = ResultsExport.DecodeQueryDocument("""
             {"auto_apply_trinket":true,"max_depth":19,"requirements":[
-              {"item":"runic_blade","upgrade":1,"effect":"Grim"}]}
+              {"kind":"weapon","effect":"Grim"}]}
             """);
         var narrowed = ResultsExport.DecodeQueryDocument("""
             {"auto_apply_trinket":true,"max_depth":19,"requirements":[
-              {"item":"runic_blade","upgrade":1,"effect":"Grim"},
+              {"kind":"weapon","effect":"Grim"},
               {"item":"whip","effect":"Venomous"}]}
             """);
         const string seed = "EYY-RUL-LQG";

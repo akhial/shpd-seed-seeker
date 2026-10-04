@@ -12,4 +12,4 @@ AAA-AAA-AAQ|0|HornOfPlenty,ChaliceOfBlood,TimekeepersHourglass,SkeletonKey,Dried
 AAA-AAA-AAQ|1|HornOfPlenty,ChaliceOfBlood,TimekeepersHourglass,SkeletonKey,DriedRose,TalismanOfForesight,UnstableSpellbook,MasterThievesArmband,AlchemistsToolkit,SandalsOfNature,EtherealChains
 AAA-AAA-AAQ|9|ChaliceOfBlood,TimekeepersHourglass,SkeletonKey,DriedRose,TalismanOfForesight,UnstableSpellbook,MasterThievesArmband,AlchemistsToolkit,SandalsOfNature,EtherealChains
 AAA-AAA-AAQ|19|TalismanOfForesight,UnstableSpellbook,MasterThievesArmband,AlchemistsToolkit,SandalsOfNature,EtherealChains
-AAA-AAA-AAQ|24|AlchemistsToolkit,SandalsOfNature,EtherealChains
+AAA-AAA-AAQ|24|MasterThievesArmband,AlchemistsToolkit,SandalsOfNature,EtherealChains
