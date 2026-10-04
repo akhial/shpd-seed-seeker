@@ -30,4 +30,4 @@ case "$(uname -s 2>/dev/null || echo "${OSTYPE:-}")" in
 esac
 
 exec "$JAVA" -cp "$CLASSES$SEP$JAR" \
-    com.shatteredpixel.shatteredpixeldungeon.ParityOracle "$@"
+    "${ORACLE_MAIN_CLASS:-com.shatteredpixel.shatteredpixeldungeon.ParityOracle}" "$@"

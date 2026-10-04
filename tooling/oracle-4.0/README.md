@@ -26,6 +26,11 @@ the classpath `classes` first, then the JAR (`;` separated on Windows/MSYS,
 `:` elsewhere). Both honour `JAVA_21_HOME`, then `JAVA_HOME`, then `PATH`; the
 v4.0.1 fixtures were checked with Eclipse Adoptium JDK 25.0.4.1 on Linux x86_64.
 
+Set `ORACLE_MAIN_CLASS` to run another oracle entry point with the same JDK
+and classpath handling. The vault-door fixture generator uses this to run
+`com.shatteredpixel.shatteredpixeldungeon.VaultDoorOracle`, passing the level-map
+document on stdin.
+
 ## Build and run
 
 ```sh

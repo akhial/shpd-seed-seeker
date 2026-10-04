@@ -8,6 +8,7 @@ import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.quest.vault.VaultFi
 import com.shatteredpixel.shatteredpixeldungeon.levels.rooms.quest.vault.VaultTokensRoom;
 import com.shatteredpixel.shatteredpixeldungeon.tiles.CustomTilemap;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -25,7 +26,10 @@ public final class VaultDoorOracle {
 
     public static void main(String[] args) throws Exception {
         com.watabou.noosa.Game.version = "4.0.1";
-        JsonValue doc = new JsonReader().parse(Files.readString(Path.of(args[0])));
+        String input = args.length == 0
+            ? new String(System.in.readAllBytes(), StandardCharsets.UTF_8)
+            : Files.readString(Path.of(args[0]));
+        JsonValue doc = new JsonReader().parse(input);
         Dungeon.level = new SewerLevel();
         int width = doc.getInt("width");
         Dungeon.level.setSize(width, doc.getInt("height"));
