@@ -506,6 +506,8 @@ impl ClosedResinSupply {
 #[derive(Clone, Debug)]
 pub struct QueryPlan {
     floor_requirements: [Option<crate::floor_filters::CompiledFloorRequirement>; 25],
+    /// Deepest required regular-floor feeling, or zero for no preflight.
+    last_feeling_depth: u8,
     auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
     /// Mandatory slots whose alternatives all name trinket deck outcomes.
@@ -536,9 +538,15 @@ pub struct QueryPlan {
     unsatisfiable_reason: Option<String>,
 }
 
-fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<Requirement>> {
+fn required_trinket_slots(
+    slots: &[Vec<RequirementPlan>],
+    waivable: &[bool],
+) -> Vec<Vec<Requirement>> {
     slots
         .iter()
+        .enumerate()
+        .filter(|(index, _)| !waivable.get(*index).copied().unwrap_or(false))
+        .map(|(_, slot)| slot)
         .filter(|slot| {
             slot.iter().all(|plan| {
                 let requirement = &plan.requirement;
@@ -549,6 +557,61 @@ fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<Requirement
         })
         .map(|slot| slot.iter().map(|plan| plan.requirement).collect())
         .collect()
+}
+
+/// Each mandatory trinket slot needs a different identity in this seed's
+/// private deck. This ignores acquisition constraints, so failure alone proves
+/// impossibility. Blankets can reuse an assigned identity and consume no card.
+fn trinket_slots_fit(slots: &[Vec<Requirement>], order: &[ItemId]) -> bool {
+    const DECK_SIZE: usize =
+        crate::trinkets::INITIAL_OFFER_COUNT + crate::trinkets::TRANSMUTATION_COUNT as usize;
+    if slots.len() < 2 {
+        return true; // The caller already checked individual availability.
+    }
+    let mut choices = [0_u32; DECK_SIZE];
+    let mut owners = [usize::MAX; DECK_SIZE];
+    let mut count = 0;
+    for slot in slots {
+        if slot.first().is_some_and(|r| r.blanket) {
+            continue;
+        }
+        if count == DECK_SIZE {
+            return false;
+        }
+        let mut mask = 0;
+        for requirement in slot {
+            let limit = crate::trinkets::INITIAL_OFFER_COUNT
+                + usize::from(requirement.trinket_transmutations);
+            if let Some(index) = order
+                .iter()
+                .take(limit)
+                .position(|&id| Some(id) == requirement.item)
+            {
+                mask |= 1 << index;
+            }
+        }
+        choices[count] = mask;
+        if !assign_trinket_slot(count, &choices, &mut owners, &mut 0) {
+            return false;
+        }
+        count += 1;
+    }
+    true
+}
+
+fn assign_trinket_slot(slot: usize, choices: &[u32], owners: &mut [usize], seen: &mut u32) -> bool {
+    let mut remaining = choices[slot] & !*seen;
+    while remaining != 0 {
+        let card = remaining.trailing_zeros() as usize;
+        let bit = 1 << card;
+        *seen |= bit;
+        if owners[card] == usize::MAX || assign_trinket_slot(owners[card], choices, owners, seen) {
+            owners[card] = slot;
+            return true;
+        }
+        remaining &= !*seen;
+    }
+    false
 }
 
 // Matching uses distinct item indices. Group only identical singleton mandatory
@@ -926,7 +989,7 @@ impl QueryPlan {
             (variant, deadline)
         });
 
-        let required_trinket_slots = required_trinket_slots(&slots);
+        let required_trinket_slots = required_trinket_slots(&slots, &waivable);
         let closed_multiplicities = closed_multiplicities(&slots, &waivable);
         let mut floor_requirements = [None; 25];
         for floor in &query.floor_requirements {
@@ -935,6 +998,22 @@ impl QueryPlan {
                 generation_depth = generation_depth.max(floor.depth);
             }
         }
+        let last_feeling_depth = floor_requirements
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(depth, requirement)| {
+                // Preserve validation and conservatively ignore malformed raw
+                // boss/zero-depth filters in this additional optimization.
+                if depth % 5 == 0 {
+                    return None;
+                }
+                requirement
+                    .as_ref()
+                    .and_then(|requirement| requirement.feeling)
+                    .and_then(|_| u8::try_from(depth).ok())
+            })
+            .unwrap_or_default();
         // Deferred vault items may be missing even at ordinary callbacks with
         // no pending depth. Exclude every vault-capable donor envelope. Auto
         // also stays with the final allocator: its cost depends on reservations.
@@ -970,6 +1049,7 @@ impl QueryPlan {
         }
         let mut plan = Self {
             floor_requirements,
+            last_feeling_depth,
             auto_trinket: None,
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
@@ -985,6 +1065,53 @@ impl QueryPlan {
         };
         plan.unsatisfiable_reason = plan.impossibility_reason(query, &profile, &deadline);
         plan
+    }
+
+    /// Mandatory-drop counters and floor roots determine the ordinary feeling
+    /// before any room generation. Trinket activation is unknown here, so keep
+    /// every override outcome possible when the ordinary roll is None.
+    fn feelings_possible(&self, dungeon_seed: i64) -> bool {
+        use crate::level_prelude::{Feeling, LimitedDrops, roll_feeling};
+        use crate::rng::{RandomStack, seed_for_depth};
+
+        if self.last_feeling_depth == 0 {
+            return true;
+        }
+        let mut limited = LimitedDrops::default();
+        let mut random = RandomStack::with_base_seed(0);
+        for depth in 1..=self.last_feeling_depth {
+            // Depth 20 generates a shop but has no ordinary prelude/feeling.
+            if depth % 5 == 0 {
+                continue;
+            }
+            random.push(seed_for_depth(dungeon_seed, u32::from(depth), 0));
+            // Mandatory food uses its private category stream and leaves this
+            // floor RNG unchanged. Only these counters precede the feeling.
+            limited.roll_for_floor(i32::from(depth), &mut random);
+            let feeling = roll_feeling(i32::from(depth), &mut random);
+            random.pop();
+            let wanted = self
+                .floor_requirements
+                .get(usize::from(depth))
+                .and_then(Option::as_ref)
+                .and_then(|requirement| requirement.feeling);
+            if wanted.is_some_and(|wanted| {
+                wanted != feeling
+                    && !(depth > 1
+                        && feeling == Feeling::None
+                        && matches!(
+                            wanted,
+                            Feeling::None
+                                | Feeling::Grass
+                                | Feeling::Water
+                                | Feeling::Traps
+                                | Feeling::Chasm
+                        ))
+            }) {
+                return false;
+            }
+        }
+        true
     }
 
     /// Whether the slot at `index` is a member stack's copy, which another
@@ -1242,7 +1369,7 @@ impl FloorGate for QueryPlan {
             return false;
         }
         if self.required_trinket_slots.is_empty() {
-            return true;
+            return self.feelings_possible(run.dungeon_seed);
         }
         // Preserve the cheap four-card prefix for ordinary offer searches.
         if self
@@ -1255,7 +1382,8 @@ impl FloorGate for QueryPlan {
             return self.required_trinket_slots.iter().all(|slot| {
                 slot.iter()
                     .any(|r| r.item.is_some_and(|id| offers.contains(&id)))
-            });
+            }) && trinket_slots_fit(&self.required_trinket_slots, &offers)
+                && self.feelings_possible(run.dungeon_seed);
         }
         let order = crate::trinkets::order_from_generator(&run.generator);
         self.required_trinket_slots.iter().all(|slot| {
@@ -1264,7 +1392,8 @@ impl FloorGate for QueryPlan {
                     order[..4 + usize::from(r.trinket_transmutations)].contains(&id)
                 })
             })
-        })
+        }) && trinket_slots_fit(&self.required_trinket_slots, &order)
+            && self.feelings_possible(run.dungeon_seed)
     }
 
     fn selected_trinket(&self, seed: crate::seed::DungeonSeed) -> Option<crate::catalog::ItemId> {
@@ -3835,6 +3964,15 @@ mod trinket_preflight_tests {
     struct PreserveFloorGate<'a>(&'a dyn FloorGate);
 
     impl FloorGate for PreserveFloorGate<'_> {
+        fn floor_requirement(
+            &self,
+            depth: u8,
+        ) -> Option<&crate::floor_filters::CompiledFloorRequirement> {
+            self.0.floor_requirement(depth)
+        }
+        fn deferred_vault_plan(&self, target: u8) -> Option<&QueryPlan> {
+            self.0.deferred_vault_plan(target)
+        }
         fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
             self.0.selected_trinket(seed)
         }
@@ -3874,6 +4012,119 @@ mod trinket_preflight_tests {
             .into_iter()
             .map(|matched| matched.map(|m| (m.recipe, m.world)))
             .collect()
+    }
+
+    #[test]
+    fn joint_trinket_assignment_agrees_with_exhaustive_distinct_choices() {
+        // Every three-slot graph over three cards, including empty slots,
+        // rerouting an earlier choice, and deficient proper subsets.
+        for encoded in 0..512_u32 {
+            let choices = [encoded & 7, (encoded >> 3) & 7, (encoded >> 6) & 7];
+            let expected = (0..3).any(|a| {
+                (0..3).any(|b| {
+                    (0..3).any(|c| {
+                        a != b
+                            && a != c
+                            && b != c
+                            && choices[0] & (1 << a) != 0
+                            && choices[1] & (1 << b) != 0
+                            && choices[2] & (1 << c) != 0
+                    })
+                })
+            });
+            let mut owners = [usize::MAX; 3];
+            let actual =
+                (0..3).all(|slot| assign_trinket_slot(slot, &choices, &mut owners, &mut 0));
+            assert_eq!(actual, expected, "choices {choices:?}");
+        }
+    }
+
+    #[test]
+    fn joint_trinket_slots_keep_member_limits_blankets_and_full_deck_capacity() {
+        let order = crate::trinkets::trinket_order(DungeonSeed::MIN);
+        let requirement = |index: usize, limit| Requirement {
+            item: Some(order[index]),
+            trinket_transmutations: limit,
+            ..Requirement::any(ItemKind::Trinket)
+        };
+        let a = requirement(0, 0);
+        let b = requirement(1, 0);
+        assert!(trinket_slots_fit(&[vec![a, b], vec![a]], &order[..4]));
+        assert!(!trinket_slots_fit(&[vec![a], vec![a]], &order[..4]));
+        assert!(!trinket_slots_fit(
+            &[vec![a, b], vec![a, b], vec![a, b]],
+            &order[..4]
+        ));
+        // B's permissive cap must never widen the later identity's own cap.
+        let later = requirement(8, 1);
+        let broad_a = requirement(0, 13);
+        assert!(!trinket_slots_fit(&[vec![later, broad_a], vec![a]], &order));
+        assert!(trinket_slots_fit(
+            &[vec![requirement(8, 5), broad_a], vec![a]],
+            &order
+        ));
+        let blanket = Requirement { blanket: true, ..a };
+        assert!(trinket_slots_fit(&[vec![a], vec![blanket]], &order));
+        let mut slots: Vec<_> = (0..order.len())
+            .map(|index| vec![requirement(index, 13)])
+            .collect();
+        assert!(trinket_slots_fit(&slots, &order));
+        slots.push(vec![a]);
+        assert!(!trinket_slots_fit(&slots, &order));
+    }
+
+    #[test]
+    fn joint_trinket_preflight_preserves_complete_worlds_and_recipe_replays() {
+        let seeds = [0, 1, 812_345_678_901, 3_355_211_884_971]
+            .map(|value| DungeonSeed::new(value).unwrap());
+        let order = crate::trinkets::trinket_order(seeds[0]);
+        let name = |index: usize| crate::catalog::item(order[index]).stable_id;
+        let a = serde_json::json!({"item":name(0)});
+        let b = serde_json::json!({"item":name(1)});
+        let either = serde_json::json!({"any_of":[a,b]});
+        let cases = [
+            serde_json::json!([either, either]),
+            serde_json::json!([either, a]),
+            serde_json::json!([a,{"item":name(0),"blanket":true}]),
+            serde_json::json!([a,{"any_of":[a,{"kind":"weapon"}]}]),
+            serde_json::json!([
+                {"any_of":[a,{"item":name(4),"trinket_transmutations":1}]},a
+            ]),
+        ];
+        for requirements in cases {
+            let query = crate::json_query::decode(
+                &serde_json::json!({"max_depth":3,"auto_apply_trinket":false,
+                    "requirements":requirements})
+                .to_string(),
+            )
+            .unwrap();
+            assert!(!QueryPlan::analyze(&query).is_unsatisfiable());
+            assert!(query.matches(&CanonicalMainWorldGenerator.generate(seeds[0], 3)));
+            compare_paths(&query, &seeds, true);
+            for seed in seeds {
+                let run = RunState::new(i64::try_from(seed.value()).unwrap());
+                let before = run.clone();
+                QueryPlan::analyze(&query).continue_after_run_init(&run);
+                assert_eq!(run, before);
+            }
+        }
+        let query = crate::json_query::decode(
+            r#"{"max_depth":3,"requirements":[
+                {"any_of":[{"item":"mimic_tooth"},{"item":"rat_skull"}]},
+                {"any_of":[{"item":"mimic_tooth"},{"item":"rat_skull"}]}]}"#,
+        )
+        .unwrap();
+        let plan = QueryPlan::analyze(&query);
+        let mut newly_rejected = 0;
+        for value in 0..32 {
+            let run = RunState::new(value);
+            let offers = crate::trinkets::initial_offers_from_generator(&run.generator);
+            if offers.contains(&ItemId::MimicTooth) ^ offers.contains(&ItemId::RatSkull) {
+                assert!(!plan.continue_after_run_init(&run));
+                newly_rejected += 1;
+            }
+        }
+        assert!(newly_rejected > 0);
     }
 
     fn seeds() -> Vec<DungeonSeed> {
@@ -5687,5 +5938,224 @@ mod closed_multiplicity_grouping_tests {
             4,
         );
         check(&equivalent.slots, &[(0, 2)]);
+    }
+}
+
+#[cfg(test)]
+mod future_feeling_tests {
+    use super::*;
+    use crate::auto_trinkets::{self, SeedRecipe};
+    use crate::challenges::Challenges;
+    use crate::floor_filters::FloorRequirement;
+    use crate::level_prelude::{Feeling, LimitedDrops, roll_feeling};
+    use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
+    use crate::query::scout_matches;
+    use crate::rng::{RandomStack, seed_for_depth};
+    use crate::run::RunState;
+    use crate::seed::DungeonSeed;
+
+    fn query(depth: u8, feeling: Feeling) -> SearchQuery {
+        let mut query = crate::json_query::decode(
+            r#"{"requirements":[],"max_depth":24,"auto_apply_trinket":false,"floor_requirements":[{"depth":7,"feeling":"dark"}]}"#,
+        )
+        .unwrap();
+        query.floor_requirements[0].depth = depth;
+        query.floor_requirements[0].feeling = Some(feeling);
+        query
+    }
+
+    fn reference_plan(plan: &QueryPlan) -> QueryPlan {
+        let mut reference = plan.clone();
+        // Retain E01 trinket availability/assignment, every floor filter,
+        // ordinary prefix gate, selection rule and deferred-vault strategy.
+        reference.last_feeling_depth = 0;
+        reference
+    }
+
+    #[test]
+    fn future_feeling_prelude_preserves_counters_and_floor_rng() {
+        for seed in [i64::MIN, -1, 0, 1, 91, 502, 8_687_205_886, i64::MAX] {
+            for challenges in [Challenges::NONE, Challenges::LEVEL_GENERATION] {
+                let mut run = RunState::with_challenges(seed, challenges);
+                let mut actual_limited = LimitedDrops::default();
+                let mut predicted_limited = LimitedDrops::default();
+                let mut actual = RandomStack::with_base_seed(17);
+                let mut predicted = actual.clone();
+                for depth in (1..=24_u32).filter(|depth| depth % 5 != 0) {
+                    let root = seed_for_depth(seed, depth, 0);
+                    actual.push(root);
+                    predicted.push(root);
+                    let prepared = crate::regular_level::prepare_regular_floor(
+                        &mut run,
+                        &mut actual_limited,
+                        depth,
+                        &mut actual,
+                    )
+                    .unwrap();
+                    let depth_i32 = i32::try_from(depth).unwrap();
+                    predicted_limited.roll_for_floor(depth_i32, &mut predicted);
+                    let feeling = roll_feeling(depth_i32, &mut predicted);
+                    assert_eq!(feeling, prepared.feeling, "seed={seed}, depth={depth}");
+                    assert_eq!(predicted_limited, actual_limited);
+                    assert_eq!(format!("{predicted:?}"), format!("{actual:?}"));
+                    assert_eq!(predicted.long(), actual.long());
+                    predicted.pop();
+                    actual.pop();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn future_feeling_marker_ignores_nonfeeling_and_invalid_raw_filters() {
+        let mut query = query(7, Feeling::None);
+        query.floor_requirements[0].feeling = None;
+        query.floor_requirements[0].rooms = vec![crate::floor_filters::RoomType::SpecialGarden];
+        query.validate().unwrap();
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.last_feeling_depth, 0);
+        assert!(plan.feelings_possible(0));
+
+        for depth in [0, 5, 10, 15, 20, 25, u8::MAX] {
+            query.floor_requirements[0].depth = depth;
+            query.floor_requirements[0].feeling = Some(Feeling::Dark);
+            assert!(query.validate().is_err());
+            let plan = QueryPlan::analyze(&query);
+            assert_eq!(plan.last_feeling_depth, 0);
+            assert!(plan.feelings_possible(0));
+        }
+        query.floor_requirements = vec![
+            FloorRequirement {
+                depth: 22,
+                feeling: Some(Feeling::Dark),
+                rooms: vec![],
+                any_rooms: vec![],
+            },
+            FloorRequirement {
+                depth: 7,
+                feeling: Some(Feeling::Water),
+                rooms: vec![],
+                any_rooms: vec![],
+            },
+        ];
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.last_feeling_depth, 22);
+        query.floor_requirements.reverse();
+        let reversed = QueryPlan::analyze(&query);
+        assert_eq!(reversed.last_feeling_depth, 22);
+        for seed in [0, 1, 91] {
+            assert_eq!(
+                plan.feelings_possible(seed),
+                reversed.feelings_possible(seed)
+            );
+        }
+    }
+
+    #[test]
+    fn future_feeling_preflight_preserves_forced_worlds_and_recipe_witnesses() {
+        let mut override_seen = [false; 2];
+        let mut early_rejections = 0;
+        let mut recipe_matches = 0;
+        // Six full worlds, reused across all 20 regular-floor observations.
+        for (value, challenges) in [(0, Challenges::NONE), (91, Challenges::LEVEL_GENERATION)] {
+            let seed = DungeonSeed::new(value).unwrap();
+            let run = RunState::with_challenges(i64::try_from(value).unwrap(), challenges);
+            let before = run.clone();
+            let mut baseline_feelings = Vec::new();
+            for selected in [None, Some(ItemId::MossyClump), Some(ItemId::TrapMechanism)] {
+                // This low-level API deliberately accepts a forced profile;
+                // recipe filtering must keep it even when Auto is disabled.
+                let full =
+                    generate_main_world_with_trinket(seed, 24, challenges, selected).unwrap();
+                if selected.is_none() {
+                    baseline_feelings.clone_from(&full.feelings);
+                }
+                assert_eq!(full.feelings.len(), 20);
+                for floor in &full.feelings {
+                    let baseline = baseline_feelings
+                        .iter()
+                        .find(|baseline| baseline.depth == floor.depth)
+                        .unwrap()
+                        .feeling;
+                    if baseline != floor.feeling {
+                        assert_eq!(baseline, Feeling::None);
+                        match selected {
+                            Some(ItemId::MossyClump) => {
+                                assert!(matches!(floor.feeling, Feeling::Grass | Feeling::Water));
+                                override_seen[0] = true;
+                            }
+                            Some(ItemId::TrapMechanism) => {
+                                assert!(matches!(floor.feeling, Feeling::Traps | Feeling::Chasm));
+                                override_seen[1] = true;
+                            }
+                            _ => panic!("unexpected feeling override"),
+                        }
+                    }
+                    let mut wanted = query(floor.depth, floor.feeling);
+                    wanted.challenges = challenges;
+                    let plan = QueryPlan::analyze(&wanted);
+                    assert!(plan.continue_after_run_init(&run));
+                    assert_eq!(run, before);
+
+                    // These feelings cannot be introduced by either trinket.
+                    // Pick a different one so the real full world is a known
+                    // negative, without depending on an unobserved seed fact.
+                    wanted.floor_requirements[0].feeling =
+                        Some(if floor.feeling == Feeling::Dark {
+                            Feeling::Large
+                        } else {
+                            Feeling::Dark
+                        });
+                    let plan = QueryPlan::analyze(&wanted);
+                    assert!(!wanted.matches(&full));
+                    assert!(!plan.continue_after_run_init(&run));
+                    assert_eq!(run, before);
+                    if floor.depth > 1 {
+                        assert!(reference_plan(&plan).continue_after_run_init(&run));
+                        early_rejections += 1;
+                    }
+                }
+
+                let feeling = full
+                    .feelings
+                    .iter()
+                    .find(|floor| floor.depth == 22)
+                    .unwrap()
+                    .feeling;
+                let mut wanted = query(22, feeling);
+                wanted.max_depth = 22;
+                wanted.challenges = challenges;
+                wanted.requirements = vec![Requirement {
+                    max_depth: Some(22),
+                    ..Requirement::any(ItemKind::Weapon)
+                }];
+                wanted.validate().unwrap();
+                assert!(wanted.matches(&full), "positive weapon witness for {seed}");
+                let plan = QueryPlan::analyze(&wanted);
+                let reference = reference_plan(&plan);
+                let generator = CanonicalMainWorldGenerator::with_challenges(challenges);
+                let recipes = [SeedRecipe {
+                    seed,
+                    trinket: selected,
+                }];
+                // RecipeGate forwards every hook and the forced choice. The
+                // reference differs only by the disabled new preflight marker.
+                let actual = auto_trinkets::filter_batch(&generator, &wanted, &plan, &recipes);
+                let expected =
+                    auto_trinkets::filter_batch(&generator, &wanted, &reference, &recipes);
+                let actual = actual[0].as_ref().expect("retained positive recipe");
+                let expected = expected[0].as_ref().expect("original positive recipe");
+                assert_eq!(actual.recipe, recipes[0]);
+                assert_eq!(actual.recipe, expected.recipe);
+                assert_eq!(actual.world, expected.world);
+                let marks = scout_matches(&actual.world, &wanted);
+                assert_eq!(marks, scout_matches(&expected.world, &wanted));
+                assert!(!marks.matched_indices().is_empty());
+                recipe_matches += 1;
+            }
+        }
+        assert!(override_seen.into_iter().all(|seen| seen));
+        assert_eq!(early_rejections, 6 * 19);
+        assert_eq!(recipe_matches, 6);
     }
 }

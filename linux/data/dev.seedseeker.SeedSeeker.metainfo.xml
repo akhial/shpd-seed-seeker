@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.20.7" date="2026-09-30">
+    <release version="0.20.8" date="2026-10-03">
       <description>
-        <p>Require T5 melee weapons in the Necromancer and Blood Berserker presets.</p>
+        <p>Prune impossible trinket and future floor requirements before generation, and give macOS toolbar glass bubbles a consistent height.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
