@@ -34,7 +34,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
     result
 }
 
-fn pixel(cell: usize, color: [u8; 3], loop_ms: u16) -> MapEmitter {
+fn pixel(cell: usize, color: [u8; 3], loop_ms: u32) -> MapEmitter {
     MapEmitter {
         start_ms: None,
         wall_mask: true,
@@ -88,7 +88,7 @@ fn garden(cell: usize) -> MapEmitter {
             // that interval into birth and position, keeping the visible life.
             let delay = (sample(cell, i, 20) * 1200.0) as u16;
             MapParticle {
-                birth_ms: (i as u16 * 900 + delay) % e.loop_ms,
+                birth_ms: (i as u32 * 900 + u32::from(delay)) % e.loop_ms,
                 lifespan_ms: 1200,
                 position: [
                     500 + (sample(cell, i, 21) * 16000.0) as i32,
@@ -141,7 +141,7 @@ fn elemental(cell: usize, kind: &str) -> Vec<MapEmitter> {
     for i in 0..3000 / interval {
         let n = usize::from(i);
         let particle = MapParticle {
-            birth_ms: (i * interval + phase) % 3000,
+            birth_ms: u32::from((i * interval + phase) % 3000),
             lifespan_ms: if shock {
                 250 + (sample(cell, n, 24) * 250.0) as u16
             } else if chaos || frost {

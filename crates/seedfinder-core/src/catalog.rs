@@ -1853,7 +1853,7 @@ mod tests {
     #[test]
     fn display_names_are_the_shared_catalog_asset_names() {
         let asset: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"
+            "../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.1.json"
         ))
         .expect("the catalog asset is JSON");
         let entries = asset["entries"].as_array().expect("an entries array");

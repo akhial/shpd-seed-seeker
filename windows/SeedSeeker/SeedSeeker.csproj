@@ -56,7 +56,7 @@
     <Content Include="..\..\web\src\assets\ATTRIBUTION.md" Link="Assets\DUNGEON-ICONS-ATTRIBUTION.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\crates\seedfinder-core\assets\level-map\ATTRIBUTION.md" Link="Assets\LEVEL-MAP-ATTRIBUTION.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\SeedSeeker.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\..\android\app\src\main\assets\third_party\shattered-pixel-dungeon\catalog-v4.0.0.json" Link="Assets\catalog-v4.0.0.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\android\app\src\main\assets\third_party\shattered-pixel-dungeon\catalog-v4.0.1.json" Link="Assets\catalog-v4.0.1.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Upstream GPL-3.0-or-later item artwork, shared with the Android app rather
          than duplicated here. Shipping the art means shipping its notices too. -->
     <Content Include="..\..\android\app\src\main\assets\third_party\shattered-pixel-dungeon\items.png" Link="Assets\items.png" CopyToOutputDirectory="PreserveNewest" />

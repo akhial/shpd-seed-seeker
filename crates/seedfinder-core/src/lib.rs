@@ -45,6 +45,8 @@ mod maze;
 pub mod mining_floor;
 pub mod mobs;
 pub mod model;
+#[cfg(test)]
+mod oracle_fixture_tests;
 pub mod painter;
 pub mod prison_floor;
 pub mod prison_mobs;
@@ -74,6 +76,7 @@ pub mod special_consumable;
 pub mod special_equipment;
 pub mod special_forced;
 pub mod trinkets;
+
 #[cfg(test)]
 mod vault_debug;
 pub mod vault_floor;
@@ -85,8 +88,8 @@ pub mod vault_sentries;
 pub mod wire;
 
 /// Upstream generation line this engine targets.
-pub const SHPD_VERSION: &str = "4.0.0";
+pub const SHPD_VERSION: &str = "4.0.1";
 
-/// Upstream source commit tagged `v4.0.0`. The matching official release
+/// Upstream source commit tagged `v4.0.1`. The matching official release
 /// JAR and its SHA-256 digest are pinned separately in `tooling/oracle-4.0`.
-pub const SHPD_COMMIT: &str = "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f";
+pub const SHPD_COMMIT: &str = "e9defd0444c96d2fce3de5ec297c3398be8b7c55";

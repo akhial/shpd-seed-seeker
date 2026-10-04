@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pins the v4.0.0 Imp quest reward options and the full Imp's Vault (branch 1)
+# Pins the v4.0.1 Imp quest reward options and the full Imp's Vault (branch 1)
 # for one seed per possible Imp floor: 17 (AAA-AAA-AAC), 18 (AAA-AAA-AAB) and
 # 19 (AAA-AAA-AAA).
 set -euo pipefail

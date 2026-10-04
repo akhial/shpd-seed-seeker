@@ -2,9 +2,9 @@
 
 Shattered Pixel Dungeon generation changes between versions. Every engine result
 must therefore carry the target version, commit, and run profile. This project
-targets the final [v4.0.0 source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.0),
-build 912. `SHPD_COMMIT` holds its source commit,
-`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. The 4.0.0 parity oracle
+targets the final [v4.0.1 source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.1),
+build 920. `SHPD_COMMIT` holds its source commit,
+`e9defd0444c96d2fce3de5ec297c3398be8b7c55`. The 4.0.1 parity oracle
 (`tooling/oracle-4.0`) runs the matching unmodified official release JAR,
 with its SHA-256 pinned separately. The v3.3.8 fixtures
 that still exist were pinned at commit
@@ -166,8 +166,8 @@ official oracle preserves the runtime result and records JVM provenance.
 5. Whole-floor item/event snapshots across randomized and targeted seeds.
 6. An Android/ART oracle pass for runtime-sensitive collection ordering.
 
-The pinned desktop fixtures use Temurin 21. `tooling/oracle` retains official
-Java behavior and has no diagnostic RNG canonicalization.
+The current desktop fixtures use Temurin 25.0.4.1. `tooling/oracle-4.0` retains
+official Java behavior and has no diagnostic RNG canonicalization.
 
 Android native builds use Rust `opt-level=2` with fat LTO. The workspace's
 host release profile remains O3. With rustc 1.94/LLVM 21.1.8, Android AArch64

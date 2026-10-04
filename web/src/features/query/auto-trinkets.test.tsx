@@ -27,7 +27,7 @@ afterEach(() => {
 const document = {
   auto_apply_trinket: true,
   max_depth: 19,
-  requirements: [{ item: "runic_blade", upgrade: 1, effect: "Grim" }],
+  requirements: [{ kind: "weapon", effect: "Grim" }],
 };
 
 it("keeps the setting in share links and rejects malformed flags", () => {

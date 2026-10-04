@@ -10,7 +10,7 @@ subprocess.run([str(ORACLE / 'build.sh')], check=True, stdout=subprocess.DEVNULL
 samples = []
 for seed in ('AAA-AAA-AAA', 'FOI-QDX-EMJ', 'BAD-RAT-KNG', 'HEL-LOO-WRD'):
     data = json.loads(subprocess.check_output([
-        'java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.0-Java.jar',
+        'java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.1-Java.jar',
         'com.shatteredpixel.shatteredpixeldungeon.ParityOracle', '--seed', seed,
         '--floors', '17-19', '--map-contents', '--acquire-hourglass', '--vault', '--format', 'json']))
     level = next(r for r in data['records'] if r.get('record') == 'level' and r['branch'] == 1)
@@ -19,6 +19,6 @@ for seed in ('AAA-AAA-AAA', 'FOI-QDX-EMJ', 'BAD-RAT-KNG', 'HEL-LOO-WRD'):
     cycles = [[c[k] for k in ('cell', 'initialCooldown', 'cooldown', 'triggers')]
               for c in level['flame_cycles']]
     samples.append(dict(seed=seed, depth=level['depth'], families=families, cycles=cycles))
-fixture = dict(source='Official ShatteredPD-v4.0.0-Java.jar: VaultFlameTraps setup arrays; cycles are [cell, initialCooldown, cooldown, triggers].', samples=samples)
+fixture = dict(source='Official ShatteredPD-v4.0.1-Java.jar: VaultFlameTraps setup arrays; cycles are [cell, initialCooldown, cooldown, triggers].', samples=samples)
 (ROOT / 'crates/seedfinder-core/tests/fixtures/vault-flames.json').write_text(json.dumps(fixture, indent=2)+'\n')
 print([(s['seed'], s['families'], len(s['cycles'])) for s in samples])

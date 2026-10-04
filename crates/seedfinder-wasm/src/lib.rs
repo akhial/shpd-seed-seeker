@@ -1256,7 +1256,7 @@ mod tests {
         );
 
         let catalog: AndroidCatalog = serde_json::from_str(include_str!(
-            "../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"
+            "../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.1.json"
         ))
         .unwrap();
         let sprites = catalog
@@ -1309,7 +1309,7 @@ mod tests {
     #[test]
     fn artifact_shared_catalog_agrees_with_engine_wire_metadata() {
         let entries: Value =
-            serde_json::from_str(include_str!("../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"))
+            serde_json::from_str(include_str!("../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.1.json"))
                 .unwrap();
         let entries: Vec<_> = entries["entries"]
             .as_array()
@@ -1405,7 +1405,7 @@ mod tests {
                 .any(|offer| offer["id"] == "mimic_tooth" && offer["matched"] == true)
         );
         let catalog: Value =
-            serde_json::from_str(include_str!("../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"))
+            serde_json::from_str(include_str!("../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.1.json"))
                 .unwrap();
         for entry in catalog["entries"]
             .as_array()

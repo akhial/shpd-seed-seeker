@@ -1625,17 +1625,46 @@ where
     }
 
     let armored = inputs.random.float() < statue_alt_chance(inputs.prizes);
+    // Statue.random isolates type-dependent equipment draws from levelgen.
+    let child_seed = inputs.random.long();
+    inputs.random.push(child_seed);
+    let carried = generate_statue_equipment(inputs, armored);
+    inputs.random.pop();
+    let carried = carried?;
+    let source = if armored {
+        ItemSource::ArmoredStatue
+    } else {
+        ItemSource::Statue
+    };
+    let cell = point_to_cell(inputs.level, center);
+    inputs.mob(
+        cell,
+        if armored {
+            SpecialMobKind::ArmoredStatue
+        } else {
+            SpecialMobKind::Statue
+        },
+        carried,
+        source,
+    );
+    Ok(())
+}
+
+fn generate_statue_equipment<L, G, P>(
+    inputs: &mut PaintInputs<'_, L, G, P>,
+    armored: bool,
+) -> Result<Vec<SpecialReward>, GeneratorError>
+where
+    L: SpecialLevelContext,
+    G: SpecialGeneratorContext,
+    P: SpecialPrizeContext,
+{
     let mut weapon = inputs.generate(SpecialGeneratorRequest::Weapon {
         floor_set: inputs.floor_set(),
         use_defaults: false,
     })?;
     force_good_weapon_enchantment(&mut weapon, inputs.random);
 
-    let source = if armored {
-        ItemSource::ArmoredStatue
-    } else {
-        ItemSource::Statue
-    };
     let mut carried = vec![SpecialReward {
         item: weapon,
         accessibility: Accessibility::Independent,
@@ -1650,18 +1679,7 @@ where
             accessibility: Accessibility::Independent,
         });
     }
-    let cell = point_to_cell(inputs.level, center);
-    inputs.mob(
-        cell,
-        if armored {
-            SpecialMobKind::ArmoredStatue
-        } else {
-            SpecialMobKind::Statue
-        },
-        carried,
-        source,
-    );
-    Ok(())
+    Ok(carried)
 }
 
 fn paint_crystal_vault<L, G, P>(inputs: &mut PaintInputs<'_, L, G, P>) -> Result<(), GeneratorError>
@@ -2307,7 +2325,7 @@ mod tests {
                 0,
                 824_035_768,
                 DoorType::Locked,
-                -7_423_979_211_207_825_555,
+                -7_261_648_964_369_397_258,
             ),
             (
                 SpecialRoomKind::CrystalVault,
@@ -2413,9 +2431,9 @@ mod tests {
                 Accessibility::Independent,
             )],
             SpecialRoomKind::Statue => vec![world_item(
-                ItemId::Crossbow,
-                1,
-                Some(Effect::Weapon(WeaponEffect::Blocking)),
+                ItemId::Sai,
+                0,
+                Some(Effect::Weapon(WeaponEffect::Shocking)),
                 false,
                 ItemSource::Statue,
                 Accessibility::Independent,
@@ -2585,22 +2603,22 @@ mod tests {
     fn armored_statue_and_armory_missile_paths_match_java() {
         let statue = paint_fixture(SpecialRoomKind::Statue, 11);
         assert_eq!(statue.map_hash, 824_035_768);
-        assert_eq!(statue.next, -1_218_090_000_690_447_877);
+        assert_eq!(statue.next, 97_340_379_874_793_124);
         assert_eq!(
             statue.report.searchable_items,
             [
                 world_item(
-                    ItemId::Crossbow,
+                    ItemId::Sai,
                     0,
-                    Some(Effect::Weapon(WeaponEffect::Corrupting)),
+                    Some(Effect::Weapon(WeaponEffect::Unstable)),
                     false,
                     ItemSource::ArmoredStatue,
                     Accessibility::Independent,
                 ),
                 world_item(
-                    ItemId::MailArmor,
+                    ItemId::ScaleArmor,
                     0,
-                    Some(Effect::Armor(ArmorEffect::Stone)),
+                    Some(Effect::Armor(ArmorEffect::Obfuscation)),
                     false,
                     ItemSource::ArmoredStatue,
                     Accessibility::Independent,

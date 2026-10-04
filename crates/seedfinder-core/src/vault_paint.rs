@@ -1,4 +1,4 @@
-//! Exact `paint(Level)` ports for every v4.0.0 Imp Vault room class.
+//! Exact `paint(Level)` ports for every v4.0.1 Imp Vault room class.
 //!
 //! Each function reproduces its Java counterpart's terrain writes, heap
 //! drops, mob placements, and RNG draws in source order. `Painter.fill`
@@ -347,6 +347,33 @@ fn paint_entrance(
     state.entrance_cell = Some(entrance);
 }
 
+/// Entrance-adjacent rooms reject stronger enemies and return their concrete
+/// classes to the front of the deck in encounter order.
+fn create_room_enemy(
+    state: &mut VaultLevelState,
+    rooms: &[VaultRoom],
+    room: usize,
+    random: &mut RandomStack,
+) -> VaultMobKind {
+    let next_to_entry = rooms[room]
+        .connected
+        .iter()
+        .any(|entry| rooms[entry.room].is_entrance());
+    let mut rejected = Vec::new();
+    let enemy = loop {
+        let enemy = state.mob_deck.create_mob(random);
+        if next_to_entry && !enemy.is_tier_one() {
+            rejected.push(enemy.class().expect("deck mobs have classes"));
+        } else {
+            break enemy;
+        }
+    };
+    for class in rejected {
+        state.mob_deck.return_mob(class);
+    }
+    enemy
+}
+
 fn paint_ring(
     state: &mut VaultLevelState,
     rooms: &mut [VaultRoom],
@@ -358,7 +385,7 @@ fn paint_ring(
     fill_room_margin(state, &this, 1, terrain::EMPTY);
     fill_room_margin(state, &this, 4, terrain::WALL);
     doors_regular(rooms, room);
-    let enemy = state.mob_deck.create_mob(random);
+    let enemy = create_room_enemy(state, rooms, room, random);
     let b = this.bounds;
     let wander = if random.int_bound(2) == 0 {
         [
@@ -430,7 +457,7 @@ fn paint_quadrants(
     if spawn_positions.is_empty() {
         return;
     }
-    let enemy = state.mob_deck.create_mob(random);
+    let enemy = create_room_enemy(state, rooms, room, random);
     let corner = spawn_positions[random_index(spawn_positions.len(), random)];
     let pos = i32::try_from(state.point_to_cell(corner)).expect("cell fits Java int");
     state.add_mob(enemy, as_cell(pos));
@@ -466,10 +493,14 @@ fn paint_rings(
     fill(state, b.right - 4, b.bottom - 4, 3, 3, terrain::WALL);
     doors_regular(rooms, room);
 
+    let next_to_entry = this
+        .connected
+        .iter()
+        .any(|entry| rooms[entry.room].is_entrance());
     let mut to_return = Vec::new();
     let enemy = loop {
         let enemy = state.mob_deck.create_mob(random);
-        if enemy.is_large() {
+        if enemy.is_large() || (next_to_entry && !enemy.is_tier_one()) {
             to_return.push(enemy.class().expect("deck mobs have classes"));
         } else {
             break enemy;
@@ -544,7 +575,7 @@ fn paint_enemy_center(
     );
     doors_regular(rooms, room);
 
-    let enemy = state.mob_deck.create_mob(random);
+    let enemy = create_room_enemy(state, rooms, room, random);
     let c = this.center();
     let wander = if random.int_bound(2) == 0 {
         [
@@ -656,7 +687,7 @@ fn paint_hallway(
         drop_heap(state, item, loot_positions[0]);
     }
 
-    let enemy = state.mob_deck.create_mob(random);
+    let enemy = create_room_enemy(state, rooms, room, random);
     // setupStealthGameplayWanderPositions(..., Random.Int(2)) only stores
     // the starting index; the draw itself is what matters here.
     let _ = random.int_bound(2);
@@ -811,8 +842,8 @@ fn paint_circle(
     fill_room_margins(state, &this, 4, 1, 4, 1, terrain::EMPTY);
     fill_room_margins(state, &this, 1, 4, 1, 4, terrain::EMPTY);
     set_point(state, this.center(), terrain::PEDESTAL);
-    // The sentry's scan pattern is chosen with Random.Int(4).
-    let pattern = random.int_bound(4);
+    // The difficult four-cone pattern was removed in 4.0.1.
+    let pattern = random.int_bound(3);
     let cell = state.point_to_cell(this.center());
     state.add_mob(VaultMobKind::Sentry, cell);
     let width = state.width();
@@ -846,8 +877,8 @@ fn paint_alternating_fire(
     let cell = i32::try_from(state.point_to_cell(c)).unwrap();
     drop_heap(state, VaultItem::Equipment(item), cell);
     let mut alternate = false;
-    for x in b.left + 1..b.right {
-        for y in b.top + 1..b.bottom {
+    for x in b.left + 2..=b.right - 2 {
+        for y in b.top + 2..=b.bottom - 2 {
             let cell = cell_of(state, x, y);
             if map_at(state, cell) != terrain::PEDESTAL {
                 state.setup_flame_trap(as_cell(cell), u16::from(alternate), 2, 1);
@@ -888,7 +919,7 @@ fn paint_lasers(
                 x + width * (b.bottom - 1)
             };
             set_cell(state, cell, terrain::PEDESTAL);
-            let after_shot = random.int_range(3, 7);
+            let after_shot = random.int_range(7, 9);
             let initial = random.int_range(1, after_shot);
             state.add_mob(VaultMobKind::Laser, as_cell(cell));
             let target = if cell / width == b.top + 1 {
@@ -918,7 +949,7 @@ fn paint_lasers(
                 b.right - 1 + width * y
             };
             set_cell(state, cell, terrain::PEDESTAL);
-            let after_shot = random.int_range(3, 7);
+            let after_shot = random.int_range(7, 9);
             let initial = random.int_range(1, after_shot);
             state.add_mob(VaultMobKind::Laser, as_cell(cell));
             let target = if cell % width == b.left + 1 {

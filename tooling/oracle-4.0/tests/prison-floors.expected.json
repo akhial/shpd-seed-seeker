@@ -1,7 +1,7 @@
 {
   "schema": "shpd-prison-parity-fixture/v3",
-  "game_version": "4.0.0",
-  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "game_version": "4.0.1",
+  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -73,17 +73,17 @@
         [
           7,
           "PrisonLevel",
-          -1779608914
+          -1246457199
         ],
         [
           8,
           "PrisonLevel",
-          483177192
+          -713657683
         ],
         [
           9,
           "PrisonLevel",
-          -1851823764
+          -1306121329
         ]
       ],
       "levels": [
@@ -146,58 +146,46 @@
             41,
             54
           ],
-          "map_hash": -2025558282,
+          "map_hash": -588538309,
           "entrance": 1221,
           "exit": 995,
-          "generator_state_hash": -1779608914,
+          "generator_state_hash": -1246457199,
           "mobs": [
-            [
-              "Thief",
-              217
-            ],
             [
               "Statue",
               224
             ],
             [
               "Skeleton",
-              296
+              255
+            ],
+            [
+              "Thief",
+              468
             ],
             [
               "Skeleton",
-              538
+              496
             ],
             [
               "Skeleton",
-              848
+              550
             ],
             [
-              "DM100",
-              919
-            ],
-            [
-              "Skeleton",
-              1038
+              "Thief",
+              1168
             ],
             [
               "Guard",
               1173
             ],
             [
-              "Mimic",
-              1197
-            ],
-            [
-              "Skeleton",
-              1241
-            ],
-            [
               "DM100",
-              1320
+              1240
             ],
             [
               "Skeleton",
-              1331
+              1249
             ]
           ]
         },
@@ -212,7 +200,7 @@
           "map_hash": -1261455225,
           "entrance": 1235,
           "exit": 489,
-          "generator_state_hash": 483177192,
+          "generator_state_hash": -713657683,
           "mobs": [
             [
               "Guard",
@@ -260,10 +248,10 @@
             27,
             45
           ],
-          "map_hash": -2111462339,
+          "map_hash": 238268942,
           "entrance": 462,
           "exit": 856,
-          "generator_state_hash": -1851823764,
+          "generator_state_hash": -1306121329,
           "mobs": [
             [
               "Necromancer",
@@ -300,10 +288,6 @@
             [
               "DM100",
               829
-            ],
-            [
-              "Mimic",
-              1128
             ],
             [
               "Thief",
@@ -439,11 +423,11 @@
           7,
           "chest",
           0,
-          1561,
+          2108,
           "CHEST",
-          "Scimitar",
-          "weapon",
-          1,
+          "MailArmor",
+          "armor",
+          0,
           false,
           null,
           {
@@ -482,21 +466,6 @@
         ],
         [
           7,
-          "mimic",
-          1,
-          1197,
-          null,
-          "Tomahawk",
-          "weapon",
-          0,
-          false,
-          null,
-          {
-            "kind": "independent"
-          }
-        ],
-        [
-          7,
           "skeleton",
           3,
           1503,
@@ -518,9 +487,9 @@
           null,
           "AssassinsBlade",
           "weapon",
-          1,
+          0,
           false,
-          "Vorpal",
+          "Blazing",
           {
             "kind": "independent"
           }
@@ -536,21 +505,6 @@
           0,
           false,
           null,
-          {
-            "kind": "independent"
-          }
-        ],
-        [
-          8,
-          "heap",
-          0,
-          1185,
-          "HEAP",
-          "LeatherArmor",
-          "armor",
-          0,
-          true,
-          "Corrosion",
           {
             "kind": "independent"
           }
@@ -626,7 +580,7 @@
         [
           6,
           "PrisonLevel",
-          -647641529
+          1130108811
         ]
       ],
       "levels": [
@@ -638,46 +592,42 @@
             43,
             40
           ],
-          "map_hash": -903102768,
+          "map_hash": -36354504,
           "entrance": 627,
           "exit": 994,
-          "generator_state_hash": -647641529,
+          "generator_state_hash": 1130108811,
           "mobs": [
             [
-              "Swarm",
-              152
+              "Skeleton",
+              194
+            ],
+            [
+              "Skeleton",
+              311
             ],
             [
               "Statue",
               484
             ],
             [
+              "Thief",
+              780
+            ],
+            [
               "Shopkeeper",
               811
             ],
             [
-              "Skeleton",
-              1006
-            ],
-            [
-              "Skeleton",
-              1078
-            ],
-            [
-              "Skeleton",
-              1093
+              "Swarm",
+              963
             ],
             [
               "SentryRoom$Sentry",
               1102
             ],
             [
-              "Thief",
-              1341
-            ],
-            [
               "Skeleton",
-              1387
+              1122
             ]
           ]
         }
@@ -702,13 +652,28 @@
           6,
           "heap",
           0,
-          779,
+          181,
           "HEAP",
-          "ThrowingClub",
-          "weapon",
+          "RingOfSharpshooting",
+          "ring",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          6,
+          "heap",
+          0,
+          837,
+          "HEAP",
+          "LeatherArmor",
+          "armor",
           1,
           true,
-          "Displacing",
+          "Overgrowth",
           {
             "kind": "independent"
           }
@@ -783,7 +748,7 @@
           "weapon",
           1,
           false,
-          "Venomous",
+          "Corrupting",
           {
             "kind": "independent"
           }

@@ -4,14 +4,14 @@ The apps and CLI scout the daily run for a selected UTC calendar date. The
 date picker accepts past and future dates; **Today** reads the UTC date when
 pressed, so it remains correct across midnight and in every device time zone.
 
-The pinned game's [`Dungeon.initSeed`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/Dungeon.java#L206-L212)
+The pinned game's [`Dungeon.initSeed`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/e9defd0444c96d2fce3de5ec297c3398be8b7c55/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/Dungeon.java#L206-L212)
 computes `UTC midnight Unix milliseconds + 5_429_503_678_976`. This value is
 outside the normal seed-code range. Converting it to nine letters, reducing it
 modulo `26^9`, or entering the date as a custom text seed produces a different
 run. For example, `2026-09-25` has the raw seed `7_219_798_078_976`.
 
 All dates use the app's pinned generation version, currently Shattered Pixel
-Dungeon 4.0.0. The game itself permits 4.0 dailies starting on April 1, 2026.
+Dungeon 4.0.1. The game itself permits 4.0 dailies starting on April 1, 2026.
 Earlier dates are extrapolations with this engine, not replays of older game
 versions. Future dates likewise assume this game version.
 

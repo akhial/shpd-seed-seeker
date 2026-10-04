@@ -1,7 +1,7 @@
 {
   "schema": "shpd-city-parity-fixture/v3",
-  "game_version": "4.0.0",
-  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "game_version": "4.0.1",
+  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -43,27 +43,27 @@
         [
           15,
           "CavesBossLevel",
-          390619280
+          -521548173
         ],
         [
           16,
           "CityLevel",
-          -1519889268
+          -22220433
         ],
         [
           17,
           "CityLevel",
-          1989254258
+          446007927
         ],
         [
           18,
           "CityLevel",
-          -556153213
+          -458654972
         ],
         [
           19,
           "CityLevel",
-          883677465
+          -2127965508
         ]
       ],
       "levels": [
@@ -75,10 +75,10 @@
             39,
             37
           ],
-          "map_hash": -640772373,
+          "map_hash": -349605781,
           "entrance": 1186,
           "exit": 383,
-          "generator_state_hash": -1519889268,
+          "generator_state_hash": -22220433,
           "mobs": [
             [
               "Elemental$FireElemental",
@@ -118,10 +118,10 @@
             57,
             36
           ],
-          "map_hash": -1251089393,
+          "map_hash": 1878564159,
           "entrance": 679,
           "exit": 1601,
-          "generator_state_hash": 1989254258,
+          "generator_state_hash": 446007927,
           "mobs": [
             [
               "Mimic",
@@ -165,10 +165,10 @@
             43,
             37
           ],
-          "map_hash": 435526208,
+          "map_hash": -1061092348,
           "entrance": 338,
           "exit": 1080,
-          "generator_state_hash": -556153213,
+          "generator_state_hash": -458654972,
           "mobs": [
             [
               "SentryRoom$Sentry",
@@ -208,10 +208,10 @@
             37,
             46
           ],
-          "map_hash": -538847853,
+          "map_hash": 851610946,
           "entrance": 461,
           "exit": 397,
-          "generator_state_hash": 883677465,
+          "generator_state_hash": -2127965508,
           "mobs": [
             [
               "Elemental$ShockElemental",
@@ -220,10 +220,6 @@
             [
               "Golem",
               325
-            ],
-            [
-              "Mimic",
-              396
             ],
             [
               "Warlock",
@@ -381,21 +377,6 @@
           18,
           "heap",
           0,
-          1121,
-          "HEAP",
-          "MailArmor",
-          "armor",
-          1,
-          true,
-          "Multiplicity",
-          {
-            "kind": "independent"
-          }
-        ],
-        [
-          18,
-          "heap",
-          0,
           1320,
           "HEAP",
           "Javelin",
@@ -433,6 +414,21 @@
           0,
           false,
           null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          19,
+          "heap",
+          0,
+          399,
+          "HEAP",
+          "ThrowingHammer",
+          "weapon",
+          0,
+          true,
+          "Friendly",
           {
             "kind": "independent"
           }
@@ -541,27 +537,12 @@
         ],
         [
           19,
-          "mimic",
-          1,
-          396,
-          null,
-          "RingOfEvasion",
-          "ring",
-          0,
-          false,
-          null,
-          {
-            "kind": "independent"
-          }
-        ],
-        [
-          19,
           "skeleton",
           0,
           541,
           "SKELETON",
-          "HeavyBoomerang",
-          "weapon",
+          "ScaleArmor",
+          "armor",
           2,
           false,
           null,
@@ -581,12 +562,12 @@
         [
           15,
           "CavesBossLevel",
-          -1448575199
+          96861093
         ],
         [
           16,
           "CityLevel",
-          -379318337
+          284566459
         ]
       ],
       "levels": [
@@ -601,7 +582,7 @@
           "map_hash": 129683275,
           "entrance": 1420,
           "exit": 194,
-          "generator_state_hash": -379318337,
+          "generator_state_hash": 284566459,
           "mobs": [
             [
               "Ghoul",
@@ -748,12 +729,12 @@
         [
           15,
           "CavesBossLevel",
-          1323116360
+          577658192
         ],
         [
           16,
           "CityLevel",
-          1779161899
+          288442961
         ]
       ],
       "levels": [
@@ -765,10 +746,10 @@
             52,
             32
           ],
-          "map_hash": 1928380213,
+          "map_hash": -1593653441,
           "entrance": 997,
           "exit": 667,
-          "generator_state_hash": 1779161899,
+          "generator_state_hash": 288442961,
           "mobs": [
             [
               "Warlock",
@@ -838,7 +819,7 @@
           0,
           1514,
           "FOR_SALE",
-          "Longsword",
+          "AssassinsBlade",
           "weapon",
           0,
           false,
@@ -874,12 +855,12 @@
         [
           15,
           "CavesBossLevel",
-          -521022532
+          -783043934
         ],
         [
           16,
           "CityLevel",
-          277775753
+          1020089476
         ]
       ],
       "levels": [
@@ -894,7 +875,7 @@
           "map_hash": -1234450086,
           "entrance": 350,
           "exit": 1176,
-          "generator_state_hash": 277775753,
+          "generator_state_hash": 1020089476,
           "mobs": [
             [
               "Shopkeeper",
@@ -991,7 +972,7 @@
           0,
           74,
           "FOR_SALE",
-          "AssassinsBlade",
+          "Flail",
           "weapon",
           0,
           false,

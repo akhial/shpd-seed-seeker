@@ -70,11 +70,11 @@ fn curve_value(curve: &shpd_seedfinder_core::level_map::MapCurve, progress: f64)
 }
 
 fn check_warnings(map: &LevelMap, expected: &[Value], code: &str) {
-    // Crossing lasers have independent 3–7 turn periods: 84 seconds covers
-    // two complete cycles even for the longest pair (6 and 7 turns).
+    // Crossing lasers have independent 7–9 turn periods: 144 seconds covers
+    // two complete cycles even for the longest pair (8 and 9 turns).
     for emitters in [&map.scene.emitters, &map.scene.concealed_emitters] {
         let warnings: Vec<_> = emitters.iter().filter(|e| is_warning(e)).collect();
-        for turn in 0..84 {
+        for turn in 0..144 {
             for offset in [0, 399, 400, 599, 600, 999] {
                 let time = turn * 1000 + offset;
                 let mut ages = BTreeMap::<usize, u32>::new();
@@ -103,11 +103,11 @@ fn check_warnings(map: &LevelMap, expected: &[Value], code: &str) {
                 for emitter in &warnings {
                     let cells = particle_cells(emitter, map.width, 8000);
                     for (particle, cell) in emitter.particles.iter().zip(cells) {
-                        let start = emitter.start_ms.unwrap() + u32::from(particle.birth_ms);
+                        let start = emitter.start_ms.unwrap() + particle.birth_ms;
                         if time < start {
                             continue;
                         }
-                        let age = (time - start) % u32::from(emitter.loop_ms);
+                        let age = (time - start) % emitter.loop_ms;
                         if age >= u32::from(particle.lifespan_ms) {
                             continue;
                         }

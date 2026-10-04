@@ -7,7 +7,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 ORACLE = ROOT / 'tooling/oracle-4.0'
-JAVA = ['java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.0-Java.jar']
+JAVA = ['java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.1-Java.jar']
 MAIN = 'com.shatteredpixel.shatteredpixeldungeon.'
 
 def format_fixture(fixture):
@@ -62,7 +62,7 @@ def main():
     jobs += [(seed,challenge,None,(depth,variant)) for seed,depth,variant in [('AAA-AAA-AAA',13,1),('ZZZ-ZZZ-ZZZ',12,2)] for challenge in (0,32)]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         samples = [s for batch in pool.map(generate,jobs) for s in batch]
-    fixture = dict(source='official ShatteredPD-v4.0.0-Java.jar; ParityOracle --map-contents --acquire-hourglass', samples=samples)
+    fixture = dict(source='official ShatteredPD-v4.0.1-Java.jar; ParityOracle --map-contents --acquire-hourglass', samples=samples)
     (ROOT/'crates/seedfinder-core/tests/fixtures/map-contents.json').write_text(format_fixture(fixture))
     print(f'Wrote {len(samples)} samples')
 

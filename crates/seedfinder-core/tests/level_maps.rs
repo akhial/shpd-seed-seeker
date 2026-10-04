@@ -20,7 +20,7 @@ fn completed_map_matches_saved_game_fixtures_in_every_region() {
             .terrain
             .iter()
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v)),
-        -72_472_821
+        -445_847_158
     );
     for fixture in [
         include_str!("../../../tooling/oracle-4.0/tests/prison-floors.expected.json"),
@@ -342,6 +342,66 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
         }
     }
     assert_drawing_bounds(&map);
+}
+
+#[test]
+fn vault_doors_match_the_official_custom_tile_selectors() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/vault-doors.json")).unwrap();
+    for sample in fixture["samples"].as_array().unwrap() {
+        let map = generate_level_map_in_branch(
+            DungeonSeed::from_code(sample["seed"].as_str().unwrap()).unwrap(),
+            u8::try_from(sample["depth"].as_u64().unwrap()).unwrap(),
+            1,
+            Challenges::NONE,
+            None,
+        )
+        .unwrap();
+        let floor = map
+            .scene
+            .layers
+            .iter()
+            .find(|l| l.name == "room_floor")
+            .unwrap();
+        let walls = map
+            .scene
+            .layers
+            .iter()
+            .find(|l| l.name == "room_walls")
+            .unwrap();
+        let check = |layer: &shpd_seedfinder_core::level_map::MapLayer,
+                     cell: usize,
+                     expected: i64| {
+            if expected == -1 {
+                assert!(
+                    layer.cells[cell].is_none(),
+                    "unexpected door tile at {cell}"
+                );
+            } else {
+                let sprite = &map.scene.sprites[layer.cells[cell].expect("custom door tile")];
+                let tile = u16::try_from(expected).unwrap();
+                assert!(
+                    matches!(sprite.frames[0].as_slice(), [MapDraw::Blit { asset: "city_quest.png", source, .. }]
+                    if *source == [(tile % 16) * 16, (tile / 16) * 16, 16, 16])
+                );
+            }
+        };
+        for door in sample["doors"].as_array().unwrap() {
+            let cell = usize::try_from(door["cell"].as_u64().unwrap()).unwrap();
+            assert!(
+                map.contents
+                    .features
+                    .iter()
+                    .any(|f| f.cell == cell && f.kind == door["kind"].as_str().unwrap())
+            );
+            check(floor, cell, door["floor"].as_i64().unwrap());
+            check(
+                walls,
+                cell - usize::try_from(map.width).unwrap(),
+                door["walls"][0].as_i64().unwrap(),
+            );
+            check(walls, cell, door["walls"][1].as_i64().unwrap());
+        }
+    }
 }
 
 #[test]

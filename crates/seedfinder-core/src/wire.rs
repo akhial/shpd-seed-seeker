@@ -2021,10 +2021,10 @@ mod tests {
             WandmakerQuestType,
         };
 
-        // Re-pinned from the v4.0.0-BETA-4 oracle (tooling/oracle-4.0): the
+        // Re-pinned from the v4.0.1 oracle (tooling/oracle-4.0): the
         // vault adds fifteen treasure options to the Imp's five prizes.
         let generated = native_world(DungeonSeed::MIN, 24);
-        assert_eq!(generated.items.len(), 103);
+        assert_eq!(generated.items.len(), 99);
         assert_eq!(
             generated.quests,
             QuestSummary {
@@ -2052,11 +2052,23 @@ mod tests {
                 .iter()
                 .filter(|value| item(value.item).kind == ItemKind::Ring)
                 .count(),
-            9
+            7
         );
         let packet = super::encode_scout_world(&generated).unwrap();
         let decoded = decode_scout_world(&packet).unwrap();
         assert_eq!(decoded, generated);
+        for depth in 1..=24 {
+            let items: Vec<_> = decoded
+                .items
+                .iter()
+                .filter(|i| i.depth == depth)
+                .cloned()
+                .collect();
+            crate::oracle_fixture_tests::assert_items(
+                crate::oracle_fixture_tests::floor("AAA-AAA-AAA", 0, u32::from(depth)),
+                &items,
+            );
+        }
 
         assert!(decoded.items.iter().any(|item| {
             item.depth == 1
@@ -2112,7 +2124,7 @@ mod tests {
             item.depth == 22
                 && item.item == ItemId::Greatsword
                 && item.source == ItemSource::Statue
-                && item.effect == Some(Effect::Weapon(WeaponEffect::Venomous))
+                && item.effect == Some(Effect::Weapon(WeaponEffect::Blocking))
         }));
         assert!(decoded.items.iter().any(|item| {
             item.depth == 24

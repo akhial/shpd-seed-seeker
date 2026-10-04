@@ -285,7 +285,9 @@ display frame, independently of the scenery frame cache (120 Hz on a 120 Hz disp
 Each emitter provides an `image` command, `cell`, `loopMs`, `blend`, velocity and
 acceleration in pixels/second, and `angularSpeed` in degrees/second. Each particle
 provides `birthMs`, `lifespanMs`, a cell-relative `position` in milli-pixels,
-initial `scale` in thousandths, and an initial `angle` in degrees.
+initial `scale` in thousandths, and an initial `angle` in degrees. `loopMs` and
+`birthMs` support unsigned 32-bit milliseconds; crossing vault lasers can repeat
+over a 72-second combined cycle.
 
 ```text
 clockMs = elapsedMs - (startMs or 0)
@@ -348,26 +350,29 @@ particle schedules, secret masks and trinket refresh alongside choice matching.
 
 ## Source and validation
 
-Generation uses the repository's pinned v4.0.0 engine and saved Java parity
+Generation uses the repository's pinned v4.0.1 engine and saved Java parity
 fixtures. Terrain hashes, dimensions and transitions are tested against those
 fixtures across all five regions. Tests also cover query/override selection,
 pre-brewing behaviour, repeated requests, secret revelation, source/destination
 bounds, animation wrapping and native/wasm document equivalence.
 
-Sprite assets and their selection tables are pinned to the v4.0.0 source commit
-`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. The official release JAR and its
+Sprite assets and their selection tables are pinned to the v4.0.1 source commit
+`e9defd0444c96d2fce3de5ec297c3398be8b7c55`. The official release JAR and its
 SHA-256 are pinned in `tooling/oracle-4.0/build.sh`.
 See [asset attribution](../crates/seedfinder-core/assets/level-map/ATTRIBUTION.md)
 for the original files and rules. Mining terrain additionally matches 36 fixtures generated from the unmodified
 v4.0.0 release JAR (both quest types, depths 12–14, three seeds, challenge masks
 0/104). Its separate JAR digest and reproduction instructions are recorded in
 [mining-map fixtures](../tooling/oracle-4.0/tests/mining-maps.md).
-Vault terrain uses the v4.0.0-validated generator and saved vault fixtures.
+Vault terrain uses the v4.0.1-validated generator and saved vault fixtures.
 Sentry setup and ray/scan coverage match 342 official sentries across nine seeds
 in `tests/fixtures/vault-sentries.json`; regenerate with
-`python3 tooling/oracle-4.0/generate-vault-sentries.py`.
+`python3 tooling/oracle-4.0/generate-vault-sentries.py`. The new token and final-room
+door floor/overhang artwork is checked against the official custom tile selectors
+by `tests/fixtures/vault-doors.json`; regenerate with
+`python3 tooling/oracle-4.0/generate-vault-doors.py`.
 
-The raised selectors are checked against the unmodified official v4.0.0 JAR:
+The raised selectors are checked against the unmodified official v4.0.1 JAR:
 65 full-layer hashes across 13 maps cover every region, Crystal and Gnoll mines,
 and an Imp vault, including the example seed JHG-HJJ-BKK. The oracle receives
 the engine's terrain and independently resolves atlas indices; it validates
@@ -417,7 +422,7 @@ map transform when hit testing, and clear inspection on navigation or gestures.
 Older documents without this array remain renderable without inspection.
 
 Names and static descriptions come from the original English Java messages at
-v4.0.0 commit `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`, under GPL-3.0-or-later
+v4.0.1 commit `e9defd0444c96d2fce3de5ec297c3398be8b7c55`, under GPL-3.0-or-later
 (see `NOTICE`). Regenerate with `python3 scripts/generate-item-text.py`.
 The generated file records each source SHA-256. Game emphasis markers are
 removed; hero/depth-dependent formatted sentences are omitted. No damage

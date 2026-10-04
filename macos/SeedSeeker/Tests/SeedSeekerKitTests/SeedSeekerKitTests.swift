@@ -108,7 +108,7 @@ final class SeedSeekerKitTests: XCTestCase {
             .deletingLastPathComponent() // macos
             .deletingLastPathComponent() // repository root
             .appendingPathComponent(
-                "android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json")
+                "android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.1.json")
         let document = try XCTUnwrap(
             try JSONSerialization.jsonObject(with: Data(contentsOf: asset)) as? [String: Any])
         let entries = try XCTUnwrap(document["entries"] as? [[String: Any]])

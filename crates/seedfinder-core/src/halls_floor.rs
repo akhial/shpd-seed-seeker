@@ -1027,11 +1027,9 @@ impl RoomCharacterRules for HallsSpatialRules {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{ArmorEffect, Effect, ItemId, WeaponEffect};
-    use crate::halls_mobs::HallsMobKind;
-    use crate::level_prelude::Feeling;
-    use crate::model::{Accessibility, ItemSource};
-    use crate::quest_rooms::{QuestMobKind, QuestPaintEvent};
+    use crate::catalog::ItemId;
+
+    use crate::model::ItemSource;
 
     fn generate_halls_prefix(seed: DungeonSeed, maximum_depth: u32) -> Vec<GeneratedHallsFloor> {
         let dungeon_seed = i64::try_from(seed.value()).unwrap();
@@ -1107,364 +1105,56 @@ mod tests {
             .collect()
     }
 
-    fn assert_floor(
-        floor: &GeneratedHallsFloor,
-        expected: (u32, Feeling, (i32, i32), i32, usize, usize),
-        ordinary_mobs: &[(HallsMobKind, usize)],
-        occupied: &[usize],
-        expected_items: Vec<WorldItem>,
-    ) {
-        let (depth, feeling, size, hash, entrance, exit) = expected;
-        assert_eq!(floor.painted.level.depth, depth);
-        assert_eq!(floor.painted.prepared.feeling, feeling, "depth {depth}");
-        assert_eq!(
-            (floor.painted.level.width(), floor.painted.level.height()),
-            size,
-            "depth {depth}"
-        );
-        assert_eq!(floor.painted.level.java_map_hash(), hash, "depth {depth}");
-        assert_eq!(
-            floor.painted.level.entrance(),
-            Some(entrance),
-            "depth {depth}"
-        );
-        assert_eq!(floor.painted.level.exit(), Some(exit), "depth {depth}");
-
-        let mut actual_mobs = floor
-            .mobs
-            .mobs
-            .iter()
-            .map(|mob| (mob.mob.kind, mob.cell))
-            .collect::<Vec<_>>();
-        actual_mobs.sort_unstable_by_key(|(_, cell)| *cell);
-        assert_eq!(actual_mobs, ordinary_mobs, "depth {depth}");
-
-        let actual_occupied = floor
-            .painted
-            .level
-            .mob_cells
-            .iter()
-            .enumerate()
-            .filter_map(|(cell, &value)| value.then_some(cell))
-            .collect::<Vec<_>>();
-        assert_eq!(actual_occupied, occupied, "depth {depth}");
-        assert_eq!(floor.painted.quest_paint_state.spawners_alive, 1);
-        assert_eq!(
-            floor
-                .painted
-                .quest_events
-                .iter()
-                .filter(|event| matches!(
-                    event,
-                    QuestPaintEvent::Mob {
-                        kind: QuestMobKind::DemonSpawner {
-                            spawn_recorded: true
-                        },
-                        ..
-                    }
-                ))
-                .count(),
-            1,
-            "depth {depth}"
-        );
-
-        // These historical fixtures cover equipment. Artifact parity is
-        // pinned separately in tests/artifacts.rs.
-        let mut actual_items: Vec<_> = floor
-            .world_items
-            .iter()
-            .filter(|entry| {
-                crate::catalog::item(entry.item).kind != crate::catalog::ItemKind::Artifact
-            })
-            .cloned()
-            .collect();
-        assert_eq!(actual_items.len(), expected_items.len(), "depth {depth}");
-        for expected_item in expected_items {
-            let index = actual_items
-                .iter()
-                .position(|actual| *actual == expected_item)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "depth {depth} missing {expected_item:?}; unmatched actual {actual_items:?}"
-                    )
-                });
-            actual_items.remove(index);
-        }
-        assert!(actual_items.is_empty(), "depth {depth}: {actual_items:?}");
-    }
-
-    fn item(
-        id: ItemId,
-        upgrade: u8,
-        effect: Option<Effect>,
-        cursed: bool,
-        depth: u8,
-        source: ItemSource,
-        accessibility: Accessibility,
-    ) -> WorldItem {
-        WorldItem {
-            item: id,
-            upgrade,
-            effect,
-            cursed,
-            depth,
-            source,
-            accessibility,
-            secret: false,
-        }
-    }
-
     #[test]
     fn aaa_sequential_halls_maps_mobs_and_items_match_official_oracle() {
-        let floors = generate_halls_prefix(DungeonSeed::MIN, 24);
-        assert_floor(
-            &floors[0],
-            (21, Feeling::None, (48, 53), -1_582_285_692, 339, 1_134),
-            &[
-                (HallsMobKind::Succubus, 450),
-                (HallsMobKind::Eye, 897),
-                (HallsMobKind::Succubus, 1_852),
-                (HallsMobKind::Eye, 2_198),
-            ],
-            &[450, 897, 1_313, 1_852, 2_198],
-            vec![
-                item(
-                    ItemId::WandPrismaticLight,
-                    1,
-                    None,
-                    true,
-                    21,
-                    ItemSource::CrystalChest,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-                item(
-                    ItemId::ThrowingHammer,
-                    0,
-                    None,
-                    false,
-                    21,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-            ],
-        );
-        assert_floor(
-            &floors[1],
-            (22, Feeling::Chasm, (48, 44), 825_663_912, 253, 1_475),
-            &[
-                (HallsMobKind::Succubus, 407),
-                (HallsMobKind::Succubus, 745),
-                (HallsMobKind::Eye, 1_432),
-                (HallsMobKind::Succubus, 1_480),
-                (HallsMobKind::Eye, 1_751),
-            ],
-            &[
-                246, 389, 407, 436, 591, 745, 1_432, 1_480, 1_671, 1_751, 1_842,
-            ],
-            vec![
-                item(
-                    ItemId::Greataxe,
-                    1,
-                    None,
-                    false,
-                    22,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                item(
-                    ItemId::RingEvasion,
-                    0,
-                    None,
-                    false,
-                    22,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                item(
-                    ItemId::Greatsword,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Venomous)),
-                    false,
-                    22,
-                    ItemSource::Statue,
-                    Accessibility::Independent,
-                ),
-            ],
-        );
-        assert_floor(
-            &floors[2],
-            (23, Feeling::Dark, (47, 60), 675_253_468, 1_061, 441),
-            &[
-                (HallsMobKind::Succubus, 160),
-                (HallsMobKind::Eye, 633),
-                (HallsMobKind::Eye, 1_477),
-                (HallsMobKind::Scorpio, 1_619),
-                (HallsMobKind::Scorpio, 1_671),
-                (HallsMobKind::Eye, 1_819),
-                (HallsMobKind::Succubus, 1_872),
-                (HallsMobKind::Eye, 2_196),
-            ],
-            &[160, 595, 633, 1_477, 1_619, 1_671, 1_819, 1_872, 2_196],
-            vec![item(
-                ItemId::PlateArmor,
+        let seed = DungeonSeed::MIN;
+        for floor in generate_halls_prefix(seed, 24) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
                 0,
-                Some(Effect::Armor(ArmorEffect::Stone)),
-                false,
-                23,
-                ItemSource::Skeleton,
-                Accessibility::Independent,
-            )],
-        );
-        assert_floor(
-            &floors[3],
-            (24, Feeling::None, (38, 47), 728_473_008, 549, 676),
-            &[
-                (HallsMobKind::Eye, 486),
-                (HallsMobKind::Succubus, 520),
-                (HallsMobKind::Scorpio, 556),
-                (HallsMobKind::Scorpio, 657),
-                (HallsMobKind::Scorpio, 688),
-                (HallsMobKind::Scorpio, 878),
-                (HallsMobKind::Scorpio, 961),
-                (HallsMobKind::Eye, 1_342),
-            ],
-            &[486, 520, 556, 657, 688, 878, 961, 1_342, 1_579],
-            vec![
-                item(
-                    ItemId::WarScythe,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Blooming)),
-                    false,
-                    24,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                WorldItem {
-                    secret: true,
-                    ..item(
-                        ItemId::WandWarding,
-                        1,
-                        None,
-                        true,
-                        24,
-                        ItemSource::LockedChest,
-                        Accessibility::Independent,
-                    )
-                },
-                item(
-                    ItemId::Greatsword,
-                    0,
-                    None,
-                    false,
-                    24,
-                    ItemSource::LockedChest,
-                    Accessibility::Independent,
-                ),
-                item(
-                    ItemId::Longsword,
-                    2,
-                    Some(Effect::Weapon(WeaponEffect::Polarized)),
-                    true,
-                    24,
-                    ItemSource::SacrificialFire,
-                    Accessibility::Independent,
-                ),
-            ],
-        );
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+            );
+        }
     }
 
     #[test]
     fn three_nonzero_depth_twenty_one_floors_match_official_oracle() {
-        let fixtures = [
-            (
-                "AAA-AAA-AAB",
-                (21, Feeling::Dark, (44, 48), -92_532_309, 1_298, 329),
-                vec![
-                    (HallsMobKind::Succubus, 292),
-                    (HallsMobKind::Succubus, 584),
-                    (HallsMobKind::Succubus, 677),
-                    (HallsMobKind::Eye, 735),
-                    (HallsMobKind::Succubus, 1_001),
-                    (HallsMobKind::Eye, 1_965),
-                ],
-                vec![292, 550, 584, 677, 735, 1_001, 1_965],
-                vec![],
-            ),
-            (
-                "ABC-DEF-GHI",
-                (21, Feeling::Water, (46, 48), 636_878_731, 2_048, 889),
-                vec![
-                    (HallsMobKind::Eye, 165),
-                    (HallsMobKind::Succubus, 300),
-                    (HallsMobKind::Succubus, 922),
-                    (HallsMobKind::Eye, 1_229),
-                    (HallsMobKind::Succubus, 1_780),
-                ],
-                vec![165, 268, 300, 922, 1_229, 1_780],
-                vec![item(
-                    ItemId::WandMagicMissile,
-                    0,
-                    None,
-                    false,
-                    21,
-                    ItemSource::Chest,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                )],
-            ),
-            (
-                "ZZZ-ZZZ-ZZZ",
-                (21, Feeling::Dark, (43, 44), 66_705_927, 486, 1_530),
-                vec![
-                    (HallsMobKind::Eye, 331),
-                    (HallsMobKind::Succubus, 844),
-                    (HallsMobKind::Succubus, 999),
-                    (HallsMobKind::Succubus, 1_144),
-                    (HallsMobKind::Eye, 1_443),
-                    (HallsMobKind::Succubus, 1_447),
-                ],
-                vec![331, 844, 999, 1_144, 1_263, 1_443, 1_447, 1_683],
-                vec![item(
-                    ItemId::WandCorrosion,
-                    0,
-                    None,
-                    true,
-                    21,
-                    ItemSource::CrystalChest,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 0,
-                    },
-                )],
-            ),
-        ];
-
-        for (code, expected, ordinary_mobs, occupied, expected_items) in fixtures {
+        for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
             let seed = DungeonSeed::from_code(code).unwrap();
             let floor = generate_halls_prefix(seed, 21).pop().unwrap();
-            assert_floor(&floor, expected, &ordinary_mobs, &occupied, expected_items);
+            crate::oracle_fixture_tests::assert_floor(
+                code,
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+            );
         }
     }
 
     #[test]
-    fn halls_lore_page_clears_its_drop_cell() {
-        // Official v4.0.0 JAR: seed 17, depth 24, attrition page at cell 1191.
-        // The BETA-4 profile left this cell as HIGH_GRASS.
+    fn halls_lore_page_matches_its_official_drop_cell() {
+        // Official v4.0.1 JAR: seed 17, depth 24, attrition page at cell 560.
         let floor = generate_halls_prefix(DungeonSeed::new(17).unwrap(), 24)
             .pop()
             .unwrap();
         assert_eq!(
-            floor.painted.level.map.cells[1191],
-            crate::geometry::terrain::GRASS
+            floor.painted.level.map.cells[560],
+            crate::geometry::terrain::EMPTY
         );
-        assert!(!floor.flags.los_blocking[1191]);
+        assert!(!floor.flags.los_blocking[560]);
         assert!(floor.regular_items.placements.iter().any(|placement| {
-            placement.cell == 1191
+            placement.cell == 560
                 && placement.items
                     == vec![RegularItem::Queued(QueuedItemKind::Other(
                         "RegionLorePage$Halls",
@@ -1506,40 +1196,19 @@ mod tests {
     #[test]
     fn seed_two_hundred_ten_unconnected_platform_merge_matches_depth_twenty_two_oracle() {
         let seed = DungeonSeed::from_code("AAA-AAA-AIC").unwrap();
-        let floor = generate_halls_prefix(seed, 22).pop().unwrap();
-        assert_floor(
-            &floor,
-            (22, Feeling::None, (39, 48), 1_297_741_869, 597, 259),
-            &[
-                (HallsMobKind::Succubus, 444),
-                (HallsMobKind::Succubus, 679),
-                (HallsMobKind::Eye, 768),
-                (HallsMobKind::Eye, 1_118),
-                (HallsMobKind::Succubus, 1_276),
-                (HallsMobKind::Eye, 1_468),
-            ],
-            &[411, 444, 679, 768, 1_118, 1_269, 1_276, 1_426, 1_468, 1_773],
-            vec![
-                item(
-                    ItemId::PlateArmor,
-                    0,
-                    Some(Effect::Armor(ArmorEffect::Bulk)),
-                    true,
-                    22,
-                    ItemSource::Skeleton,
-                    Accessibility::Independent,
-                ),
-                item(
-                    ItemId::WandCorrosion,
-                    0,
-                    None,
-                    false,
-                    22,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-            ],
-        );
+        for floor in generate_halls_prefix(seed, 22) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+            );
+        }
     }
 
     #[test]

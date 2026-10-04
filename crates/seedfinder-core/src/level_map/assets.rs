@@ -12,7 +12,7 @@ pub struct MapAsset {
     pub png: &'static [u8],
 }
 
-pub const SOURCE_REVISION: &str = "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f";
+pub const SOURCE_REVISION: &str = "e9defd0444c96d2fce3de5ec297c3398be8b7c55";
 
 pub const ASSETS: &[MapAsset] = &[
     MapAsset {
@@ -117,7 +117,7 @@ pub const ASSETS: &[MapAsset] = &[
         id: "city_quest.png",
         width: 256,
         height: 256,
-        sha256: "8782ef5007a841b2f13abc18b31983335ca193daed590760439c44410781b529",
+        sha256: "20dc779770967af1d1979af2d90def0073ba71b4a5497184287ec2b89ebba9d4",
         png: include_bytes!("../../assets/level-map/city_quest.png"),
     },
     MapAsset {
@@ -502,7 +502,7 @@ pub const ASSETS: &[MapAsset] = &[
         id: "items.png",
         width: 256,
         height: 512,
-        sha256: "6ba1201fa135ccc93fa055425179c4cb13d63ccbd238db0be54dec759eb22fe6",
+        sha256: "86b2fd9e99efc34718cb0194bfd4a4d856882cf3e97416283f44889e81e11404",
         png: include_bytes!("../../assets/level-map/items.png"),
     },
     MapAsset {
@@ -537,7 +537,7 @@ pub const ASSETS: &[MapAsset] = &[
         id: "icons.png",
         width: 256,
         height: 128,
-        sha256: "3087ee0e113a6ebe59060be53dbaef18734ebc5f4011fb4a053d361a026b4bae",
+        sha256: "592ba061fde6ebba4c6c912604f4e2846c956a473d6e89b53ffc05339e0f49d8",
         png: include_bytes!("../../assets/level-map/icons.png"),
     },
     MapAsset {

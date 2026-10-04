@@ -79,9 +79,9 @@ mod tests {
                 "AAA-AAA-AAB",
                 &[
                     (4, ItemId::TalismanOfForesight),
-                    (13, ItemId::Trident),
+                    (13, ItemId::ForceCube),
                     (14, ItemId::HolyDart),
-                    (18, ItemId::Glaive),
+                    (18, ItemId::WarScythe),
                     (19, ItemId::PlateArmor),
                 ],
             ),

@@ -81,20 +81,11 @@ impl VaultSentryPattern {
                 }
                 (dirs, 45000)
             }
-            _ => {
-                let dirs = [(-3, 0), (-3, -1), (-3, -2), (-3, -3), (-2, -3), (-1, -3)]
-                    .into_iter()
-                    .map(|(x, y)| {
-                        offsets(cell, width, &[(x, y), (-y, x), (-x, -y), (y, -x)])
-                            .into_iter()
-                            .flatten()
-                            .collect()
-                    })
-                    .collect();
-                (dirs, 22500)
-            }
+            _ => unreachable!("circle room has three patterns"),
         };
-        Self::scan(cell, directions, degrees, 4490)
+        let mut out = Self::scan(cell, directions, degrees, 4490);
+        out.cooldown = 2;
+        out
     }
 
     pub(crate) fn circle_treasure(cell: usize, width: i32, clockwise: bool) -> Self {

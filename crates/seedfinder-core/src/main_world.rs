@@ -1512,7 +1512,7 @@ mod deferred_vault_tests {
     fn deferred_vault_smoke_preserves_worlds_recipes_replays_and_witnesses() {
         // A rejected seed, a surviving vault blade, and a blade requiring
         // Mimic Tooth. Keep positive/negative and retained-auto coverage in CI.
-        let seeds = [0, 20_013_266, 20_028_874].map(|value| DungeonSeed::new(value).unwrap());
+        let seeds = [0, 20_013_756, 20_013_125].map(|value| DungeonSeed::new(value).unwrap());
         check_deferred_search(
             &seeds,
             &DEFERRED_SEARCH_REQUIREMENTS[1..2],

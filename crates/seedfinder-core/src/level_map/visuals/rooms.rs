@@ -62,6 +62,17 @@ pub(super) fn layers(
     for feature in &contents.features {
         let p = level.map.cell_to_point(feature.cell);
         match feature.kind.as_str() {
+            "VaultTokenDoorFloor" => {
+                let tile = if level.map.cells[feature.cell] == t::DOOR {
+                    144
+                } else {
+                    145
+                };
+                put(scene, &mut floor, feature.cell, "city_quest.png", tile);
+            }
+            "VaultFinalDoor" => {
+                vault_final_door(scene, level, feature.cell, &mut floor, &mut walls);
+            }
             "ImpEntrance" => {
                 // Two rectangular carpets under the torn 5x5 entrance artwork.
                 for (ox, oy, w, h) in [(-1, 1, 7, 3), (1, -1, 3, 7)] {
@@ -255,6 +266,58 @@ pub(super) fn layers(
         }
     }
     [floor, terrain, walls]
+}
+
+/// Initial (unsealed) `FinalRoomDoor` and `FinalRoomDoorOverhang` tilemaps.
+#[allow(clippy::if_not_else)] // Preserve the official horizontal/vertical selector order.
+fn vault_final_door(
+    scene: &mut MapScene,
+    level: &Level,
+    cell: usize,
+    floor: &mut MapLayer,
+    walls: &mut MapLayer,
+) {
+    let w = usize::try_from(level.width()).unwrap();
+    let tile = level.map.cells[cell];
+    let open = matches!(tile, t::OPEN_DOOR | t::EMBERS);
+    if level.map.cells[cell + w] != t::WALL {
+        let mut image = if open { 145 } else { 146 };
+        if level.map.cells[cell + w] != t::EMPTY_SP {
+            image += 16;
+        } else if level.map.cells[cell - w] != t::EMPTY_SP {
+            image += 32;
+        }
+        put(scene, floor, cell, "city_quest.png", image);
+        if !open {
+            put(scene, walls, cell - w, "city_quest.png", 130);
+        }
+    } else {
+        let side = if level.map.cells[cell - 1] != t::EMPTY_SP {
+            1
+        } else if level.map.cells[cell + 1] != t::EMPTY_SP {
+            2
+        } else {
+            0
+        };
+        put(scene, floor, cell, "city_quest.png", 192 + side);
+        if !open {
+            let locked = tile == t::LOCKED_DOOR;
+            put(
+                scene,
+                walls,
+                cell - w,
+                "city_quest.png",
+                208 + i32::from(locked),
+            );
+            put(
+                scene,
+                walls,
+                cell,
+                "city_quest.png",
+                if locked { 212 + side } else { 211 },
+            );
+        }
+    }
 }
 
 fn append(scene: &mut MapScene, target: &mut MapLayer, cell: usize, mut sprite: MapSprite) {

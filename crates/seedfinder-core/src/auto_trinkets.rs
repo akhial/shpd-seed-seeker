@@ -801,7 +801,8 @@ mod tests {
     #[test]
     fn necessary_trinkets_survive_baseline_replay_and_saved_choices_replay_the_match() {
         let seed = DungeonSeed::from_code("SRU-YSU-QHS").unwrap();
-        let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        // 4.0.1 supplies a Grim tomahawk only in the Parchment Scrap world.
+        let query = query(r#"[{"kind":"weapon","effect":"Grim"}]"#);
         let plan = QueryPlan::analyze(&query);
         let generator = CountingGenerator(AtomicUsize::new(0));
         let result = search_batch(&generator, &query, &plan, &[seed])
@@ -847,7 +848,7 @@ mod tests {
     #[test]
     fn only_auto_applied_matches_are_rechecked_and_unneeded_worlds_are_replaced() {
         let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        let query = query(r#"[{"kind":"weapon","effect":"Grim"}]"#);
         let plan = QueryPlan::analyze(&query);
         assert_eq!(plan.selected_trinket(seed), Some(ItemId::ParchmentScrap));
         let generator = CountingGenerator(AtomicUsize::new(0));
@@ -890,7 +891,7 @@ mod tests {
 
         let explicit = json_query::decode(
             r#"{"auto_apply_trinket":true,"max_depth":19,
-            "requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},
+            "requirements":[{"kind":"weapon","effect":"Grim"},
                 {"item":"parchment_scrap","select_trinket":true}]}"#,
         )
         .unwrap();

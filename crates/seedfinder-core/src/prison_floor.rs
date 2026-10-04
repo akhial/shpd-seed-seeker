@@ -911,10 +911,9 @@ impl RoomCharacterRules for PrisonSpatialRules {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{ArmorEffect, Effect, ItemId, WeaponEffect};
-    use crate::level_prelude::Feeling;
-    use crate::model::{Accessibility, ItemSource};
-    use crate::prison_mobs::PrisonMobKind;
+    use crate::catalog::ItemId;
+
+    use crate::model::ItemSource;
 
     fn generate_prison_prefix(seed: DungeonSeed, maximum_depth: u32) -> Vec<GeneratedPrisonFloor> {
         let dungeon_seed = i64::try_from(seed.value()).unwrap();
@@ -950,374 +949,49 @@ mod tests {
 
     #[test]
     fn aaa_sequential_prison_maps_mobs_and_npc_cells_match_official_oracle() {
-        let floors = generate_prison_prefix(DungeonSeed::MIN, 9);
-        let expected = [
-            (
-                6,
-                Feeling::Large,
-                (46, 53),
-                1_223_218_598,
-                297,
-                1_450,
-                None,
-                vec![
-                    (PrisonMobKind::Thief, 489),
-                    (PrisonMobKind::Skeleton, 931),
-                    (PrisonMobKind::Swarm, 1_633),
-                    (PrisonMobKind::Skeleton, 1_768),
-                    (PrisonMobKind::Swarm, 1_860),
-                    (PrisonMobKind::Skeleton, 2_318),
-                ],
-                vec![259, 489, 931, 1_420, 1_633, 1_768, 1_773, 1_860, 2_318],
-            ),
-            (
-                7,
-                Feeling::Large,
-                (41, 54),
-                -2_025_558_282,
-                1_221,
-                995,
-                None,
-                vec![
-                    (PrisonMobKind::Thief, 217),
-                    (PrisonMobKind::Skeleton, 296),
-                    (PrisonMobKind::Skeleton, 538),
-                    (PrisonMobKind::Skeleton, 848),
-                    (PrisonMobKind::Dm100, 919),
-                    (PrisonMobKind::Skeleton, 1_038),
-                    (PrisonMobKind::Guard, 1_173),
-                    (PrisonMobKind::Skeleton, 1_241),
-                    (PrisonMobKind::Dm100, 1_320),
-                    (PrisonMobKind::Skeleton, 1_331),
-                ],
-                vec![
-                    217, 224, 296, 538, 848, 919, 1_038, 1_173, 1_197, 1_241, 1_320, 1_331,
-                ],
-            ),
-            (
-                8,
-                Feeling::None,
-                (40, 35),
-                -1_261_455_225,
-                1_235,
-                489,
-                None,
-                vec![
-                    (PrisonMobKind::Guard, 212),
-                    (PrisonMobKind::Skeleton, 452),
-                    (PrisonMobKind::Dm100, 504),
-                    (PrisonMobKind::Guard, 655),
-                    (PrisonMobKind::Necromancer, 702),
-                    (PrisonMobKind::Thief, 812),
-                    (PrisonMobKind::Dm100, 822),
-                    (PrisonMobKind::Skeleton, 886),
-                ],
-                vec![212, 452, 504, 655, 702, 768, 812, 822, 886],
-            ),
-            (
-                9,
-                Feeling::None,
-                (27, 45),
-                -2_111_462_339,
-                462,
-                856,
-                Some(441),
-                vec![
-                    (PrisonMobKind::Necromancer, 88),
-                    (PrisonMobKind::Guard, 318),
-                    (PrisonMobKind::Dm100, 418),
-                    (PrisonMobKind::Dm100, 426),
-                    (PrisonMobKind::Skeleton, 499),
-                    (PrisonMobKind::Necromancer, 509),
-                    (PrisonMobKind::Guard, 825),
-                    (PrisonMobKind::Dm100, 829),
-                    (PrisonMobKind::Thief, 1_130),
-                ],
-                vec![88, 318, 418, 426, 441, 499, 509, 825, 829, 1_128, 1_130],
-            ),
-        ];
-
-        for (floor, expected) in floors.iter().zip(expected) {
-            let (
-                depth,
-                feeling,
-                size,
-                map_hash,
-                entrance,
-                exit,
-                wandmaker,
-                expected_mobs,
-                expected_occupied,
-            ) = expected;
-            assert_eq!(floor.painted.level.depth, depth);
-            assert_eq!(floor.painted.prepared.feeling, feeling, "depth {depth}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "depth {depth}"
+        let seed = DungeonSeed::MIN;
+        for floor in generate_prison_prefix(seed, 9) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(
-                floor.painted.level.java_map_hash(),
-                map_hash,
-                "depth {depth}"
-            );
-            assert_eq!(
-                floor.painted.level.entrance(),
-                Some(entrance),
-                "depth {depth}"
-            );
-            assert_eq!(floor.painted.level.exit(), Some(exit), "depth {depth}");
-            assert_eq!(floor.mobs.wandmaker_cell, wandmaker, "depth {depth}");
-            let mut mobs = floor
-                .mobs
-                .mobs
-                .iter()
-                .map(|mob| (mob.mob.kind, mob.cell))
-                .collect::<Vec<_>>();
-            mobs.sort_unstable_by_key(|(_, cell)| *cell);
-            assert_eq!(mobs, expected_mobs, "depth {depth}");
-            let occupied = floor
-                .painted
-                .level
-                .mob_cells
-                .iter()
-                .enumerate()
-                .filter_map(|(cell, &occupied)| occupied.then_some(cell))
-                .collect::<Vec<_>>();
-            assert_eq!(occupied, expected_occupied, "depth {depth}");
         }
     }
 
     #[test]
     fn three_nonzero_depth_six_maps_match_official_oracle() {
-        for (code, feeling, size, hash, entrance, exit) in [
-            (
-                "AAA-AAA-AAB",
-                Feeling::None,
-                (43, 40),
-                -903_102_768,
-                627,
-                994,
-            ),
-            (
-                "ABC-DEF-GHI",
-                Feeling::Water,
-                (31, 54),
-                -226_466_149,
-                1_253,
-                335,
-            ),
-            (
-                "ZZZ-ZZZ-ZZZ",
-                Feeling::None,
-                (39, 45),
-                774_748_808,
-                1_146,
-                223,
-            ),
-        ] {
+        for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
             let seed = DungeonSeed::from_code(code).unwrap();
             let floor = generate_prison_prefix(seed, 6).pop().unwrap();
-            assert_eq!(floor.painted.prepared.feeling, feeling, "{code}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "{code}"
+            crate::oracle_fixture_tests::assert_floor(
+                code,
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), hash, "{code}");
-            assert_eq!(floor.painted.level.entrance(), Some(entrance), "{code}");
-            assert_eq!(floor.painted.level.exit(), Some(exit), "{code}");
         }
     }
 
     #[test]
     fn aaa_sequential_prison_searchable_items_match_official_oracle() {
-        let floors = generate_prison_prefix(DungeonSeed::MIN, 9);
-        let expected = [
-            vec![
-                (
-                    ItemId::Quarterstaff,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::HolyDart,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::LeatherArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::ThrowingClub,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Katana,
-                    1,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::WandBlastWave,
-                    0,
-                    None,
-                    false,
-                    ItemSource::CrystalChest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::RingTenacity,
-                    1,
-                    None,
-                    false,
-                    ItemSource::CrystalMimic,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::HandAxe,
-                    0,
-                    None,
-                    false,
-                    ItemSource::LockedChest,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::LeatherArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Scimitar,
-                    1,
-                    Some(Effect::Weapon(WeaponEffect::Wondrous)),
-                    true,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Sickle,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Polarized)),
-                    true,
-                    ItemSource::Skeleton,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::AssassinsBlade,
-                    1,
-                    Some(Effect::Weapon(WeaponEffect::Vorpal)),
-                    false,
-                    ItemSource::Statue,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Scimitar,
-                    1,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Tomahawk,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Mimic,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::RingEnergy,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-                (
-                    ItemId::LeatherArmor,
-                    0,
-                    Some(Effect::Armor(ArmorEffect::Corrosion)),
-                    true,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::WandTransfusion,
-                    3,
-                    None,
-                    false,
-                    ItemSource::WandmakerReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 0,
-                    },
-                ),
-                (
-                    ItemId::WandFrost,
-                    3,
-                    None,
-                    false,
-                    ItemSource::WandmakerReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-            ],
-        ];
-
-        for (floor, expected) in floors.iter().zip(expected) {
-            assert_eq!(
-                floor.world_items.len(),
-                expected.len(),
-                "depth {}",
-                floor.painted.level.depth
+        let seed = DungeonSeed::MIN;
+        for floor in generate_prison_prefix(seed, 9) {
+            crate::oracle_fixture_tests::assert_items(
+                crate::oracle_fixture_tests::floor(&seed.to_code(), 0, floor.painted.level.depth),
+                &floor.world_items,
             );
-            for (item, upgrade, effect, cursed, source, accessibility) in expected {
-                assert!(
-                    floor.world_items.iter().any(|actual| {
-                        actual.item == item
-                            && actual.upgrade == upgrade
-                            && actual.effect == effect
-                            && actual.cursed == cursed
-                            && actual.source == source
-                            && actual.accessibility == accessibility
-                    }),
-                    "depth {} missing {item:?} {source:?}",
-                    floor.painted.level.depth
-                );
-            }
         }
     }
 
@@ -1351,36 +1025,20 @@ mod tests {
         assert_eq!(golden[1].upgrade, 1);
         assert!(!golden[1].cursed);
 
-        // The draw consumed by Ring.upgrade() is what keeps the rest of the
-        // run aligned: depth 8 drops a plain Whip and depth 9 rolls a Statue,
-        // a Mimic, and the Wandmaker's two wands.
-        assert!(world.items.iter().any(|item| {
-            item.item == ItemId::Whip
-                && item.upgrade == 0
-                && item.depth == 8
-                && item.source == ItemSource::Heap
-        }));
-        assert!(world.items.iter().any(|item| {
-            item.item == ItemId::RoundShield
-                && item.depth == 9
-                && item.effect == Some(Effect::Weapon(WeaponEffect::Chilling))
-                && item.source == ItemSource::Statue
-        }));
-        assert!(world.items.iter().any(|item| {
-            item.item == ItemId::MailArmor && item.depth == 9 && item.source == ItemSource::Mimic
-        }));
-
-        let rewards: Vec<_> = world
-            .items
-            .iter()
-            .filter(|item| item.source == ItemSource::WandmakerReward)
-            .collect();
-        assert_eq!(rewards.len(), 2);
-        assert_eq!(rewards[0].item, ItemId::WandFireblast);
-        assert_eq!(rewards[0].upgrade, 1);
-        assert_eq!(rewards[1].item, ItemId::WandRegrowth);
-        assert_eq!(rewards[1].upgrade, 1);
-        assert!(rewards.iter().all(|item| item.depth == 9));
+        // Verify every later floor after the golden mimic's curse-clearing draw.
+        for floor in generate_prison_prefix(seed, 9) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+            );
+        }
     }
 
     #[test]

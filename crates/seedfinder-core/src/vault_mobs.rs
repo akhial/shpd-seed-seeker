@@ -1,4 +1,4 @@
-//! Exact v4.0.0 `VaultLevel` mob rotation and constructor-time RNG.
+//! Exact v4.0.1 `VaultLevel` mob rotation and constructor-time RNG.
 //!
 //! `VaultLevel.createMob()` keeps its own `mobsToSpawn` deck: two tier-one
 //! classes plus one random duplicate, all three tier-two classes, both

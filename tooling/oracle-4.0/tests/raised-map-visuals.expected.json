@@ -4,9 +4,9 @@
     "depth": 1,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": -72472821,
+    "terrainHash": -445847158,
     "layers": {
-      "terrain": -1516686347,
+      "terrain": -645136682,
       "shadows": 986968729,
       "features": -1598108724,
       "raised": -218090853,
@@ -18,13 +18,13 @@
     "depth": 7,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": -2025558282,
+    "terrainHash": -588538309,
     "layers": {
-      "terrain": 1755656749,
-      "shadows": -935873286,
-      "features": 2033937773,
-      "raised": -1653736975,
-      "walls": -1911189270
+      "terrain": -819165279,
+      "shadows": 1036168899,
+      "features": -1918583006,
+      "raised": 157367450,
+      "walls": 281885149
     }
   },
   {
@@ -32,9 +32,9 @@
     "depth": 12,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": 516872055,
+    "terrainHash": 828420932,
     "layers": {
-      "terrain": -1001559929,
+      "terrain": 784260748,
       "shadows": 637307156,
       "features": -1030126871,
       "raised": 1349537821,
@@ -46,9 +46,9 @@
     "depth": 16,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": -640772373,
+    "terrainHash": -349605781,
     "layers": {
-      "terrain": 1202258791,
+      "terrain": -425202969,
       "shadows": 434907553,
       "features": 1867252941,
       "raised": -1953921791,
@@ -60,13 +60,13 @@
     "depth": 23,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": 675253468,
+    "terrainHash": 1675257360,
     "layers": {
-      "terrain": -1084897324,
+      "terrain": 1980895894,
       "shadows": 1895840310,
-      "features": 890199736,
+      "features": 469771639,
       "raised": 1479482627,
-      "walls": -1906716704
+      "walls": -2134175935
     }
   },
   {
@@ -74,13 +74,13 @@
     "depth": 1,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": -1210420634,
+    "terrainHash": 1051719816,
     "layers": {
-      "terrain": 2131187239,
+      "terrain": 437794249,
       "shadows": 1975375744,
-      "features": -1532864266,
-      "raised": 785588922,
-      "walls": -515767544
+      "features": -1969887638,
+      "raised": 39614627,
+      "walls": 1458923326
     }
   },
   {
@@ -88,13 +88,13 @@
     "depth": 7,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": 1964588217,
+    "terrainHash": -1489051950,
     "layers": {
-      "terrain": 103153514,
+      "terrain": 226386123,
       "shadows": -1026295629,
-      "features": -846842613,
-      "raised": -584643076,
-      "walls": 859654774
+      "features": -540526461,
+      "raised": -1425877786,
+      "walls": 414296972
     }
   },
   {
@@ -102,13 +102,13 @@
     "depth": 12,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": 2073801425,
+    "terrainHash": -268631384,
     "layers": {
-      "terrain": 615675448,
-      "shadows": -1353270961,
-      "features": -1418730988,
-      "raised": 826743997,
-      "walls": -1376312180
+      "terrain": 1390054778,
+      "shadows": 2063954934,
+      "features": -1321924394,
+      "raised": 896442874,
+      "walls": 1993163242
     }
   },
   {
@@ -116,9 +116,9 @@
     "depth": 16,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": 319139853,
+    "terrainHash": 3228137,
     "layers": {
-      "terrain": -139252073,
+      "terrain": 1494463635,
       "shadows": 1178890099,
       "features": -1669471468,
       "raised": 1296449201,
@@ -130,13 +130,13 @@
     "depth": 23,
     "branch": 0,
     "kind": "regular",
-    "terrainHash": -1082934667,
+    "terrainHash": -905456104,
     "layers": {
-      "terrain": 1331405510,
-      "shadows": 123985386,
-      "features": -529609559,
-      "raised": 327981844,
-      "walls": -1595024149
+      "terrain": -1346715043,
+      "shadows": 323136022,
+      "features": -1922713653,
+      "raised": 913526286,
+      "walls": -1784087981
     }
   },
   {
@@ -172,13 +172,13 @@
     "depth": 19,
     "branch": 1,
     "kind": "imp_vault",
-    "terrainHash": -743826665,
+    "terrainHash": -1032072244,
     "layers": {
-      "terrain": -1026631453,
-      "shadows": -1736484186,
-      "features": -1212409678,
-      "raised": 1706073197,
-      "walls": 1872429370
+      "terrain": -2104325858,
+      "shadows": -260957936,
+      "features": -1379721502,
+      "raised": 1673279962,
+      "walls": -494441879
     }
   }
 ]
