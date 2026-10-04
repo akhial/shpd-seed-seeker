@@ -1,8 +1,8 @@
-# Shattered Pixel Dungeon v4.0.0 parity oracle
+# Shattered Pixel Dungeon v4.0.1 parity oracle
 
 This directory builds an isolated, deterministic generation oracle for
-Shattered Pixel Dungeon `v4.0.0`. The full
-[source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.0)
+Shattered Pixel Dungeon `v4.0.1`. The full
+[source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.1)
 is published and pins the Rust port's upstream revision. This oracle continues
 to drive the **unmodified official desktop JAR** headlessly, validating the
 shipped build without recompiling game classes. Only the oracle itself and a
@@ -10,12 +10,12 @@ small geometry-only stand-in precede the JAR (see "Headless technique").
 
 The pin is:
 
-- source commit: `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f` (`v4.0.0`)
+- source commit: `e9defd0444c96d2fce3de5ec297c3398be8b7c55` (`v4.0.1`)
 
-- artifact: `ShatteredPD-v4.0.0-Java.jar`
-- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar`
-- sha256: `b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1`
-- manifest: `Specification-Version: 4.0.0`, `Implementation-Version: 912`
+- artifact: `ShatteredPD-v4.0.1-Java.jar`
+- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.1/ShatteredPD-v4.0.1-Java.jar`
+- sha256: `452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea`
+- manifest: `Specification-Version: 4.0.1`, `Implementation-Version: 920`
   (used as `Game.versionCode`)
 
 `build.sh` downloads the JAR into `.work/` when absent, verifies the sha256
@@ -24,7 +24,12 @@ The pin is:
 needed and runs `com.shatteredpixel.shatteredpixeldungeon.ParityOracle` with
 the classpath `classes` first, then the JAR (`;` separated on Windows/MSYS,
 `:` elsewhere). Both honour `JAVA_21_HOME`, then `JAVA_HOME`, then `PATH`; the
-v4.0.0 fixtures were checked with Eclipse Adoptium JDK 25.0.4.1 on macOS arm64.
+v4.0.1 fixtures were checked with Eclipse Adoptium JDK 25.0.4.1 on Linux x86_64.
+
+Set `ORACLE_MAIN_CLASS` to run another oracle entry point with the same JDK
+and classpath handling. The vault-door fixture generator uses this to run
+`com.shatteredpixel.shatteredpixeldungeon.VaultDoorOracle`, passing the level-map
+document on stdin.
 
 ## Build and run
 
@@ -57,7 +62,7 @@ until the Imp has spawned; those extra floors only appear as
 CLI compatibility with the v3.3.8 runner: `--seed`, `--floors`/`--depths`,
 `--format`, `--challenges`, `--run-checkpoints`, `--boss-skip-checkpoints` and
 the positional `SEED FLOORS` form are unchanged. `--no-phases` is accepted as a
-no-op (schema v2 has no phase records). `--transmute-imp` is gone: the v4.0.0
+no-op (schema v2 has no phase records). `--transmute-imp` is gone: the v4.0.1
 Imp no longer hands out a single ring, so the diagnostic is obsolete.
 
 ## Headless technique
@@ -80,15 +85,15 @@ any game class:
    `AAA-AAA-AAA` floor 1 gains an
    eleventh heap and floor 2 changes). The JAR implements `isDebug()` as
    `Game.version.contains("INDEV")`, so the oracle simply sets
-   `Game.version = "4.0.0-INDEV"`. The published source shows
+   `Game.version = "4.0.1-INDEV"`. The published source shows
    `Game.version` is otherwise read only by `DesktopLauncher`, the title/menu
    version labels, and `SPDSettings.betas()` (an update-checker default), none
    of which are on the generation path; the other `isDebug()` call sites are
    `HeroClass.isUnlocked` (Warrior is always unlocked anyway) and UI scenes.
    `run_init.game_commit` records the published source revision,
-   `run_init.game_version` records the true `4.0.0`;
+   `run_init.game_version` records the true `4.0.1`;
    `run_init.effective_game_version` records the string actually installed.
-   v4.0.0 deliberately leaves the Halls King's `attrition` lore page unfound even
+   v4.0.1 deliberately leaves the Halls King's `attrition` lore page unfound even
    in debug mode. It is placed on floor 24 and can clear high grass at its cell;
    the engine mirrors this exception rather than suppressing the oracle page.
 2. **An eagerly loaded texture atlas.** `ItemSpriteSheet.Icons.film` is
@@ -167,7 +172,7 @@ nothing changed, the v1 vocabulary is kept verbatim.
   room queues and shop state.
 
 The quest snapshot (`boss_transition`/`vault_transition` hashes) records the
-v4.0.0 Imp fields `oldQuest`, `alternative`, `spawned`, `given`, `completed`,
+v4.0.1 Imp fields `oldQuest`, `alternative`, `spawned`, `given`, `completed`,
 `reward`, `hazardFreebies`, `mirrorUsed`, `score`; `rewardOptions` is
 deliberately excluded because it is transient (rolled on the Imp's floor,
 cleared by the Vault) and is already recorded as item records.
@@ -181,7 +186,7 @@ display path.
 
 ## Branch and Vault semantics
 
-v4.0.0 replaces the old Imp token quest with the Imp's Vault: a sub-level
+v4.0.1 replaces the old Imp token quest with the Imp's Vault: a sub-level
 reached from the Imp's floor. `Dungeon.newLevel()` builds a `VaultLevel` when
 `Dungeon.branch == 1` and `Dungeon.depth` is 16-19. It is seeded independently
 by `Dungeon.seedForDepth(depth, 1)` (`depth + 30 * branch` look-ahead draws),
@@ -230,9 +235,9 @@ tooling/oracle-4.0/tests/vault.sh
 ```
 
 Every script accepts `--print` to regenerate its `*.expected.json` fixture
-from a fresh run. All fixtures were regenerated for 4.0.0 (the Builder change
-alters every floor from depth 1: `AAA-AAA-AAA` floor 1 is now 37x43 with map
-hash -72472821, versus 40x30 / -188128262 in 3.3.8) and use the same seeds and
+from a fresh run. All fixtures were regenerated for 4.0.1. The 4.0 Builder change
+altered every floor from depth 1: `AAA-AAA-AAA` floor 1 is now 37x43 with map
+hash -445847158, versus 40x30 / -188128262 in 3.3.8. The fixtures use the same seeds and
 floors as the v3.3.8 tests:
 
 - `smoke.sh` runs `AAA-AAA-AAA` floor 1 twice, requires byte-identical NDJSON,
@@ -261,6 +266,27 @@ the v3.3.8 caveat about `ShopRoom.ChooseBag` iterating a `HashMap` still
 applies, and the Vault consumable caveat above is new.
 
 ## Comparing against the engine
+
+### 4.0.1 generation changes
+
+Open-space traps remove cardinal neighbors from their preferred placement pool.
+Statue equipment now uses a child RNG, fixing Rat Skull's type-dependent level
+generation. Vault rooms next to the entrance use tier-one enemies, Long Rings
+cannot connect directly to the entrance, Circle sentries use three patterns with
+a two-turn cooldown, lasers use seven to nine turns, and Alternating Fire leaves
+its outer ring clear. A guaranteed healing potion is added near the entrance.
+
+The selected-trinket corpus also verifies Mossy Clump's two unconditional feeling
+rolls. Regenerate the shared Rust fixtures with:
+
+```sh
+python3 tooling/oracle-4.0/generate-floor-fixtures.py
+python3 tooling/oracle-4.0/generate-selected-trinkets.py
+```
+
+The shared floor corpus checks maps, occupied cells, ordinary mobs and searchable
+equipment. Crystal choice topology is tested separately: the generic Java item
+recorder assigns option numbers by cell order and cannot encode every chamber.
 
 ### BETA-4 generation changes
 
@@ -313,10 +339,9 @@ result. This is a compatibility reconstruction, not a run of an archived
 BETA-3 JAR. The canonical scout still models a run generated entirely on
 its advertised version; a seed alone does not specify an upgrade history.
 
-All versioned oracle fixtures are checked against the pinned v4.0.0 JAR;
-their artifact entries were refreshed to match the current recorder. The
-previous equipment, maps and generator checkpoints are unchanged. Historical
-BETA-3 benchmark measurements retain their original provenance.
+The active floor, challenge, boss and vault fixtures are regenerated against
+the pinned v4.0.1 JAR. Historical BETA-3/BETA-4 fixture and benchmark
+measurements retain their original provenance.
 Probability supply tables are calibrated against BETA-4, including artifacts.
 
 `crates/seedfinder-core/examples/dump_floors.rs` prints a seed's floors in a

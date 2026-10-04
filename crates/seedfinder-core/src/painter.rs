@@ -911,7 +911,7 @@ impl RegularPainter {
         }
         let width = level.width();
         let circle = [-width, 1, width, -1];
-        let mut valid_non_hallways = Vec::new();
+        let mut valid_open_space = Vec::new();
         for &cell in &valid_cells {
             let cell = i32::try_from(cell).expect("level map exceeds Java int indexing");
             let at = |offset: i32| {
@@ -920,7 +920,7 @@ impl RegularPainter {
                 level.passable[index]
             };
             if (at(circle[0]) || at(circle[2])) && (at(circle[1]) || at(circle[3])) {
-                valid_non_hallways.push(usize::try_from(cell).unwrap());
+                valid_open_space.push(usize::try_from(cell).unwrap());
             }
         }
         self.trap_count = self.trap_count.min(cap);
@@ -937,13 +937,20 @@ impl RegularPainter {
                 .chances(&self.trap_chances)
                 .expect("positive trap weights are required");
             let spec = self.trap_classes[class];
-            let cell = if spec.avoids_hallways && !valid_non_hallways.is_empty() {
-                random_element(&valid_non_hallways, rng)
+            let cell = if spec.avoids_closed_spaces && !valid_open_space.is_empty() {
+                random_element(&valid_open_space, rng)
             } else {
                 random_element(&valid_cells, rng)
             };
             remove_first(&mut valid_cells, cell);
-            remove_first(&mut valid_non_hallways, cell);
+            remove_first(&mut valid_open_space, cell);
+            // Every placed trap removes its cardinal neighbours from the
+            // preferred pool, preserving Java's ordered-list selection.
+            for offset in circle {
+                let neighbour = usize::try_from(i32::try_from(cell).unwrap() + offset)
+                    .expect("trap cells are interior");
+                remove_first(&mut valid_open_space, neighbour);
+            }
 
             reveal_increment += self.revealed_trap_chance.max(rng.trinket.reveal_chance());
             let requested_visible = index >= self.trap_count || reveal_increment >= 1.0;
@@ -1697,7 +1704,7 @@ mod terrain_filter_tests {
                         13,
                         vec![
                             TrapSpec::new(TrapKind::WornDart),
-                            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+                            TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
                         ],
                         vec![1.0, 1.0],
                     )

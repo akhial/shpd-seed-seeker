@@ -34,10 +34,10 @@ public sealed class LevelMapTests
     {
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 7, 0, new QuerySettings(), "none"));
         var items = map.ItemTooltips.SelectMany(tip => tip.Items).ToArray();
-        var enchanted = items.First(item => item.Name == "Vorpal Assassin's Blade");
-        Assert.Equal(1, enchanted.Upgrade); Assert.Equal("Vorpal", enchanted.Enchantment);
+        var enchanted = items.First(item => item.Name == "Blazing Assassin's Blade");
+        Assert.Equal(0, enchanted.Upgrade); Assert.Equal("Blazing", enchanted.Enchantment);
         Assert.False(enchanted.Cursed); Assert.Null(enchanted.Curse);
-        Assert.Equal(new[] { 170, 102, 102 }, enchanted.Glow!.Color); Assert.Equal(1000, enchanted.Glow.PeriodMs);
+        Assert.Equal(new[] { 255, 68, 0 }, enchanted.Glow!.Color); Assert.Equal(1000, enchanted.Glow.PeriodMs);
         var cursed = items.First(item => item.Curse == "Wondrous");
         Assert.Equal(1, cursed.Upgrade); Assert.True(cursed.Cursed); Assert.Null(cursed.Enchantment);
         Assert.Equal(new[] { 0, 0, 0 }, cursed.Glow!.Color);

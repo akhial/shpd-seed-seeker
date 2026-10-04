@@ -1153,7 +1153,7 @@ mod tests {
 
     #[test]
     fn native_auto_matches_deliver_reproducible_recipes_and_refine_them() {
-        let request = br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]}"#;
+        let request = br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"kind":"weapon","effect":"Grim"}]}"#;
         let query = decode_query(request).unwrap();
         let parchment = shpd_seedfinder_core::catalog::item_by_stable_id("parchment_scrap")
             .unwrap()
@@ -1194,7 +1194,7 @@ mod tests {
             assert_eq!(&packet[7..18], code.as_bytes());
         }
         let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let refined = decode_query(br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}"#).unwrap();
+        let refined = decode_query(br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"kind":"weapon","effect":"Grim"},{"item":"whip","effect":"Venomous"}]}"#).unwrap();
         let found = filter_matching_recipes(
             &refined,
             &query,
@@ -1224,7 +1224,15 @@ mod tests {
             query.requirements.last_mut().unwrap().max_depth = cap;
             let found = filter_matching_recipes(&query, &base, &[recipe]).unwrap();
             assert_eq!(found.len(), 1, "cap={cap:?}");
-            assert_eq!(found[0].recipe, recipe);
+            // This seed's 4.0.1 baseline also has the early donor, so replay
+            // removes the now-unnecessary saved trinket while keeping the match.
+            assert_eq!(
+                found[0].recipe,
+                SeedRecipe {
+                    trinket: None,
+                    ..recipe
+                }
+            );
             assert!(query.matches(&found[0].world));
         }
         query.requirements.last_mut().unwrap().max_depth = Some(1);
@@ -1330,7 +1338,7 @@ mod tests {
 
     #[test]
     fn native_recipe_filter_validates_envelope_and_preserves_explicit_none() {
-        let request = br#"{"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"base_query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"trinkets":[null]}"#;
+        let request = br#"{"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"kind":"weapon","effect":"Grim"}]},"base_query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"kind":"weapon","effect":"Grim"}]},"trinkets":[null]}"#;
         let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
         let packet = production_filter_packet(request, &[seed.value()]).unwrap();
         assert_eq!(&packet[..6], b"SSR2\0\x01");

@@ -108,7 +108,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
             scale: curve(&[[0, 1000], [500, 1200], [1000, 1000]]),
             particles: vec![MapParticle {
                 angle: 0,
-                birth_ms: (sample(mob.cell, 0, 8) * 800.0) as u16,
+                birth_ms: (sample(mob.cell, 0, 8) * 800.0) as u32,
                 lifespan_ms: 800,
                 position: [
                     (8000 + i32::from(sprite.width) * 500),
@@ -151,7 +151,7 @@ fn vent_emitters(cell: usize, cycle: crate::vault_floor::VaultFlameCycle) -> [Ma
     let first_ms = u32::from(first_turn.saturating_sub(1)) * 1000;
     let make = |kind, burst| {
         let mut e = emitter(cell, kind);
-        e.loop_ms = cycle.cooldown * 1000;
+        e.loop_ms = u32::from(cycle.cooldown) * 1000;
         e.start_ms = Some(first_ms + if burst { 1000 } else { 0 });
         let samples = e.particles.clone();
         e.particles.clear();
@@ -169,9 +169,9 @@ fn vent_emitters(cell: usize, cycle: crate::vault_floor::VaultFlameCycle) -> [Ma
         for index in 0..count {
             let mut particle = samples[usize::from(index) % samples.len()].clone();
             particle.birth_ms = if burst {
-                index / 10 * 1000 + index % 10 * 20
+                u32::from(index / 10 * 1000 + index % 10 * 20)
             } else {
-                index * 300
+                u32::from(index * 300)
             };
             e.particles.push(particle);
         }
@@ -257,7 +257,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
                 } else {
                     0
                 },
-                birth_ms: (i * interval + phase) % loop_ms,
+                birth_ms: u32::from((i * interval + phase) % loop_ms),
                 lifespan_ms: if matches!(kind, Particle::Bubble) {
                     800 + (sample(cell, n, 3) * 700.0) as u16
                 } else if matches!(kind, Particle::Toxic | Particle::RotHeart) {
@@ -311,7 +311,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         wall_mask: true,
         clip_to_chasm: false,
         cell,
-        loop_ms,
+        loop_ms: u32::from(loop_ms),
         blend: if speck.is_none() {
             Some(MapBlend::Add)
         } else {
@@ -392,7 +392,7 @@ fn pipe_drips(cell: usize) -> MapEmitter {
         scale: curve(&[[0, 1000], [1000, 1000]]),
         particles: (0..4)
             .map(|i| MapParticle {
-                birth_ms: (i * 100) as u16,
+                birth_ms: (i * 100) as u32,
                 lifespan_ms: 400,
                 angle: 0,
                 position: [6500 + (sample(cell, i, 7) * 4000.0) as i32, 11500],

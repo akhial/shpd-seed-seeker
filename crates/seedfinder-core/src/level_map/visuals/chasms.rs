@@ -120,7 +120,7 @@ fn wind(cell: usize) -> MapEmitter {
         scale_x: None,
         scale_y: None,
         particles: vec![MapParticle {
-            birth_ms: (sample(cell, 0, 34) * 2500.0) as u16,
+            birth_ms: (sample(cell, 0, 34) * 2500.0) as u32,
             lifespan_ms: life,
             position: [0, 1].map(|axis| {
                 // PixelParticle's half-pixel origin, minus half the drift.

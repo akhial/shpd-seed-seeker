@@ -40,16 +40,16 @@ pub fn prison_trap_table() -> (Vec<TrapSpec>, Vec<f32>) {
             TrapSpec::new(TrapKind::Toxic),
             TrapSpec::new(TrapKind::Burning),
             TrapSpec::new(TrapKind::PoisonDart)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Alarm),
             TrapSpec::new(TrapKind::Ooze),
-            TrapSpec::new(TrapKind::Gripping).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gripping).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Confusion),
             TrapSpec::new(TrapKind::Flock),
             TrapSpec::new(TrapKind::Summoning),
             TrapSpec::new(TrapKind::Teleportation),
-            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Geyser),
         ],
         vec![
@@ -1493,10 +1493,10 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(classes[4].kind, TrapKind::PoisonDart);
-        assert!(classes[4].avoids_hallways);
+        assert!(classes[4].avoids_closed_spaces);
         assert!(!classes[4].can_be_hidden);
-        assert!(classes[7].avoids_hallways);
-        assert!(classes[12].avoids_hallways);
+        assert!(classes[7].avoids_closed_spaces);
+        assert!(classes[12].avoids_closed_spaces);
         assert!(classes[13].can_be_hidden);
     }
 

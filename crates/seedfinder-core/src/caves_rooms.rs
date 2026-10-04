@@ -39,21 +39,21 @@ pub fn caves_trap_table() -> (Vec<TrapSpec>, Vec<f32>) {
         vec![
             TrapSpec::new(TrapKind::Burning),
             TrapSpec::new(TrapKind::PoisonDart)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Frost),
             TrapSpec::new(TrapKind::Storm),
             TrapSpec::new(TrapKind::Corrosion),
-            TrapSpec::new(TrapKind::Gripping).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gripping).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Rockfall)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Guardian),
             TrapSpec::new(TrapKind::Confusion),
             TrapSpec::new(TrapKind::Summoning),
             TrapSpec::new(TrapKind::Warping),
             TrapSpec::new(TrapKind::Pitfall),
-            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Geyser),
         ],
         vec![
@@ -1648,21 +1648,21 @@ mod tests {
             [
                 TrapSpec::new(TrapKind::Burning),
                 TrapSpec::new(TrapKind::PoisonDart)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
                 TrapSpec::new(TrapKind::Frost),
                 TrapSpec::new(TrapKind::Storm),
                 TrapSpec::new(TrapKind::Corrosion),
-                TrapSpec::new(TrapKind::Gripping).avoids_hallways(),
+                TrapSpec::new(TrapKind::Gripping).avoids_closed_spaces(),
                 TrapSpec::new(TrapKind::Rockfall)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
                 TrapSpec::new(TrapKind::Guardian),
                 TrapSpec::new(TrapKind::Confusion),
                 TrapSpec::new(TrapKind::Summoning),
                 TrapSpec::new(TrapKind::Warping),
                 TrapSpec::new(TrapKind::Pitfall),
-                TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+                TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
                 TrapSpec::new(TrapKind::Geyser),
             ]
         );

@@ -33,9 +33,6 @@ NON_ORDINARY_MOBS = {
     "WandOfRegrowth$Lotus", "CrystalSpire", "GnollGeomancer", "Bee", "RotHeart",
     "RotLasher",
 }
-# A Mass Grave quest room also paints one `Skeleton`, which this script cannot
-# tell apart from the Prison's ordinary skeletons; expect one such report on
-# the Corpse Dust floor.
 
 # Upstream classes that are not catalog equipment and so never reach the
 # engine's item list (the vault drops a plain Dart stack).
@@ -83,6 +80,10 @@ def load_oracle(path):
             for mob in record.get("mobs", []):
                 name = mob_name(mob.get("class"))
                 if name in {entry.lower() for entry in NON_ORDINARY_MOBS}:
+                    continue
+                # The quest room paints this actor separately from ordinary
+                # Prison mobs. Schema v2 records its room explicitly.
+                if name == "skeleton" and mob.get("room") == "MassGraveRoom":
                     continue
                 mobs[(name, mob.get("cell"))] += 1
             entry["mobs"] = mobs

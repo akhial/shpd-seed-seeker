@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Runs the v4.0.0 parity oracle.  The compiled oracle/shadow classes come
+# Runs the v4.0.1 parity oracle.  The compiled oracle/shadow classes come
 # FIRST on the classpath so that the headless TextureFilm stand-in shadows the
 # JAR's copy; everything else is loaded from the unmodified official JAR.
 set -euo pipefail
 
 ORACLE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORK="$ORACLE_DIR/.work"
-JAR="$WORK/ShatteredPD-v4.0.0-Java.jar"
+JAR="$WORK/ShatteredPD-v4.0.1-Java.jar"
 CLASSES=$("$ORACLE_DIR/build.sh")
 
 if [[ -n "${JAVA_21_HOME:-}" ]]; then
@@ -30,4 +30,4 @@ case "$(uname -s 2>/dev/null || echo "${OSTYPE:-}")" in
 esac
 
 exec "$JAVA" -cp "$CLASSES$SEP$JAR" \
-    com.shatteredpixel.shatteredpixeldungeon.ParityOracle "$@"
+    "${ORACLE_MAIN_CLASS:-com.shatteredpixel.shatteredpixeldungeon.ParityOracle}" "$@"

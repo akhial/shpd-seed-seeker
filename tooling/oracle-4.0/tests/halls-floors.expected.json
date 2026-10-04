@@ -1,7 +1,7 @@
 {
   "schema": "shpd-halls-parity-fixture/v3",
-  "game_version": "4.0.0",
-  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "game_version": "4.0.1",
+  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -43,52 +43,52 @@
         [
           15,
           "CavesBossLevel",
-          390619280
+          -521548173
         ],
         [
           16,
           "CityLevel",
-          -1519889268
+          -22220433
         ],
         [
           17,
           "CityLevel",
-          1989254258
+          446007927
         ],
         [
           18,
           "CityLevel",
-          -556153213
+          -458654972
         ],
         [
           19,
           "CityLevel",
-          883677465
+          -2127965508
         ],
         [
           20,
           "CityBossLevel",
-          -116106283
+          1167218040
         ],
         [
           21,
           "HallsLevel",
-          404344912
+          1665477296
         ],
         [
           22,
           "HallsLevel",
-          -328620720
+          125802841
         ],
         [
           23,
           "HallsLevel",
-          -2122201542
+          882298390
         ],
         [
           24,
           "HallsLevel",
-          1896347053
+          -1579599046
         ]
       ],
       "levels": [
@@ -100,10 +100,10 @@
             48,
             53
           ],
-          "map_hash": -1582285692,
+          "map_hash": -1411235142,
           "entrance": 339,
           "exit": 1134,
-          "generator_state_hash": 404344912,
+          "generator_state_hash": 1665477296,
           "mobs": [
             [
               "Succubus",
@@ -135,10 +135,10 @@
             48,
             44
           ],
-          "map_hash": 825663912,
+          "map_hash": -1843293953,
           "entrance": 253,
           "exit": 1475,
-          "generator_state_hash": -328620720,
+          "generator_state_hash": 125802841,
           "mobs": [
             [
               "Piranha",
@@ -149,12 +149,12 @@
               389
             ],
             [
-              "Succubus",
-              407
-            ],
-            [
               "Piranha",
               436
+            ],
+            [
+              "Eye",
+              454
             ],
             [
               "Statue",
@@ -162,27 +162,35 @@
             ],
             [
               "Succubus",
-              745
-            ],
-            [
-              "Eye",
-              1432
+              737
             ],
             [
               "Succubus",
-              1480
+              847
+            ],
+            [
+              "Succubus",
+              893
+            ],
+            [
+              "Eye",
+              979
+            ],
+            [
+              "Eye",
+              1527
             ],
             [
               "Bee",
               1671
             ],
             [
-              "Eye",
-              1751
-            ],
-            [
               "DemonSpawner",
               1842
+            ],
+            [
+              "Eye",
+              1851
             ]
           ]
         },
@@ -194,10 +202,10 @@
             47,
             60
           ],
-          "map_hash": 675253468,
+          "map_hash": 1675257360,
           "entrance": 1061,
           "exit": 441,
-          "generator_state_hash": -2122201542,
+          "generator_state_hash": 882298390,
           "mobs": [
             [
               "Succubus",
@@ -245,42 +253,42 @@
             38,
             47
           ],
-          "map_hash": 728473008,
+          "map_hash": 229325171,
           "entrance": 549,
           "exit": 676,
-          "generator_state_hash": 1896347053,
+          "generator_state_hash": -1579599046,
           "mobs": [
             [
               "Eye",
-              486
+              693
+            ],
+            [
+              "Scorpio",
+              830
             ],
             [
               "Succubus",
-              520
+              840
             ],
             [
               "Scorpio",
-              556
+              918
             ],
             [
               "Scorpio",
-              657
+              935
+            ],
+            [
+              "Succubus",
+              1039
             ],
             [
               "Scorpio",
-              688
-            ],
-            [
-              "Scorpio",
-              878
-            ],
-            [
-              "Scorpio",
-              961
+              1228
             ],
             [
               "Eye",
-              1342
+              1346
             ],
             [
               "DemonSpawner",
@@ -330,7 +338,7 @@
           0,
           1114,
           "HEAP",
-          "ThrowingHammer",
+          "ForceCube",
           "weapon",
           0,
           false,
@@ -373,10 +381,10 @@
           22,
           "heap",
           0,
-          1528,
+          307,
           "HEAP",
-          "RingOfEvasion",
-          "ring",
+          "ForceCube",
+          "weapon",
           0,
           false,
           null,
@@ -394,7 +402,7 @@
           "weapon",
           0,
           false,
-          "Venomous",
+          "Blocking",
           {
             "kind": "independent"
           }
@@ -418,13 +426,13 @@
           24,
           "heap",
           0,
-          527,
+          1040,
           "HEAP",
-          "WarScythe",
-          "weapon",
+          "ScaleArmor",
+          "armor",
           0,
           false,
-          "Blooming",
+          null,
           {
             "kind": "independent"
           }
@@ -439,21 +447,6 @@
           "wand",
           1,
           true,
-          null,
-          {
-            "kind": "independent"
-          }
-        ],
-        [
-          24,
-          "locked_chest",
-          0,
-          1152,
-          "LOCKED_CHEST",
-          "Greatsword",
-          "weapon",
-          0,
-          false,
           null,
           {
             "kind": "independent"
@@ -486,37 +479,37 @@
         [
           15,
           "CavesBossLevel",
-          -1448575199
+          96861093
         ],
         [
           16,
           "CityLevel",
-          -379318337
+          284566459
         ],
         [
           17,
           "CityLevel",
-          1991938797
+          1830026221
         ],
         [
           18,
           "CityLevel",
-          -283033898
+          1031647958
         ],
         [
           19,
           "CityLevel",
-          447762386
+          189573615
         ],
         [
           20,
           "CityBossLevel",
-          -1331280392
+          -371854571
         ],
         [
           21,
           "HallsLevel",
-          -173162309
+          555351484
         ]
       ],
       "levels": [
@@ -531,7 +524,7 @@
           "map_hash": -92532309,
           "entrance": 1298,
           "exit": 329,
-          "generator_state_hash": -173162309,
+          "generator_state_hash": 555351484,
           "mobs": [
             [
               "Succubus",
@@ -592,37 +585,37 @@
         [
           15,
           "CavesBossLevel",
-          1323116360
+          577658192
         ],
         [
           16,
           "CityLevel",
-          1779161899
+          288442961
         ],
         [
           17,
           "CityLevel",
-          217325513
+          1628457813
         ],
         [
           18,
           "CityLevel",
-          886657019
+          -1201764173
         ],
         [
           19,
           "CityLevel",
-          381266552
+          -2121709972
         ],
         [
           20,
           "CityBossLevel",
-          -446452040
+          1345538732
         ],
         [
           21,
           "HallsLevel",
-          -59901659
+          1521062737
         ]
       ],
       "levels": [
@@ -634,10 +627,10 @@
             46,
             48
           ],
-          "map_hash": 636878731,
+          "map_hash": 677181131,
           "entrance": 2048,
           "exit": 889,
-          "generator_state_hash": -59901659,
+          "generator_state_hash": 1521062737,
           "mobs": [
             [
               "Eye",
@@ -681,6 +674,21 @@
           {
             "kind": "independent"
           }
+        ],
+        [
+          21,
+          "locked_chest",
+          0,
+          391,
+          "LOCKED_CHEST",
+          "ThrowingHammer",
+          "weapon",
+          2,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
         ]
       ]
     },
@@ -694,37 +702,37 @@
         [
           15,
           "CavesBossLevel",
-          -521022532
+          -783043934
         ],
         [
           16,
           "CityLevel",
-          277775753
+          1020089476
         ],
         [
           17,
           "CityLevel",
-          746001009
+          2033153013
         ],
         [
           18,
           "CityLevel",
-          -1882085018
+          -1115972630
         ],
         [
           19,
           "CityLevel",
-          2102563731
+          -1517248813
         ],
         [
           20,
           "CityBossLevel",
-          1618731829
+          1994199157
         ],
         [
           21,
           "HallsLevel",
-          -1586040834
+          -1609758696
         ]
       ],
       "levels": [
@@ -736,10 +744,10 @@
             43,
             44
           ],
-          "map_hash": 66705927,
+          "map_hash": 1728918036,
           "entrance": 486,
           "exit": 1530,
-          "generator_state_hash": -1586040834,
+          "generator_state_hash": -1609758696,
           "mobs": [
             [
               "Eye",
@@ -800,7 +808,7 @@
           0,
           1519,
           "CRYSTAL_CHEST",
-          "WandOfCorrosion",
+          "WandOfWarding",
           "wand",
           0,
           true,
@@ -809,6 +817,21 @@
             "kind": "choice",
             "group": "crystal_vault@21",
             "option": 1
+          }
+        ],
+        [
+          21,
+          "heap",
+          0,
+          1658,
+          "HEAP",
+          "WandOfCorrosion",
+          "wand",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
           }
         ]
       ]
@@ -823,42 +846,42 @@
         [
           15,
           "CavesBossLevel",
-          479491858
+          1553903377
         ],
         [
           16,
           "CityLevel",
-          -922362502
+          -1607532295
         ],
         [
           17,
           "CityLevel",
-          -375033707
+          1904777015
         ],
         [
           18,
           "CityLevel",
-          2085724298
+          -7770926
         ],
         [
           19,
           "CityLevel",
-          -632555728
+          -411098086
         ],
         [
           20,
           "CityBossLevel",
-          -974451860
+          -752994218
         ],
         [
           21,
           "HallsLevel",
-          -603376064
+          -423230814
         ],
         [
           22,
           "HallsLevel",
-          1280811834
+          525733716
         ]
       ],
       "levels": [
@@ -873,7 +896,7 @@
           "map_hash": 1297741869,
           "entrance": 597,
           "exit": 259,
-          "generator_state_hash": 1280811834,
+          "generator_state_hash": 525733716,
           "mobs": [
             [
               "DemonSpawner",
@@ -923,9 +946,24 @@
           22,
           "heap",
           0,
-          562,
+          729,
           "HEAP",
-          "WandOfCorrosion",
+          "WarHammer",
+          "weapon",
+          1,
+          true,
+          "Sacrificial",
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "skeleton",
+          0,
+          322,
+          "SKELETON",
+          "WandOfWarding",
           "wand",
           0,
           false,

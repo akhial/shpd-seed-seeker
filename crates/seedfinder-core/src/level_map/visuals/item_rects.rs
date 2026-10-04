@@ -1,4 +1,4 @@
-//! Evaluated `ItemSpriteSheet` film from the pinned v4.0.0 JAR.
+//! Evaluated `ItemSpriteSheet` film from the pinned v4.0.1 JAR.
 //! Regenerate with tooling/oracle-4.0 `ItemFilmOracle`.
 pub(super) const ITEM_SIZES: [[u16; 2]; 512] = [
     [8, 13],

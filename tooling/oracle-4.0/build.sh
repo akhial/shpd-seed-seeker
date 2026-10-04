@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the Shattered Pixel Dungeon v4.0.0 parity oracle against the
+# Builds the Shattered Pixel Dungeon v4.0.1 parity oracle against the
 # official desktop JAR.  No game source is compiled: the oracle plus one small
 # headless shadow class are compiled into .work/classes and placed ahead of the
 # JAR on the classpath by run.sh.
@@ -7,9 +7,9 @@ set -euo pipefail
 
 ORACLE_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORK="$ORACLE_DIR/.work"
-JAR_NAME=ShatteredPD-v4.0.0-Java.jar
-JAR_URL="https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/$JAR_NAME"
-JAR_SHA256=b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1
+JAR_NAME=ShatteredPD-v4.0.1-Java.jar
+JAR_URL="https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.1/$JAR_NAME"
+JAR_SHA256=452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea
 JAR="$WORK/$JAR_NAME"
 CLASSES="$WORK/classes"
 

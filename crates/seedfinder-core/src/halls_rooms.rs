@@ -36,12 +36,12 @@ pub fn halls_trap_table() -> (Vec<TrapSpec>, Vec<f32>) {
             TrapSpec::new(TrapKind::Corrosion),
             TrapSpec::new(TrapKind::Blazing),
             TrapSpec::new(TrapKind::Disintegration)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Rockfall)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
-            TrapSpec::new(TrapKind::Flashing).avoids_hallways(),
+            TrapSpec::new(TrapKind::Flashing).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Guardian),
             TrapSpec::new(TrapKind::Weakening),
             TrapSpec::new(TrapKind::Disarming),
@@ -49,11 +49,11 @@ pub fn halls_trap_table() -> (Vec<TrapSpec>, Vec<f32>) {
             TrapSpec::new(TrapKind::Warping),
             TrapSpec::new(TrapKind::Cursing),
             TrapSpec::new(TrapKind::Grim)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Pitfall),
             TrapSpec::new(TrapKind::Distortion),
-            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
             TrapSpec::new(TrapKind::Geyser),
         ],
         vec![
@@ -1169,12 +1169,12 @@ mod tests {
                 TrapSpec::new(TrapKind::Corrosion),
                 TrapSpec::new(TrapKind::Blazing),
                 TrapSpec::new(TrapKind::Disintegration)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
                 TrapSpec::new(TrapKind::Rockfall)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
-                TrapSpec::new(TrapKind::Flashing).avoids_hallways(),
+                TrapSpec::new(TrapKind::Flashing).avoids_closed_spaces(),
                 TrapSpec::new(TrapKind::Guardian),
                 TrapSpec::new(TrapKind::Weakening),
                 TrapSpec::new(TrapKind::Disarming),
@@ -1182,11 +1182,11 @@ mod tests {
                 TrapSpec::new(TrapKind::Warping),
                 TrapSpec::new(TrapKind::Cursing),
                 TrapSpec::new(TrapKind::Grim)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
                 TrapSpec::new(TrapKind::Pitfall),
                 TrapSpec::new(TrapKind::Distortion),
-                TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+                TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
                 TrapSpec::new(TrapKind::Geyser),
             ]
         );
@@ -1717,7 +1717,7 @@ mod tests {
         painter
             .paint(&mut level, &mut rooms, &mut dispatcher, &mut rng)
             .unwrap();
-        assert_eq!(level.java_map_hash(), -1_190_761_107);
+        assert_eq!(level.java_map_hash(), -284_464_654);
         assert_eq!(rng.int(), -91_199_810);
         assert_eq!(level.transitions.len(), 2);
         assert_eq!(level.traps.len(), 3);

@@ -1213,7 +1213,7 @@ mod tests {
 
     use crate::catalog::ItemId;
     use crate::level_prelude::Feeling;
-    use crate::mobs::SewerMobKind;
+
     use crate::query::{EffectRequirement, Requirement, SearchQuery, TierRequirement};
     use crate::quests::QuestState;
     use crate::rng::{RandomStack, seed_for_depth};
@@ -1223,7 +1223,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn aaa_floor_one_full_painted_map_matches_official_v400_oracle() {
+    fn aaa_floor_one_full_painted_map_matches_official_v401_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut random = RandomStack::with_base_seed(0);
@@ -1234,7 +1234,7 @@ mod tests {
         assert_eq!(floor.prepared.feeling, Feeling::None);
         assert_eq!((floor.level.width(), floor.level.height()), (37, 43));
         // Painted map before createMobs tramples the high grass under mobs.
-        assert_eq!(floor.level.java_map_hash(), 268_543_026);
+        assert_eq!(floor.level.java_map_hash(), -104_831_311);
         assert_eq!(floor.level.entrance(), Some(278));
         assert_eq!(floor.level.exit(), Some(974));
         assert_eq!(floor.rooms.len(), 13);
@@ -1263,190 +1263,75 @@ mod tests {
     }
 
     #[test]
-    fn aaa_floor_one_mobs_and_searchable_items_match_official_v400_oracle() {
+    fn aaa_floor_one_mobs_and_searchable_items_match_official_v401_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut quests = QuestState::new();
         let mut random = RandomStack::with_base_seed(0);
         random.push(seed_for_depth(0, 1, 0));
-
         let floor =
             generate_sewer_floor(&mut run, &mut limited, &mut quests, 1, &mut random).unwrap();
-
-        let mut mobs = floor
-            .mobs
-            .mobs
-            .iter()
-            .map(|mob| (mob.mob.kind, mob.cell))
-            .collect::<Vec<_>>();
-        mobs.sort_unstable_by_key(|(_, cell)| *cell);
-        assert_eq!(
-            mobs,
-            [
-                (SewerMobKind::Rat, 289),
-                (SewerMobKind::Rat, 465),
-                (SewerMobKind::Rat, 534),
-                (SewerMobKind::Albino, 574),
-                (SewerMobKind::Snake, 818),
-                (SewerMobKind::Rat, 834),
-                (SewerMobKind::Snake, 1090),
-                (SewerMobKind::Rat, 1376),
-            ]
+        crate::oracle_fixture_tests::assert_floor(
+            "AAA-AAA-AAA",
+            0,
+            &floor.painted.level,
+            &floor.world_items,
+            floor
+                .mobs
+                .mobs
+                .iter()
+                .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
         );
-        assert_eq!(floor.regular_items.placements.len(), 6);
-        assert_eq!(floor.world_items.len(), 3);
-        assert_eq!(floor.world_items[0].item, ItemId::ThrowingSpear);
-        assert_eq!(floor.world_items[0].upgrade, 2);
-        assert_eq!(floor.painted.level.java_map_hash(), -72_472_821);
     }
 
     #[test]
-    fn three_more_floor_one_maps_match_official_v400_oracle() {
-        for (code, expected_size, expected_hash) in [
-            ("AAA-AAA-AAB", (29, 33), 1_897_109_935),
-            ("ABC-DEF-GHI", (43, 29), 912_887_823),
-            ("ZZZ-ZZZ-ZZZ", (33, 35), 192_758_585),
-        ] {
-            let seed = DungeonSeed::from_code(code).unwrap();
-            let seed = i64::try_from(seed.value()).unwrap();
+    fn three_more_floor_one_maps_match_official_v401_oracle() {
+        for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
+            let seed = i64::try_from(DungeonSeed::from_code(code).unwrap().value()).unwrap();
             let mut run = RunState::new(seed);
             let mut limited = LimitedDrops::default();
             let mut quests = QuestState::new();
             let mut random = RandomStack::with_base_seed(0);
             random.push(seed_for_depth(seed, 1, 0));
-
-            let floor = generate_sewer_floor(&mut run, &mut limited, &mut quests, 1, &mut random)
-                .unwrap_or_else(|error| panic!("{code}: {error}"));
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                expected_size,
-                "{code}"
+            let floor =
+                generate_sewer_floor(&mut run, &mut limited, &mut quests, 1, &mut random).unwrap();
+            crate::oracle_fixture_tests::assert_floor(
+                code,
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), expected_hash, "{code}");
-
-            let mut expected_items = match code {
-                "AAA-AAA-AAB" => Vec::new(),
-                "ABC-DEF-GHI" => vec![(ItemId::Quarterstaff, 1)],
-                "ZZZ-ZZZ-ZZZ" => vec![(ItemId::Sickle, 0)],
-                _ => unreachable!(),
-            };
-            let mut actual_items = floor
-                .world_items
-                .iter()
-                .filter(|item| {
-                    crate::catalog::item(item.item).kind != crate::catalog::ItemKind::Trinket
-                })
-                .map(|item| (item.item, item.upgrade))
-                .collect::<Vec<_>>();
-            actual_items.sort_unstable();
-            expected_items.sort_unstable();
-            assert_eq!(actual_items, expected_items, "{code}");
-
-            let expected_mob_cells: &[usize] = match code {
-                "AAA-AAA-AAB" => &[222, 283, 402, 504, 582, 619, 644, 746],
-                "ABC-DEF-GHI" => &[224, 449, 455, 665, 709, 710, 742, 975],
-                "ZZZ-ZZZ-ZZZ" => &[255, 256, 279, 345, 472, 868, 947, 983],
-                _ => unreachable!(),
-            };
-            let mut actual_mob_cells = floor
-                .mobs
-                .mobs
-                .iter()
-                .map(|mob| mob.cell)
-                .collect::<Vec<_>>();
-            actual_mob_cells.sort_unstable();
-            assert_eq!(actual_mob_cells, expected_mob_cells, "{code}");
         }
     }
 
     #[test]
-    fn aaa_sequential_sewer_maps_match_official_v400_oracle() {
+    fn aaa_sequential_sewer_maps_match_official_v401_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut quests = QuestState::new();
         let mut random = RandomStack::with_base_seed(0);
-        for (depth, expected_size, expected_hash, expected_mobs) in [
-            (1, (37, 43), -72_472_821, 11),
-            (2, (35, 48), 1_525_181_381, 6),
-            (3, (36, 36), 954_760_830, 7),
-            (4, (47, 40), 1_019_761_352, 8),
-        ] {
+        for depth in 1..=4 {
             random.push(seed_for_depth(0, depth, 0));
             let floor =
                 generate_sewer_floor(&mut run, &mut limited, &mut quests, depth, &mut random)
-                    .unwrap_or_else(|error| panic!("depth {depth}: {error}"));
+                    .unwrap();
             random.pop();
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                expected_size,
-                "depth {depth}"
+            crate::oracle_fixture_tests::assert_floor(
+                "AAA-AAA-AAA",
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(
-                floor.painted.level.java_map_hash(),
-                expected_hash,
-                "depth {depth}"
-            );
-            let painted_mobs = floor
-                .painted
-                .equipment_events
-                .iter()
-                .filter(|event| matches!(event, SpecialPaintEvent::Mob { .. }))
-                .count()
-                + floor
-                    .painted
-                    .consumable_events
-                    .iter()
-                    .filter(|event| matches!(event, ConsumablePaintEvent::Mimic { .. }))
-                    .count()
-                + floor
-                    .painted
-                    .secret_events
-                    .iter()
-                    .filter(|event| matches!(event, SecretPaintEvent::Mob { .. }))
-                    .count()
-                + floor
-                    .painted
-                    .forced_events
-                    .iter()
-                    .filter(|event| matches!(event, ForcedPaintEvent::Mob { .. }))
-                    .count();
-            let total_mobs =
-                floor.mobs.mobs.len() + usize::from(floor.mobs.ghost_cell.is_some()) + painted_mobs;
-            assert_eq!(total_mobs, expected_mobs, "depth {depth}");
-
-            let mut actual_items = floor
-                .world_items
-                .iter()
-                .filter(|item| {
-                    crate::catalog::item(item.item).kind != crate::catalog::ItemKind::Trinket
-                })
-                .map(|item| (item.item, item.upgrade))
-                .collect::<Vec<_>>();
-            actual_items.sort_unstable();
-            let mut expected_items = match depth {
-                1 => vec![
-                    (ItemId::ThrowingSpear, 2),
-                    (ItemId::Shuriken, 0),
-                    (ItemId::WandFrost, 0),
-                ],
-                2 => vec![
-                    (ItemId::Kunai, 0),
-                    (ItemId::MailArmor, 1),
-                    (ItemId::Spear, 0),
-                ],
-                3 => vec![
-                    (ItemId::Sai, 1),
-                    (ItemId::Crossbow, 0),
-                    (ItemId::Whip, 2),
-                    (ItemId::MailArmor, 2),
-                    (ItemId::LeatherArmor, 0),
-                    (ItemId::RingTenacity, 0),
-                ],
-                4 => Vec::new(),
-                _ => unreachable!(),
-            };
-            expected_items.sort_unstable();
-            assert_eq!(actual_items, expected_items, "depth {depth}");
         }
     }
 

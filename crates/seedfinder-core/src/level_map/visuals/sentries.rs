@@ -32,7 +32,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         let triggers = u32::from(sentry.triggers);
         let group = sentry.cooldown + triggers - 1;
         let groups = count / gcd(count, triggers);
-        let period = (group * groups * 1000) as u16;
+        let period = group * groups * 1000;
         let first = sentry.initial_cooldown.saturating_sub(1) * 1000;
         let fov = geometry.field_of_view(sentry.cell);
         for group_index in 0..groups {
@@ -67,7 +67,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
                 if sentry.warning {
                     // Startup never invents a warning before the first act.
                     let warning_time = if time < 1000 {
-                        time + u32::from(period) - 1000
+                        time + period - 1000
                     } else {
                         time - 1000
                     };
@@ -97,7 +97,7 @@ fn curve(points: &[[u16; 2]]) -> MapCurve {
         sqrt: false,
     }
 }
-fn base(cell: usize, start: u32, period: u16) -> MapEmitter {
+fn base(cell: usize, start: u32, period: u32) -> MapEmitter {
     MapEmitter {
         cell,
         start_ms: Some(start),
@@ -132,7 +132,7 @@ fn checked(
     cells: &BTreeSet<usize>,
     width: i32,
     start: u32,
-    period: u16,
+    period: u32,
 ) -> MapEmitter {
     let mut e = base(from, start, period);
     e.alpha = curve(&[[0, 800], [1000, 0]]);
@@ -141,7 +141,7 @@ fn checked(
         let distance = ((pos[0] - 8500) as f32).hypot((pos[1] - 8500) as f32) / 16000.0;
         let delay = (distance - 1.0).max(0.0).powf(0.67) * 100.0;
         e.particles.push(MapParticle {
-            birth_ms: delay.round() as u16,
+            birth_ms: delay.round() as u32,
             lifespan_ms: 800,
             position: pos,
             scale: 12800,
@@ -150,7 +150,7 @@ fn checked(
     }
     e
 }
-fn ray(from: usize, to: usize, width: i32, start: u32, period: u16) -> MapEmitter {
+fn ray(from: usize, to: usize, width: i32, start: u32, period: u32) -> MapEmitter {
     let mut e = base(from, start, period);
     // SentrySprite.center (8x15, raised 6px), then raisedTileCenterToWorld.
     let dx =

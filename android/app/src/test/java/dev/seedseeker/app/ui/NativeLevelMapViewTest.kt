@@ -95,12 +95,12 @@ class NativeLevelMapViewTest {
     @Test fun inspectionDecodesGeneratedUpgradesEnchantmentsAndCurses() = runBlocking {
         val bundle = LevelMaps.load(LevelMapRequest("AAA-AAA-AAA", 7, 0, null))
         val items = bundle.map.itemTooltips.flatMap { it.items }
-        val enchanted = items.first { it.name == "Vorpal Assassin's Blade" }
-        assertEquals(1, enchanted.upgrade)
-        assertEquals("Vorpal", enchanted.enchantment)
+        val enchanted = items.first { it.name == "Blazing Assassin's Blade" }
+        assertEquals(0, enchanted.upgrade)
+        assertEquals("Blazing", enchanted.enchantment)
         assertFalse(enchanted.cursed)
         assertNull(enchanted.curse)
-        assertArrayEquals(intArrayOf(170, 102, 102), enchanted.glow!!.color)
+        assertArrayEquals(intArrayOf(255, 68, 0), enchanted.glow!!.color)
         assertEquals(1000, enchanted.glow.periodMs)
         val cursed = items.first { it.curse == "Wondrous" }
         assertEquals(1, cursed.upgrade)

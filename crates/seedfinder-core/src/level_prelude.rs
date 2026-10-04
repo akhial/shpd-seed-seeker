@@ -152,7 +152,11 @@ pub fn roll_feeling(depth: i32, random: &mut RandomStack) -> Feeling {
         5 => Feeling::Traps,
         6 => Feeling::Secrets,
         _ => {
-            if random.float()
+            // Level.create pre-generates both override rolls, even when
+            // Mossy Clump succeeds and Trap Mechanism is never consulted.
+            let mossy_chance = random.float();
+            let trap_mech_chance = random.float();
+            if mossy_chance
                 < if random.trinket.is(crate::catalog::ItemId::MossyClump) {
                     1.0
                 } else {
@@ -161,7 +165,7 @@ pub fn roll_feeling(depth: i32, random: &mut RandomStack) -> Feeling {
             {
                 return random.trinket.next_feeling();
             }
-            if random.float()
+            if trap_mech_chance
                 < if random.trinket.is(crate::catalog::ItemId::TrapMechanism) {
                     1.0
                 } else {

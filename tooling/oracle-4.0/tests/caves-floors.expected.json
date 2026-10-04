@@ -1,7 +1,7 @@
 {
   "schema": "shpd-caves-parity-fixture/v3",
-  "game_version": "4.0.0",
-  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "game_version": "4.0.1",
+  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -73,42 +73,42 @@
         [
           7,
           "PrisonLevel",
-          -1779608914
+          -1246457199
         ],
         [
           8,
           "PrisonLevel",
-          483177192
+          -713657683
         ],
         [
           9,
           "PrisonLevel",
-          -1851823764
+          -1306121329
         ],
         [
           10,
           "PrisonBossLevel",
-          -1851823764
+          -1306121329
         ],
         [
           11,
           "CavesLevel",
-          -1454505068
+          325378961
         ],
         [
           12,
           "CavesLevel",
-          -317901988
+          726182873
         ],
         [
           13,
           "CavesLevel",
-          1102585394
+          190417941
         ],
         [
           14,
           "CavesLevel",
-          390619280
+          -521548173
         ]
       ],
       "levels": [
@@ -123,7 +123,7 @@
           "map_hash": 1191484531,
           "entrance": 478,
           "exit": 1718,
-          "generator_state_hash": -1454505068,
+          "generator_state_hash": 325378961,
           "mobs": [
             [
               "Shopkeeper",
@@ -136,10 +136,6 @@
             [
               "Shaman$RedShaman",
               1264
-            ],
-            [
-              "Mimic",
-              1445
             ],
             [
               "ArmoredBrute",
@@ -163,10 +159,10 @@
             37,
             56
           ],
-          "map_hash": 516872055,
+          "map_hash": 828420932,
           "entrance": 414,
           "exit": 1435,
-          "generator_state_hash": -317901988,
+          "generator_state_hash": 726182873,
           "mobs": [
             [
               "Shaman$PurpleShaman",
@@ -214,10 +210,10 @@
             45,
             35
           ],
-          "map_hash": -46924005,
+          "map_hash": -1400016514,
           "entrance": 668,
           "exit": 861,
-          "generator_state_hash": 1102585394,
+          "generator_state_hash": 190417941,
           "mobs": [
             [
               "Shaman$RedShaman",
@@ -264,7 +260,7 @@
           "map_hash": -593991188,
           "entrance": 416,
           "exit": 996,
-          "generator_state_hash": 390619280,
+          "generator_state_hash": -521548173,
           "mobs": [
             [
               "Bat",
@@ -312,15 +308,15 @@
       "items": [
         [
           11,
-          "mimic",
-          1,
-          1445,
-          null,
-          "Bolas",
-          "weapon",
+          "locked_chest",
           0,
-          true,
-          "Pressurized",
+          1545,
+          "LOCKED_CHEST",
+          "MailArmor",
+          "armor",
+          0,
+          false,
+          null,
           {
             "kind": "independent"
           }
@@ -436,7 +432,7 @@
           0,
           542,
           "LOCKED_CHEST",
-          "Javelin",
+          "Tomahawk",
           "weapon",
           0,
           false,
@@ -625,32 +621,32 @@
         [
           6,
           "PrisonLevel",
-          -647641529
+          1130108811
         ],
         [
           7,
           "PrisonLevel",
-          1169108340
+          -914929785
         ],
         [
           8,
           "PrisonLevel",
-          2057509923
+          -1046634845
         ],
         [
           9,
           "PrisonLevel",
-          -1379720351
+          -715835555
         ],
         [
           10,
           "PrisonBossLevel",
-          -1379720351
+          -715835555
         ],
         [
           11,
           "CavesLevel",
-          618255284
+          -276152520
         ]
       ],
       "levels": [
@@ -665,7 +661,7 @@
           "map_hash": 872073444,
           "entrance": 1231,
           "exit": 804,
-          "generator_state_hash": 618255284,
+          "generator_state_hash": -276152520,
           "mobs": [
             [
               "Shopkeeper",
@@ -913,7 +909,7 @@
             34,
             48
           ],
-          "map_hash": 1231044119,
+          "map_hash": 811810155,
           "entrance": 218,
           "exit": 1215,
           "generator_state_hash": 1434482620,
@@ -1117,7 +1113,7 @@
         [
           11,
           "CavesLevel",
-          -507227434
+          -1481294250
         ]
       ],
       "levels": [
@@ -1129,30 +1125,26 @@
             45,
             44
           ],
-          "map_hash": 24105011,
-          "entrance": 1376,
+          "map_hash": 2137811135,
+          "entrance": 1379,
           "exit": 187,
-          "generator_state_hash": -507227434,
+          "generator_state_hash": -1481294250,
           "mobs": [
             [
+              "Bat",
+              150
+            ],
+            [
               "Shaman$BlueShaman",
-              277
-            ],
-            [
-              "Bat",
-              424
-            ],
-            [
-              "Bat",
-              785
+              186
             ],
             [
               "Brute",
-              819
+              515
             ],
             [
               "Bat",
-              964
+              792
             ],
             [
               "Statue",
@@ -1198,21 +1190,6 @@
             "kind": "choice",
             "group": "crystal_vault@11",
             "option": 1
-          }
-        ],
-        [
-          11,
-          "heap",
-          0,
-          336,
-          "HEAP",
-          "RingOfEnergy",
-          "ring",
-          0,
-          true,
-          null,
-          {
-            "kind": "independent"
           }
         ],
         [
@@ -1281,11 +1258,11 @@
           0,
           1224,
           null,
-          "Glaive",
+          "AssassinsBlade",
           "weapon",
           0,
           false,
-          "Crystal",
+          "Unstable",
           {
             "kind": "independent"
           }
@@ -1374,7 +1351,7 @@
             37,
             45
           ],
-          "map_hash": 1536306267,
+          "map_hash": 2116850173,
           "entrance": 937,
           "exit": 448,
           "generator_state_hash": -1826951685,

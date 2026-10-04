@@ -1,7 +1,7 @@
 {
   "schema": "shpd-vault-parity-fixture/v1",
-  "game_version": "4.0.0",
-  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "game_version": "4.0.1",
+  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -77,7 +77,7 @@
         ],
         [
           2,
-          "Glaive",
+          "WarHammer",
           "weapon",
           4,
           false,
@@ -119,12 +119,12 @@
           63,
           63
         ],
-        "map_hash": -1045816989,
+        "map_hash": -272494420,
         "entrance": 2914,
         "exit": 2914,
         "mob_count": 48,
-        "heap_count": 46,
-        "generator_state_hash": -681257014,
+        "heap_count": 47,
+        "generator_state_hash": -771439978,
         "rooms": [
           [
             "VaultAlternatingFireRoom",
@@ -469,11 +469,6 @@
             "VaultRingsRoom"
           ],
           [
-            "VaultGolem",
-            3480,
-            "VaultEnemyCenterRoom"
-          ],
-          [
             "VaultLaser",
             3495,
             "VaultLasersRoom"
@@ -487,6 +482,11 @@
             "VaultGhoul",
             3575,
             "VaultSingleEnemyTreasureRoom"
+          ],
+          [
+            "VaultSkeleton",
+            3608,
+            "VaultEnemyCenterRoom"
           ],
           [
             "VaultLaser",
@@ -514,7 +514,7 @@
             318,
             "VaultFinalRoom",
             "HEAP",
-            "Glaive",
+            "WarHammer",
             "weapon",
             4,
             false,
@@ -559,18 +559,6 @@
             false
           ],
           [
-            786,
-            "VaultSimpleEnemyTreasureRoom",
-            "HEAP",
-            "HandAxe",
-            "weapon",
-            0,
-            false,
-            null,
-            1,
-            true
-          ],
-          [
             822,
             "VaultFinalRoom",
             "HEAP",
@@ -589,6 +577,18 @@
             "WandOfMagicMissile",
             "wand",
             2,
+            false,
+            null,
+            1,
+            true
+          ],
+          [
+            1040,
+            "VaultTokensRoom",
+            "HEAP",
+            "LeatherArmor",
+            "armor",
+            0,
             false,
             null,
             1,
@@ -679,18 +679,6 @@
             false
           ],
           [
-            1687,
-            "VaultCrossRoom",
-            "HEAP",
-            "Shuriken",
-            "weapon",
-            0,
-            false,
-            null,
-            3,
-            true
-          ],
-          [
             1694,
             "VaultManyScansRoom",
             "CHEST",
@@ -727,16 +715,16 @@
             false
           ],
           [
-            1937,
-            "VaultCrossRoom",
+            2033,
+            "VaultCircleRoom",
             "HEAP",
-            "Food",
-            "other",
+            "Shuriken",
+            "weapon",
             0,
             false,
             null,
-            1,
-            false
+            3,
+            true
           ],
           [
             2237,
@@ -751,10 +739,10 @@
             true
           ],
           [
-            2296,
-            "VaultRingsRoom",
+            2301,
+            "VaultCircleScanTreasureRoom",
             "HEAP",
-            "Food",
+            "DwarfToken",
             "other",
             0,
             false,
@@ -763,10 +751,10 @@
             false
           ],
           [
-            2301,
-            "VaultCircleScanTreasureRoom",
+            2343,
+            "VaultCircleRoom",
             "HEAP",
-            "DwarfToken",
+            "Food",
             "other",
             0,
             false,
@@ -797,6 +785,18 @@
             null,
             1,
             false
+          ],
+          [
+            2669,
+            "VaultAlternatingFireRoom",
+            "HEAP",
+            "Quarterstaff",
+            "weapon",
+            0,
+            false,
+            null,
+            1,
+            true
           ],
           [
             2725,
@@ -835,6 +835,30 @@
             true
           ],
           [
+            3000,
+            "VaultRingRoom",
+            "HEAP",
+            "HandAxe",
+            "weapon",
+            0,
+            false,
+            null,
+            1,
+            true
+          ],
+          [
+            3054,
+            "VaultAlternatingFireRoom",
+            "HEAP",
+            "Food",
+            "other",
+            0,
+            false,
+            null,
+            1,
+            false
+          ],
+          [
             3073,
             "VaultMultipleEnemyTreasureRoom",
             "CHEST",
@@ -847,51 +871,15 @@
             true
           ],
           [
-            3363,
-            "VaultLasersRoom",
-            "HEAP",
-            "LeatherArmor",
-            "armor",
-            0,
-            false,
-            null,
-            1,
-            true
-          ],
-          [
-            3371,
-            "VaultRingsRoom",
-            "HEAP",
-            "Quarterstaff",
-            "weapon",
-            0,
-            false,
-            null,
-            1,
-            true
-          ],
-          [
-            3427,
-            "VaultLasersRoom",
-            "HEAP",
-            "Dart",
-            "weapon",
-            0,
-            false,
-            null,
-            2,
-            true
-          ],
-          [
             3544,
             "VaultEnemyCenterRoom",
             "CHEST",
-            "WarScythe",
+            "Kunai",
             "weapon",
-            3,
-            false,
-            "Corrupting",
             1,
+            false,
+            "Blooming",
+            3,
             true
           ],
           [
@@ -905,6 +893,18 @@
             null,
             1,
             true
+          ],
+          [
+            3812,
+            "VaultRingsRoom",
+            "HEAP",
+            "Dart",
+            "weapon",
+            0,
+            false,
+            null,
+            2,
+            true
           ]
         ],
         "consumable_pool_heaps": [
@@ -914,7 +914,7 @@
             "HEAP"
           ],
           [
-            1227,
+            1290,
             "VaultSimpleEnemyTreasureRoom",
             "HEAP"
           ],
@@ -924,8 +924,8 @@
             "HEAP"
           ],
           [
-            1495,
-            "VaultCrossRoom",
+            1477,
+            "VaultRingRoom",
             "HEAP"
           ],
           [
@@ -939,12 +939,7 @@
             "HEAP"
           ],
           [
-            1873,
-            "VaultCrossRoom",
-            "HEAP"
-          ],
-          [
-            2094,
+            2222,
             "VaultCircleRoom",
             "HEAP"
           ],
@@ -954,8 +949,8 @@
             "HEAP"
           ],
           [
-            2549,
-            "VaultRingsRoom",
+            2535,
+            "VaultCircleRoom",
             "HEAP"
           ],
           [
@@ -964,13 +959,23 @@
             "HEAP"
           ],
           [
-            2812,
-            "VaultRingRoom",
+            3010,
+            "VaultMultipleEnemyTreasureRoom",
             "HEAP"
           ],
           [
-            3010,
-            "VaultMultipleEnemyTreasureRoom",
+            3295,
+            "VaultEnemyCenterRoom",
+            "HEAP"
+          ],
+          [
+            3432,
+            "VaultLasersRoom",
+            "HEAP"
+          ],
+          [
+            3566,
+            "VaultRingsRoom",
             "HEAP"
           ],
           [
@@ -989,8 +994,8 @@
           "shop_state": true
         },
         "generator_hash": [
-          -681257014,
-          -681257014
+          -771439978,
+          -771439978
         ]
       },
       "generator_checkpoints": [
@@ -998,37 +1003,37 @@
           15,
           0,
           "CavesBossLevel",
-          44385453
+          -549416256
         ],
         [
           16,
           0,
           "CityLevel",
-          1483953881
+          -2065203777
         ],
         [
           17,
           0,
           "CityLevel",
-          -1864456843
+          1887811355
         ],
         [
           18,
           0,
           "CityLevel",
-          2094141541
+          -224125907
         ],
         [
           19,
           0,
           "CityLevel",
-          -681257014
+          -771439978
         ],
         [
           17,
           1,
           "VaultLevel",
-          -681257014
+          -771439978
         ]
       ]
     },
@@ -1057,7 +1062,7 @@
         ],
         [
           2,
-          "ThrowingHammer",
+          "Trident",
           "weapon",
           4,
           false,
@@ -1066,7 +1071,7 @@
         ],
         [
           3,
-          "Crossbow",
+          "AssassinsBlade",
           "weapon",
           3,
           false,
@@ -1099,12 +1104,12 @@
           63,
           53
         ],
-        "map_hash": 1059305718,
+        "map_hash": 308219229,
         "entrance": 1694,
         "exit": 1694,
         "mob_count": 46,
-        "heap_count": 49,
-        "generator_state_hash": 447762386,
+        "heap_count": 51,
+        "generator_state_hash": 189573615,
         "rooms": [
           [
             "VaultEnemyCenterRoom",
@@ -1240,6 +1245,11 @@
             "VaultEnemyCenterRoom"
           ],
           [
+            "VaultElemental$Shock",
+            659,
+            "VaultLongRingsRoom"
+          ],
+          [
             "VaultMirror",
             676,
             "VaultTokensRoom"
@@ -1255,18 +1265,13 @@
             "VaultTokensRoom"
           ],
           [
-            "VaultElemental$Fire",
-            778,
-            "VaultLongRingsRoom"
-          ],
-          [
             "VaultTokenDoor",
             928,
             "VaultTokensRoom"
           ],
           [
-            "VaultDM100",
-            1285,
+            "VaultElemental$Frost",
+            1290,
             "VaultLongRingsRoom"
           ],
           [
@@ -1345,14 +1350,9 @@
             "VaultManyScansRoom"
           ],
           [
-            "VaultElemental$Shock",
+            "VaultDM100",
             2138,
             "VaultQuadrantsRoom"
-          ],
-          [
-            "VaultGolem",
-            2242,
-            "VaultEnemyCenterRoom"
           ],
           [
             "VaultGhoul",
@@ -1368,6 +1368,11 @@
             "VaultSentry",
             2298,
             "VaultManyScansRoom"
+          ],
+          [
+            "VaultGolem",
+            2366,
+            "VaultEnemyCenterRoom"
           ],
           [
             "VaultSentry",
@@ -1467,28 +1472,16 @@
         ],
         "items": [
           [
-            175,
-            "VaultTokensRoom",
-            "HEAP",
-            "LeatherArmor",
-            "armor",
-            0,
-            false,
-            null,
-            1,
-            true
-          ],
-          [
-            213,
+            150,
             "VaultLongRingsRoom",
             "HEAP",
-            "Food",
-            "other",
+            "ThrowingClub",
+            "weapon",
             0,
             false,
             null,
-            1,
-            false
+            3,
+            true
           ],
           [
             391,
@@ -1566,25 +1559,13 @@
             948,
             "VaultFinalRoom",
             "HEAP",
-            "ThrowingHammer",
+            "Trident",
             "weapon",
             4,
             false,
             "Vorpal",
             3,
             true
-          ],
-          [
-            967,
-            "VaultLongRingsRoom",
-            "HEAP",
-            "Pasty",
-            "other",
-            0,
-            false,
-            null,
-            1,
-            false
           ],
           [
             1074,
@@ -1599,31 +1580,31 @@
             true
           ],
           [
-            1093,
-            "VaultLongRingsRoom",
+            1125,
+            "VaultBookcaseTreasureRoom",
             "HEAP",
-            "Food",
-            "other",
+            "LeatherArmor",
+            "armor",
             0,
             false,
             null,
             1,
-            false
+            true
           ],
           [
             1129,
             "VaultBookcaseTreasureRoom",
             "CHEST",
-            "Javelin",
+            "Mace",
             "weapon",
-            2,
-            false,
-            null,
             3,
+            false,
+            "Unstable",
+            1,
             true
           ],
           [
-            1193,
+            1192,
             "VaultBookcaseTreasureRoom",
             "HEAP",
             "DwarfToken",
@@ -1698,13 +1679,25 @@
             1578,
             "VaultFinalRoom",
             "HEAP",
-            "Crossbow",
+            "AssassinsBlade",
             "weapon",
             3,
             false,
             "Blocking",
             1,
             true
+          ],
+          [
+            1609,
+            "VaultLasersRoom",
+            "HEAP",
+            "Pasty",
+            "other",
+            0,
+            false,
+            null,
+            1,
+            false
           ],
           [
             1667,
@@ -1743,22 +1736,10 @@
             true
           ],
           [
-            1744,
+            1750,
             "VaultRingRoom",
             "HEAP",
-            "ThrowingClub",
-            "weapon",
-            0,
-            false,
-            null,
-            3,
-            true
-          ],
-          [
-            1801,
-            "VaultLasersRoom",
-            "HEAP",
-            "PotionOfPurity",
+            "Food",
             "other",
             0,
             false,
@@ -1767,20 +1748,20 @@
             false
           ],
           [
-            2076,
-            "VaultQuadrantsRoom",
-            "CHEST",
-            "RingOfEvasion",
-            "ring",
-            3,
+            1809,
+            "VaultRingRoom",
+            "HEAP",
+            "Food",
+            "other",
+            0,
             false,
             null,
             1,
-            true
+            false
           ],
           [
-            2136,
-            "VaultQuadrantsRoom",
+            2066,
+            "VaultSimpleEnemyTreasureRoom",
             "HEAP",
             "Dart",
             "weapon",
@@ -1791,14 +1772,26 @@
             true
           ],
           [
+            2076,
+            "VaultQuadrantsRoom",
+            "CHEST",
+            "Sword",
+            "weapon",
+            1,
+            false,
+            "Venomous",
+            1,
+            true
+          ],
+          [
             2190,
             "VaultSimpleEnemyTreasureRoom",
             "CHEST",
-            "Mace",
-            "weapon",
-            3,
+            "RingOfSharpshooting",
+            "ring",
+            2,
             false,
-            "Unstable",
+            null,
             1,
             true
           ],
@@ -1831,6 +1824,18 @@
             "VaultManyScansRoom",
             "HEAP",
             "DwarfToken",
+            "other",
+            0,
+            false,
+            null,
+            1,
+            false
+          ],
+          [
+            2552,
+            "VaultEnemyCenterRoom",
+            "HEAP",
+            "PotionOfPurity",
             "other",
             0,
             false,
@@ -1906,33 +1911,28 @@
             "HEAP"
           ],
           [
-            690,
-            "VaultEnemyCenterRoom",
-            "HEAP"
-          ],
-          [
             741,
             "VaultTokensRoom",
             "HEAP"
           ],
           [
-            1125,
+            1065,
             "VaultBookcaseTreasureRoom",
             "HEAP"
           ],
           [
-            1171,
-            "VaultHallwayRoom",
+            1309,
+            "VaultTokensRoom",
             "HEAP"
           ],
           [
-            1193,
-            "VaultBookcaseTreasureRoom",
-            "HEAP"
-          ],
-          [
-            1419,
+            1485,
             "VaultLasersRoom",
+            "HEAP"
+          ],
+          [
+            1557,
+            "VaultRingRoom",
             "HEAP"
           ],
           [
@@ -1941,18 +1941,28 @@
             "HEAP"
           ],
           [
-            1736,
-            "VaultLasersRoom",
+            1810,
+            "VaultRingRoom",
+            "HEAP"
+          ],
+          [
+            1937,
+            "VaultRingRoom",
+            "HEAP"
+          ],
+          [
+            1938,
+            "VaultRingRoom",
+            "HEAP"
+          ],
+          [
+            2069,
+            "VaultQuadrantsRoom",
             "HEAP"
           ],
           [
             2231,
             "VaultManyScansRoom",
-            "HEAP"
-          ],
-          [
-            2510,
-            "VaultQuadrantsRoom",
             "HEAP"
           ],
           [
@@ -1981,8 +1991,8 @@
           "shop_state": true
         },
         "generator_hash": [
-          447762386,
-          447762386
+          189573615,
+          189573615
         ]
       },
       "generator_checkpoints": [
@@ -1990,37 +2000,37 @@
           15,
           0,
           "CavesBossLevel",
-          -1448575199
+          96861093
         ],
         [
           16,
           0,
           "CityLevel",
-          -379318337
+          284566459
         ],
         [
           17,
           0,
           "CityLevel",
-          1991938797
+          1830026221
         ],
         [
           18,
           0,
           "CityLevel",
-          -283033898
+          1031647958
         ],
         [
           19,
           0,
           "CityLevel",
-          447762386
+          189573615
         ],
         [
           18,
           1,
           "VaultLevel",
-          447762386
+          189573615
         ]
       ]
     },
@@ -2091,12 +2101,12 @@
           63,
           53
         ],
-        "map_hash": -743826665,
+        "map_hash": -1032072244,
         "entrance": 2914,
         "exit": 2914,
         "mob_count": 48,
-        "heap_count": 51,
-        "generator_state_hash": 883677465,
+        "heap_count": 52,
+        "generator_state_hash": -2127965508,
         "rooms": [
           [
             "VaultCircleRoom",
@@ -2262,7 +2272,7 @@
             "VaultHardLaserTreasureRoom"
           ],
           [
-            "VaultDM100",
+            "VaultElemental$Frost",
             1035,
             "VaultTokensRoom"
           ],
@@ -2312,18 +2322,23 @@
             "VaultHardLaserTreasureRoom"
           ],
           [
-            "VaultShaman",
-            1600,
-            "VaultEnemyCenterRoom"
-          ],
-          [
             "VaultDM200",
             1632,
             "VaultSimpleEnemyTreasureRoom"
           ],
           [
+            "VaultGolem",
+            1682,
+            "VaultLongRingsRoom"
+          ],
+          [
+            "VaultShaman",
+            1728,
+            "VaultEnemyCenterRoom"
+          ],
+          [
             "VaultGhoul",
-            1678,
+            1926,
             "VaultRingsRoom"
           ],
           [
@@ -2342,18 +2357,13 @@
             "VaultManyScansRoom"
           ],
           [
-            "VaultElemental$Frost",
-            2063,
-            "VaultLongRingsRoom"
-          ],
-          [
-            "VaultGolem",
+            "VaultSkeleton",
             2098,
             "VaultQuadrantsRoom"
           ],
           [
             "VaultDM100",
-            2255,
+            2125,
             "VaultLongRingsRoom"
           ],
           [
@@ -2462,7 +2472,7 @@
             "VaultLaserTreasureRoom"
           ],
           [
-            "VaultSkeleton",
+            "VaultDM100",
             3117,
             "VaultRingsRoom"
           ]
@@ -2472,8 +2482,8 @@
             225,
             "VaultFlamesTreasureRoom",
             "CHEST",
-            "Katana",
-            "weapon",
+            "RingOfArcana",
+            "ring",
             2,
             false,
             null,
@@ -2493,7 +2503,7 @@
             true
           ],
           [
-            417,
+            411,
             "VaultFlamesTreasureRoom",
             "HEAP",
             "DwarfToken",
@@ -2541,7 +2551,7 @@
             false
           ],
           [
-            814,
+            813,
             "VaultHardLaserTreasureRoom",
             "CHEST",
             "BattleAxe",
@@ -2553,7 +2563,7 @@
             true
           ],
           [
-            815,
+            814,
             "VaultHardLaserTreasureRoom",
             "HEAP",
             "DwarfToken",
@@ -2604,12 +2614,12 @@
             930,
             "VaultBookcaseTreasureRoom",
             "CHEST",
-            "Javelin",
+            "Katana",
             "weapon",
             2,
             false,
             null,
-            3,
+            1,
             true
           ],
           [
@@ -2625,14 +2635,14 @@
             true
           ],
           [
-            1041,
+            1037,
             "VaultTokensRoom",
             "HEAP",
-            "WandOfLivingEarth",
-            "wand",
+            "PlateArmor",
+            "armor",
             3,
             false,
-            null,
+            "Entanglement",
             1,
             true
           ],
@@ -2645,6 +2655,18 @@
             4,
             false,
             "Shocking",
+            3,
+            true
+          ],
+          [
+            1235,
+            "VaultTokensRoom",
+            "HEAP",
+            "FishingSpear",
+            "weapon",
+            0,
+            false,
+            null,
             3,
             true
           ],
@@ -2688,8 +2710,8 @@
             1664,
             "VaultEnemyCenterRoom",
             "CHEST",
-            "RingOfArcana",
-            "ring",
+            "WandOfWarding",
+            "wand",
             2,
             false,
             null,
@@ -2697,22 +2719,10 @@
             true
           ],
           [
-            1670,
+            1673,
             "VaultRingsRoom",
             "HEAP",
-            "LeatherArmor",
-            "armor",
-            0,
-            false,
-            null,
-            1,
-            true
-          ],
-          [
-            1737,
-            "VaultRingsRoom",
-            "HEAP",
-            "Food",
+            "Pasty",
             "other",
             0,
             false,
@@ -2736,13 +2746,25 @@
             2036,
             "VaultQuadrantsRoom",
             "CHEST",
-            "Greatsword",
+            "Sai",
             "weapon",
-            3,
+            1,
             false,
-            "Grim",
+            null,
             1,
             true
+          ],
+          [
+            2060,
+            "VaultLongRingsRoom",
+            "HEAP",
+            "PotionOfPurity",
+            "other",
+            0,
+            false,
+            null,
+            1,
+            false
           ],
           [
             2072,
@@ -2769,7 +2791,7 @@
             false
           ],
           [
-            2114,
+            2113,
             "VaultCircleRoom",
             "HEAP",
             "Dart",
@@ -2781,10 +2803,22 @@
             true
           ],
           [
-            2232,
-            "VaultManyScansRoom",
+            2117,
+            "VaultCircleRoom",
             "HEAP",
-            "DwarfToken",
+            "LeatherArmor",
+            "armor",
+            0,
+            false,
+            null,
+            1,
+            true
+          ],
+          [
+            2248,
+            "VaultLongRingsRoom",
+            "HEAP",
+            "Food",
             "other",
             0,
             false,
@@ -2796,19 +2830,19 @@
             2294,
             "VaultManyScansRoom",
             "CHEST",
-            "PlateArmor",
-            "armor",
+            "ForceCube",
+            "weapon",
             3,
             false,
-            "Entanglement",
-            1,
+            "Lucky",
+            3,
             true
           ],
           [
-            2433,
-            "VaultCircleRoom",
+            2356,
+            "VaultManyScansRoom",
             "HEAP",
-            "PotionOfPurity",
+            "DwarfToken",
             "other",
             0,
             false,
@@ -2839,30 +2873,6 @@
             null,
             1,
             false
-          ],
-          [
-            2871,
-            "VaultHallwayRoom",
-            "HEAP",
-            "Pasty",
-            "other",
-            0,
-            false,
-            null,
-            1,
-            false
-          ],
-          [
-            2928,
-            "VaultRingsRoom",
-            "HEAP",
-            "FishingSpear",
-            "weapon",
-            0,
-            false,
-            null,
-            3,
-            true
           ],
           [
             2939,
@@ -2903,7 +2913,7 @@
         ],
         "consumable_pool_heaps": [
           [
-            411,
+            417,
             "VaultFlamesTreasureRoom",
             "HEAP"
           ],
@@ -2918,13 +2928,13 @@
             "HEAP"
           ],
           [
-            1037,
+            921,
             "VaultTokensRoom",
             "HEAP"
           ],
           [
-            1422,
-            "VaultRingsRoom",
+            1041,
+            "VaultTokensRoom",
             "HEAP"
           ],
           [
@@ -2933,8 +2943,8 @@
             "HEAP"
           ],
           [
-            1741,
-            "VaultRingsRoom",
+            1814,
+            "VaultLongRingsRoom",
             "HEAP"
           ],
           [
@@ -2948,33 +2958,38 @@
             "HEAP"
           ],
           [
-            2295,
+            2219,
+            "VaultQuadrantsRoom",
+            "HEAP"
+          ],
+          [
+            2232,
             "VaultManyScansRoom",
             "HEAP"
           ],
           [
-            2301,
+            2345,
+            "VaultQuadrantsRoom",
+            "HEAP"
+          ],
+          [
+            2351,
+            "VaultQuadrantsRoom",
+            "HEAP"
+          ],
+          [
+            2556,
             "VaultCircleRoom",
             "HEAP"
           ],
           [
-            2471,
-            "VaultQuadrantsRoom",
-            "HEAP"
-          ],
-          [
-            2477,
-            "VaultQuadrantsRoom",
+            2794,
+            "VaultRingsRoom",
             "HEAP"
           ],
           [
             2895,
             "VaultLaserTreasureRoom",
-            "HEAP"
-          ],
-          [
-            3124,
-            "VaultHallwayRoom",
             "HEAP"
           ]
         ]
@@ -2988,8 +3003,8 @@
           "shop_state": true
         },
         "generator_hash": [
-          883677465,
-          883677465
+          -2127965508,
+          -2127965508
         ]
       },
       "generator_checkpoints": [
@@ -2997,37 +3012,37 @@
           15,
           0,
           "CavesBossLevel",
-          390619280
+          -521548173
         ],
         [
           16,
           0,
           "CityLevel",
-          -1519889268
+          -22220433
         ],
         [
           17,
           0,
           "CityLevel",
-          1989254258
+          446007927
         ],
         [
           18,
           0,
           "CityLevel",
-          -556153213
+          -458654972
         ],
         [
           19,
           0,
           "CityLevel",
-          883677465
+          -2127965508
         ],
         [
           19,
           1,
           "VaultLevel",
-          883677465
+          -2127965508
         ]
       ]
     }

@@ -14,7 +14,7 @@ pub struct MapCurve {
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 #[cfg_attr(feature = "json-query", serde(rename_all = "camelCase"))]
 pub struct MapParticle {
-    pub birth_ms: u16,
+    pub birth_ms: u32,
     pub angle: u16,
     pub lifespan_ms: u16,
     pub position: [i32; 2],
@@ -37,7 +37,7 @@ pub struct MapEmitter {
     )]
     pub clip_to_chasm: bool,
     pub cell: usize,
-    pub loop_ms: u16,
+    pub loop_ms: u32,
     pub blend: Option<MapBlend>,
     /// Sprite/fill centered at each particle's position, independent of cells.
     pub image: MapDraw,

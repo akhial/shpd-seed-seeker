@@ -965,22 +965,8 @@ impl RoomCharacterRules for CavesSpatialRules {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{ArmorEffect, Effect, ItemId, WeaponEffect};
-    use crate::caves_mobs::CavesMobKind;
-    use crate::level_prelude::Feeling;
-    use crate::model::{Accessibility, ItemSource};
 
-    type ExpectedItem = (ItemId, u8, Option<Effect>, bool, ItemSource, Accessibility);
-    type DepthElevenFixture = (
-        &'static str,
-        Feeling,
-        (i32, i32),
-        i32,
-        usize,
-        usize,
-        &'static [usize],
-        &'static [ExpectedItem],
-    );
+    use crate::model::ItemSource;
 
     fn generate_caves_prefix(seed: DungeonSeed, maximum_depth: u32) -> Vec<GeneratedCavesFloor> {
         generate_caves_prefix_with_challenges(
@@ -1041,665 +1027,88 @@ mod tests {
 
     #[test]
     fn aaf_challenge_caves_match_official_oracle_reduced_fixtures() {
-        use crate::challenges::Challenges;
-
-        let fixtures = [
-            (
-                Challenges::NONE,
-                [-698_069_368, 315_777_225, 395_750_173, 2_118_236_882],
-            ),
-            (
-                Challenges::NO_HERBALISM,
-                [-698_069_368, 315_777_225, 395_750_173, 2_118_236_882],
-            ),
-            (
-                Challenges::DARKNESS,
-                [9_529_915, 315_777_225, 395_750_173, 2_118_236_882],
-            ),
-            (
-                Challenges::NO_SCROLLS,
-                [-698_069_368, 315_777_225, 395_750_173, 2_118_236_882],
-            ),
-            (
-                Challenges::NO_HERBALISM | Challenges::DARKNESS | Challenges::NO_SCROLLS,
-                [9_529_915, 315_777_225, 395_750_173, 2_118_236_882],
-            ),
-        ];
         let seed = DungeonSeed::new(5).unwrap();
-        for (challenges, hashes) in fixtures {
-            let floors = generate_caves_prefix_with_challenges(seed, 14, challenges);
-            assert_eq!(
-                std::array::from_fn(|index| floors[index].painted.level.java_map_hash()),
-                hashes,
-                "mask {}",
-                challenges.bits(),
-            );
-        }
-    }
-
-    fn occupied_cells(floor: &GeneratedCavesFloor) -> Vec<usize> {
-        floor
-            .painted
-            .level
-            .mob_cells
-            .iter()
-            .enumerate()
-            .filter_map(|(cell, &occupied)| occupied.then_some(cell))
-            .collect()
-    }
-
-    fn assert_items(floor: &GeneratedCavesFloor, expected: &[ExpectedItem]) {
-        assert_eq!(
-            floor
-                .world_items
-                .iter()
-                .filter(|entry| crate::catalog::item(entry.item).kind
-                    != crate::catalog::ItemKind::Artifact)
-                .count(),
-            expected.len(),
-            "depth {} item count",
-            floor.painted.level.depth
-        );
-        for &(item, upgrade, effect, cursed, source, accessibility) in expected {
-            assert!(
-                floor.world_items.iter().any(|actual| {
-                    actual.item == item
-                        && actual.upgrade == upgrade
-                        && actual.effect == effect
-                        && actual.cursed == cursed
-                        && actual.source == source
-                        && actual.accessibility == accessibility
-                }),
-                "depth {} missing {item:?} {source:?} +{upgrade} {effect:?}",
-                floor.painted.level.depth
-            );
+        for mask in [0, 8, 32, 64, 104] {
+            let challenges = crate::challenges::Challenges::new(mask).unwrap();
+            for floor in generate_caves_prefix_with_challenges(seed, 14, challenges) {
+                crate::oracle_fixture_tests::assert_floor(
+                    &seed.to_code(),
+                    mask,
+                    &floor.painted.level,
+                    &floor.world_items,
+                    floor
+                        .mobs
+                        .mobs
+                        .iter()
+                        .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+                );
+            }
         }
     }
 
     #[test]
     fn cvb_vkt_luy_beta4_blacksmith_floor_matches_official_jar() {
-        // BETA-3 predicted Annoying Sword + Dazzling Bolas heaps here.
-        // Pin the full BETA-4 floor, including both smithy heaps and chest source.
         let seed = DungeonSeed::from_code("CVB-VKT-LUY").unwrap();
-        let floor = generate_caves_prefix(seed, 13).pop().unwrap();
-        assert_eq!(
-            (floor.painted.level.width(), floor.painted.level.height()),
-            (37, 45)
-        );
-        assert_eq!(floor.painted.level.java_map_hash(), 1_536_306_267);
-        assert_eq!(floor.painted.level.entrance(), Some(937));
-        assert_eq!(floor.painted.level.exit(), Some(448));
-        assert_eq!(
-            occupied_cells(&floor),
-            vec![168, 352, 449, 578, 763, 788, 821, 1_275]
-        );
-        assert_items(
-            &floor,
-            &[
-                (
-                    ItemId::Greatsword,
-                    1,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 0,
-                    },
-                ),
-                (
-                    ItemId::RunicBlade,
-                    1,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-                (
-                    ItemId::Kunai,
-                    1,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 2,
-                    },
-                ),
-                (
-                    ItemId::PlateArmor,
-                    1,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 3,
-                    },
-                ),
-                (
-                    ItemId::Sword,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Kinetic)),
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::BattleAxe,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::WandWarding,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::MailArmor,
-                    0,
-                    Some(Effect::Armor(ArmorEffect::Bulk)),
-                    true,
-                    ItemSource::LockedChest,
-                    Accessibility::Independent,
-                ),
-            ],
-        );
+        for floor in generate_caves_prefix(seed, 13) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
+            );
+        }
     }
 
     #[test]
     fn aaa_sequential_caves_maps_mobs_and_npc_cells_match_official_oracle() {
-        let floors = generate_caves_prefix(DungeonSeed::MIN, 14);
-        let expected = [
-            (
-                11,
-                Feeling::Water,
-                (45, 47),
-                1_191_484_531,
-                478,
-                1_718,
-                vec![
-                    (CavesMobKind::Bat, 1_095),
-                    (CavesMobKind::RedShaman, 1_264),
-                    (CavesMobKind::ArmoredBrute, 1_492),
-                    (CavesMobKind::Bat, 1_632),
-                    (CavesMobKind::Bat, 1_680),
-                ],
-                vec![264, 1_095, 1_264, 1_445, 1_492, 1_632, 1_680],
-            ),
-            (
-                12,
-                Feeling::Water,
-                (37, 56),
-                516_872_055,
-                414,
-                1_435,
-                vec![
-                    (CavesMobKind::PurpleShaman, 680),
-                    (CavesMobKind::Spinner, 690),
-                    (CavesMobKind::Brute, 873),
-                    (CavesMobKind::Brute, 1_091),
-                    (CavesMobKind::Bat, 1_503),
-                    (CavesMobKind::Bat, 1_697),
-                ],
-                vec![680, 690, 873, 1_091, 1_503, 1_697, 1_876, 1_946, 1_985],
-            ),
-            (
-                13,
-                Feeling::Traps,
-                (45, 35),
-                -46_924_005,
-                668,
-                861,
-                vec![
-                    (CavesMobKind::RedShaman, 278),
-                    (CavesMobKind::RedShaman, 500),
-                    (CavesMobKind::Dm200, 746),
-                    (CavesMobKind::Spinner, 767),
-                    (CavesMobKind::Brute, 870),
-                    (CavesMobKind::Spinner, 1_420),
-                    (CavesMobKind::Bat, 1_422),
-                ],
-                vec![278, 500, 746, 767, 870, 1_162, 1_420, 1_422],
-            ),
-            (
-                14,
-                Feeling::Water,
-                (50, 35),
-                -593_991_188,
-                416,
-                996,
-                vec![
-                    (CavesMobKind::Bat, 537),
-                    (CavesMobKind::Dm200, 792),
-                    (CavesMobKind::Brute, 1_019),
-                    (CavesMobKind::Spinner, 1_167),
-                    (CavesMobKind::Spinner, 1_197),
-                    (CavesMobKind::Spinner, 1_268),
-                    (CavesMobKind::Dm200, 1_311),
-                    (CavesMobKind::BlueShaman, 1_411),
-                    (CavesMobKind::RedShaman, 1_432),
-                ],
-                vec![
-                    537, 643, 792, 1_019, 1_167, 1_197, 1_268, 1_311, 1_411, 1_432,
-                ],
-            ),
-        ];
-
-        for (floor, expected) in floors.iter().zip(expected) {
-            let (depth, feeling, size, hash, entrance, exit, expected_mobs, occupied) = expected;
-            assert_eq!(floor.painted.level.depth, depth);
-            assert_eq!(floor.painted.prepared.feeling, feeling, "depth {depth}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "depth {depth}"
+        let seed = DungeonSeed::MIN;
+        for floor in generate_caves_prefix(seed, 14) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), hash, "depth {depth}");
-            assert_eq!(
-                floor.painted.level.entrance(),
-                Some(entrance),
-                "depth {depth}"
-            );
-            assert_eq!(floor.painted.level.exit(), Some(exit), "depth {depth}");
-            let mut mobs = floor
-                .mobs
-                .mobs
-                .iter()
-                .map(|mob| (mob.mob.kind, mob.cell))
-                .collect::<Vec<_>>();
-            mobs.sort_unstable_by_key(|(_, cell)| *cell);
-            assert_eq!(mobs, expected_mobs, "depth {depth}");
-            assert_eq!(occupied_cells(floor), occupied, "depth {depth}");
         }
     }
 
     #[test]
     fn aaa_sequential_caves_searchable_items_match_official_oracle() {
-        let floors = generate_caves_prefix(DungeonSeed::MIN, 14);
-        let expected: [Vec<ExpectedItem>; 4] = [
-            vec![
-                (
-                    ItemId::Bolas,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Pressurized)),
-                    true,
-                    ItemSource::Mimic,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::ChillingDart,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Scimitar,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::MailArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::ThrowingSpear,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::Mace,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Sword,
-                    1,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Sai,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Javelin,
-                    0,
-                    None,
-                    false,
-                    ItemSource::LockedChest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Greatshield,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Annoying)),
-                    true,
-                    ItemSource::SacrificialFire,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::BattleAxe,
-                    2,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 0,
-                    },
-                ),
-                (
-                    ItemId::Greatshield,
-                    2,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-                (
-                    ItemId::Tomahawk,
-                    2,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 2,
-                    },
-                ),
-                (
-                    ItemId::ScaleArmor,
-                    2,
-                    None,
-                    false,
-                    ItemSource::BlacksmithReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 3,
-                    },
-                ),
-                (
-                    ItemId::ScaleArmor,
-                    0,
-                    Some(Effect::Armor(ArmorEffect::Multiplicity)),
-                    true,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Bolas,
-                    0,
-                    Some(Effect::Weapon(WeaponEffect::Eldritch)),
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![(
-                ItemId::MailArmor,
-                0,
-                Some(Effect::Armor(ArmorEffect::Corrosion)),
-                true,
-                ItemSource::Tomb,
-                Accessibility::Independent,
-            )],
-        ];
-        for (floor, expected) in floors.iter().zip(&expected) {
-            assert_items(floor, expected);
+        let seed = DungeonSeed::MIN;
+        for floor in generate_caves_prefix(seed, 14) {
+            crate::oracle_fixture_tests::assert_items(
+                crate::oracle_fixture_tests::floor(&seed.to_code(), 0, floor.painted.level.depth),
+                &floor.world_items,
+            );
         }
     }
 
     #[test]
     fn three_nonzero_depth_eleven_fixtures_match_full_official_oracle() {
-        let fixtures: [DepthElevenFixture; 3] = [
-            (
-                "AAA-AAA-AAB",
-                Feeling::Large,
-                (58, 48),
-                872_073_444,
-                1_231,
-                804,
-                &[
-                    933, 1_098, 1_145, 1_202, 1_256, 1_318, 1_431, 1_484, 1_544, 1_716, 1_748,
-                    1_980,
-                ],
-                &[
-                    (
-                        ItemId::Greataxe,
-                        1,
-                        None,
-                        false,
-                        ItemSource::Chest,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Javelin,
-                        0,
-                        None,
-                        false,
-                        ItemSource::LockedChest,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::HealingDart,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::MailArmor,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Whip,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::ThrowingSpear,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                ],
-            ),
-            (
-                "ABC-DEF-GHI",
-                Feeling::None,
-                (34, 48),
-                1_231_044_119,
-                218,
-                1_215,
-                &[298, 451, 525, 557, 869, 1_183, 1_415],
-                &[
-                    (
-                        ItemId::Kunai,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::RingEnergy,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Sword,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::MailArmor,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::CleansingDart,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                ],
-            ),
-            (
-                "ZZZ-ZZZ-ZZZ",
-                Feeling::None,
-                (45, 44),
-                24_105_011,
-                1_376,
-                187,
-                &[277, 424, 785, 819, 964, 1_224, 1_748],
-                &[
-                    (
-                        ItemId::WandCorruption,
-                        0,
-                        None,
-                        false,
-                        ItemSource::CrystalChest,
-                        Accessibility::Choice {
-                            group: 0,
-                            option: 0,
-                        },
-                    ),
-                    (
-                        ItemId::RingArcana,
-                        2,
-                        None,
-                        true,
-                        ItemSource::CrystalChest,
-                        Accessibility::Choice {
-                            group: 0,
-                            option: 1,
-                        },
-                    ),
-                    (
-                        ItemId::RingEnergy,
-                        0,
-                        None,
-                        true,
-                        ItemSource::Heap,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Bolas,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::MailArmor,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Mace,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::ShockingDart,
-                        0,
-                        None,
-                        false,
-                        ItemSource::Shop,
-                        Accessibility::Independent,
-                    ),
-                    (
-                        ItemId::Glaive,
-                        0,
-                        Some(Effect::Weapon(WeaponEffect::Crystal)),
-                        false,
-                        ItemSource::Statue,
-                        Accessibility::Independent,
-                    ),
-                ],
-            ),
-        ];
-
-        for (code, feeling, size, hash, entrance, exit, occupied, items) in fixtures {
+        for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
             let seed = DungeonSeed::from_code(code).unwrap();
             let floor = generate_caves_prefix(seed, 11).pop().unwrap();
-            assert_eq!(floor.painted.prepared.feeling, feeling, "{code}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "{code}"
+            crate::oracle_fixture_tests::assert_floor(
+                code,
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), hash, "{code}");
-            assert_eq!(floor.painted.level.entrance(), Some(entrance), "{code}");
-            assert_eq!(floor.painted.level.exit(), Some(exit), "{code}");
-            assert_eq!(occupied_cells(&floor), occupied, "{code}");
-            assert_items(&floor, items);
         }
     }
 

@@ -10,8 +10,8 @@ import org.junit.Test
 class AutoTrinketTest {
     init { PackagedCatalog.install() }
     private fun query() = SearchRequest(listOf(ItemRequirement(
-        key = 1, item = ItemCatalog.findById("runic_blade"), upgrade = 1,
-        effect = EffectFilter.named("Grim"), kind = ItemKind.WEAPON, upgradeMatch = UpgradeMatch.EXACT,
+        key = 1, item = null, upgrade = 0,
+        effect = EffectFilter.named("Grim"), kind = ItemKind.WEAPON, upgradeMatch = UpgradeMatch.ANY,
     )), maximumDepth = 19, autoApplyTrinket = true)
 
     @Test fun defaultsAndRecipeDocumentsRetainExplicitNone() {

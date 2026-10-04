@@ -993,10 +993,6 @@ impl RoomCharacterRules for CitySpatialRules {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{ArmorEffect, Effect, ItemId, WeaponEffect};
-    use crate::city_mobs::CityMobKind;
-    use crate::level_prelude::Feeling;
-    use crate::model::{Accessibility, ItemSource};
 
     fn generate_city_prefix(seed: DungeonSeed, maximum_depth: u32) -> Vec<GeneratedCityFloor> {
         let dungeon_seed = i64::try_from(seed.value()).unwrap();
@@ -1058,529 +1054,49 @@ mod tests {
 
     #[test]
     fn aaa_sequential_city_maps_mobs_and_painted_actors_match_official_oracle() {
-        let floors = generate_city_prefix(DungeonSeed::MIN, 19);
-        let expected = [
-            (
-                16,
-                Feeling::None,
-                (39, 37),
-                -640_772_373,
-                1_186,
-                383,
-                vec![
-                    (CityMobKind::FireElemental, 308),
-                    (CityMobKind::Warlock, 539),
-                    (CityMobKind::Ghoul, 687),
-                    (CityMobKind::FireElemental, 799),
-                    (CityMobKind::Ghoul, 1_045),
-                    (CityMobKind::Ghoul, 1_214),
-                ],
-                vec![308, 539, 687, 799, 1_045, 1_214, 1_231],
-            ),
-            (
-                17,
-                Feeling::None,
-                (57, 36),
-                -1_251_089_393,
-                679,
-                1_601,
-                vec![
-                    (CityMobKind::Warlock, 257),
-                    (CityMobKind::FrostElemental, 480),
-                    (CityMobKind::Ghoul, 941),
-                    (CityMobKind::Ghoul, 983),
-                    (CityMobKind::ShockElemental, 988),
-                    (CityMobKind::ShockElemental, 997),
-                    (CityMobKind::Monk, 1_725),
-                ],
-                vec![144, 257, 480, 941, 983, 988, 997, 1_725],
-            ),
-            (
-                18,
-                Feeling::None,
-                (43, 37),
-                435_526_208,
-                338,
-                1_080,
-                vec![
-                    (CityMobKind::Ghoul, 501),
-                    (CityMobKind::Warlock, 547),
-                    (CityMobKind::Warlock, 594),
-                    (CityMobKind::Monk, 749),
-                    (CityMobKind::FireElemental, 1_012),
-                    (CityMobKind::Golem, 1_039),
-                ],
-                vec![408, 501, 547, 594, 749, 1_012, 1_039],
-            ),
-            (
-                19,
-                Feeling::None,
-                (37, 46),
-                -538_847_853,
-                461,
-                397,
-                vec![
-                    (CityMobKind::ShockElemental, 279),
-                    (CityMobKind::Golem, 325),
-                    (CityMobKind::Warlock, 471),
-                    (CityMobKind::Golem, 834),
-                    (CityMobKind::Monk, 1_135),
-                    (CityMobKind::Golem, 1_248),
-                    (CityMobKind::Monk, 1_271),
-                    (CityMobKind::Warlock, 1_346),
-                ],
-                vec![279, 325, 396, 471, 834, 1_135, 1_248, 1_271, 1_346, 1_437],
-            ),
-        ];
-
-        for (floor, expected) in floors.iter().zip(expected) {
-            let (depth, feeling, size, hash, entrance, exit, expected_mobs, occupied) = expected;
-            assert_eq!(floor.painted.level.depth, depth);
-            assert_eq!(floor.painted.prepared.feeling, feeling, "depth {depth}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "depth {depth}"
+        let seed = DungeonSeed::MIN;
+        for floor in generate_city_prefix(seed, 19) {
+            crate::oracle_fixture_tests::assert_floor(
+                &seed.to_code(),
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), hash, "depth {depth}");
-            assert_eq!(
-                floor.painted.level.entrance(),
-                Some(entrance),
-                "depth {depth}"
-            );
-            assert_eq!(floor.painted.level.exit(), Some(exit), "depth {depth}");
-            let mut mobs = floor
-                .mobs
-                .mobs
-                .iter()
-                .map(|mob| (mob.mob.kind, mob.cell))
-                .collect::<Vec<_>>();
-            mobs.sort_unstable_by_key(|(_, cell)| *cell);
-            assert_eq!(mobs, expected_mobs, "depth {depth}");
-            let actual_occupied = floor
-                .painted
-                .level
-                .mob_cells
-                .iter()
-                .enumerate()
-                .filter_map(|(cell, &is_occupied)| is_occupied.then_some(cell))
-                .collect::<Vec<_>>();
-            assert_eq!(actual_occupied, occupied, "depth {depth}");
         }
     }
 
     #[test]
     fn three_nonzero_depth_sixteen_maps_match_official_oracle() {
-        for (code, feeling, size, hash, entrance, exit) in [
-            (
-                "AAA-AAA-AAB",
-                Feeling::None,
-                (36, 56),
-                129_683_275,
-                1_420,
-                194,
-            ),
-            (
-                "ABC-DEF-GHI",
-                Feeling::Traps,
-                (52, 32),
-                1_928_380_213,
-                997,
-                667,
-            ),
-            (
-                "ZZZ-ZZZ-ZZZ",
-                Feeling::None,
-                (33, 49),
-                -1_234_450_086,
-                350,
-                1_176,
-            ),
-        ] {
+        for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
             let seed = DungeonSeed::from_code(code).unwrap();
             let floor = generate_city_prefix(seed, 16).pop().unwrap();
-            assert_eq!(floor.painted.prepared.feeling, feeling, "{code}");
-            assert_eq!(
-                (floor.painted.level.width(), floor.painted.level.height()),
-                size,
-                "{code}"
+            crate::oracle_fixture_tests::assert_floor(
+                code,
+                0,
+                &floor.painted.level,
+                &floor.world_items,
+                floor
+                    .mobs
+                    .mobs
+                    .iter()
+                    .map(|mob| (format!("{:?}", mob.mob.kind), mob.cell)),
             );
-            assert_eq!(floor.painted.level.java_map_hash(), hash, "{code}");
-            assert_eq!(floor.painted.level.entrance(), Some(entrance), "{code}");
-            assert_eq!(floor.painted.level.exit(), Some(exit), "{code}");
         }
     }
 
     #[test]
     fn aaa_sequential_city_searchable_items_match_official_oracle() {
-        let floors = generate_city_prefix(DungeonSeed::MIN, 19);
-        let expected = [
-            vec![
-                (
-                    ItemId::Glaive,
-                    1,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::WandMagicMissile,
-                    0,
-                    None,
-                    false,
-                    ItemSource::LockedChest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Javelin,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Katana,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::IncendiaryDart,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::ScaleArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Shop,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![(
-                ItemId::ThrowingHammer,
-                0,
-                None,
-                false,
-                ItemSource::Mimic,
-                Accessibility::Independent,
-            )],
-            vec![
-                (
-                    ItemId::PlateArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Chest,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::MailArmor,
-                    1,
-                    Some(Effect::Armor(ArmorEffect::Multiplicity)),
-                    true,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Javelin,
-                    1,
-                    Some(Effect::Weapon(WeaponEffect::Sacrificial)),
-                    true,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Trident,
-                    1,
-                    None,
-                    false,
-                    ItemSource::Heap,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::RingSharpshooting,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Skeleton,
-                    Accessibility::Independent,
-                ),
-            ],
-            vec![
-                (
-                    ItemId::RingHaste,
-                    2,
-                    None,
-                    false,
-                    ItemSource::ImpReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 1,
-                    },
-                ),
-                (
-                    ItemId::Greatshield,
-                    2,
-                    Some(Effect::Weapon(WeaponEffect::Lucky)),
-                    false,
-                    ItemSource::ImpReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 2,
-                    },
-                ),
-                (
-                    ItemId::Javelin,
-                    4,
-                    Some(Effect::Weapon(WeaponEffect::Shocking)),
-                    false,
-                    ItemSource::ImpReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 3,
-                    },
-                ),
-                (
-                    ItemId::PlateArmor,
-                    3,
-                    Some(Effect::Armor(ArmorEffect::Stone)),
-                    false,
-                    ItemSource::ImpReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 4,
-                    },
-                ),
-                (
-                    ItemId::WandCorrosion,
-                    2,
-                    None,
-                    false,
-                    ItemSource::ImpReward,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 5,
-                    },
-                ),
-                (
-                    ItemId::RingEvasion,
-                    0,
-                    None,
-                    false,
-                    ItemSource::Mimic,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::HeavyBoomerang,
-                    2,
-                    None,
-                    false,
-                    ItemSource::Skeleton,
-                    Accessibility::Independent,
-                ),
-                (
-                    ItemId::Katana,
-                    2,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 6,
-                    },
-                ),
-                (
-                    ItemId::BattleAxe,
-                    4,
-                    Some(Effect::Weapon(WeaponEffect::Blooming)),
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 7,
-                    },
-                ),
-                (
-                    ItemId::Javelin,
-                    2,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 8,
-                    },
-                ),
-                (
-                    ItemId::WandLivingEarth,
-                    3,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 9,
-                    },
-                ),
-                (
-                    ItemId::Whip,
-                    3,
-                    Some(Effect::Weapon(WeaponEffect::Kinetic)),
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 10,
-                    },
-                ),
-                (
-                    ItemId::RingEvasion,
-                    1,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 11,
-                    },
-                ),
-                (
-                    ItemId::RingArcana,
-                    2,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 12,
-                    },
-                ),
-                (
-                    ItemId::LeatherArmor,
-                    0,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 13,
-                    },
-                ),
-                (
-                    ItemId::Sickle,
-                    0,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 14,
-                    },
-                ),
-                (
-                    ItemId::Greatsword,
-                    3,
-                    Some(Effect::Weapon(WeaponEffect::Grim)),
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 15,
-                    },
-                ),
-                (
-                    ItemId::WandFireblast,
-                    1,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 16,
-                    },
-                ),
-                (
-                    ItemId::PlateArmor,
-                    3,
-                    Some(Effect::Armor(ArmorEffect::Entanglement)),
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 17,
-                    },
-                ),
-                (
-                    ItemId::Spear,
-                    2,
-                    Some(Effect::Weapon(WeaponEffect::Corrupting)),
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 18,
-                    },
-                ),
-                (
-                    ItemId::FishingSpear,
-                    0,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 19,
-                    },
-                ),
-                (
-                    ItemId::HandAxe,
-                    0,
-                    None,
-                    false,
-                    ItemSource::VaultTreasure,
-                    Accessibility::Choice {
-                        group: 0,
-                        option: 20,
-                    },
-                ),
-            ],
-        ];
-        for (floor, expected) in floors.iter().zip(expected) {
-            assert_eq!(
-                floor
-                    .world_items
-                    .iter()
-                    .filter(|entry| crate::catalog::item(entry.item).kind
-                        != crate::catalog::ItemKind::Artifact)
-                    .count(),
-                expected.len(),
-                "depth {} actual {:?}",
-                floor.painted.level.depth,
-                floor.world_items
+        let seed = DungeonSeed::MIN;
+        for floor in generate_city_prefix(seed, 19) {
+            crate::oracle_fixture_tests::assert_items(
+                crate::oracle_fixture_tests::floor(&seed.to_code(), 0, floor.painted.level.depth),
+                &floor.world_items,
             );
-            for (item, upgrade, effect, cursed, source, accessibility) in expected {
-                assert!(
-                    floor.world_items.iter().any(|actual| {
-                        actual.item == item
-                            && actual.upgrade == upgrade
-                            && actual.effect == effect
-                            && actual.cursed == cursed
-                            && actual.source == source
-                            && actual.accessibility == accessibility
-                    }),
-                    "depth {} missing {item:?} {source:?}",
-                    floor.painted.level.depth
-                );
-            }
         }
     }
 

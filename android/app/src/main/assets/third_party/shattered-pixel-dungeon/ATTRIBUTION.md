@@ -6,13 +6,12 @@
 
 `sprites/item_icons.png`
 
-from the Shattered Pixel Dungeon v4.0.0-BETA-3 release JAR
-(`ShatteredPD-v4.0.0-BETA-3-Java.jar`, SHA-256
-`f62f8ac2ef6d36c72223c1a4e78f18e98d0bb1282cd4f1fca123082d43edccc9`). These artwork files retain their original BETA-3 provenance;
-the engine targets the final v4.0.0 source release at commit
-`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. `item_icons.png` is byte-identical with the v3.3.8 copy
-(commit `7b8b845a76fe76c6b7c031ae9e570852411f56db`); `items.png` keeps the
-same 256x512 layout but redraws the tipped darts and adds the vault crystals.
+from Shattered Pixel Dungeon v4.0.1, source commit
+`e9defd0444c96d2fce3de5ec297c3398be8b7c55`, matching the official release JAR
+(`ShatteredPD-v4.0.1-Java.jar`, SHA-256
+`452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea`).
+The 256x512 atlas includes the updated runestone artwork. Sprite indices and
+`item_icons.png` are unchanged. Digests are recorded in `ASSET_MANIFEST.json`.
 
 - Pixel Dungeon: Copyright © 2012–2015 Oleg Dolya
 - Shattered Pixel Dungeon: Copyright © 2014–2026 Evan Debenham

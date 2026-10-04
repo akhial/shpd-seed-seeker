@@ -1,4 +1,5 @@
 use super::{MapContents, MapFeature, MapHeap, MapItem, items, name};
+use crate::geometry::Point;
 use crate::quest_rooms::QuestPaintEvent as Q;
 use crate::run::ItemAppearanceState;
 use crate::secret_rooms::{SecretPaintEvent as S, SecretPlantKind};
@@ -414,6 +415,37 @@ impl MapContents {
                 },
                 vec![],
             );
+            if mob.kind == crate::vault_mobs::VaultMobKind::TokenDoor {
+                out.features.push(MapFeature {
+                    cell: mob.cell,
+                    kind: "VaultTokenDoorFloor".to_owned(),
+                    width: 1,
+                    height: 1,
+                    cycle: None,
+                });
+            }
+        }
+        for room in &vault.rooms {
+            if room.kind != crate::vault_rooms::VaultRoomKind::Final {
+                continue;
+            }
+            let b = room.bounds;
+            let c = room.center();
+            let entrance = room.entrance_door().expect("final room has a door").point;
+            let doors = if entrance.x == b.left || entrance.x == b.right {
+                [Point::new(b.left + 4, c.y), Point::new(b.right - 4, c.y)]
+            } else {
+                [Point::new(c.x, b.top + 4), Point::new(c.x, b.bottom - 4)]
+            };
+            for door in doors {
+                out.features.push(MapFeature {
+                    cell: vault.level.point_to_cell(door),
+                    kind: "VaultFinalDoor".to_owned(),
+                    width: 1,
+                    height: 1,
+                    cycle: None,
+                });
+            }
         }
         for mob in &mut out.mobs {
             use crate::vault_rooms::VaultRoomKind as K;

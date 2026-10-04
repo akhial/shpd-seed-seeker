@@ -60,7 +60,7 @@ pub enum TrapKind {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TrapSpec {
     pub kind: TrapKind,
-    pub avoids_hallways: bool,
+    pub avoids_closed_spaces: bool,
     pub can_be_hidden: bool,
 }
 
@@ -69,14 +69,14 @@ impl TrapSpec {
     pub const fn new(kind: TrapKind) -> Self {
         Self {
             kind,
-            avoids_hallways: false,
+            avoids_closed_spaces: false,
             can_be_hidden: true,
         }
     }
 
     #[must_use]
-    pub const fn avoids_hallways(mut self) -> Self {
-        self.avoids_hallways = true;
+    pub const fn avoids_closed_spaces(mut self) -> Self {
+        self.avoids_closed_spaces = true;
         self
     }
 
@@ -213,7 +213,7 @@ pub fn sewer_trap_table(depth: u32) -> (Vec<TrapSpec>, Vec<f32>) {
         return (
             vec![
                 TrapSpec::new(TrapKind::WornDart)
-                    .avoids_hallways()
+                    .avoids_closed_spaces()
                     .cannot_be_hidden(),
             ],
             vec![1.0],
@@ -226,7 +226,7 @@ pub fn sewer_trap_table(depth: u32) -> (Vec<TrapSpec>, Vec<f32>) {
             TrapSpec::new(TrapKind::Shocking),
             TrapSpec::new(TrapKind::Toxic),
             TrapSpec::new(TrapKind::WornDart)
-                .avoids_hallways()
+                .avoids_closed_spaces()
                 .cannot_be_hidden(),
             TrapSpec::new(TrapKind::Alarm),
             TrapSpec::new(TrapKind::Ooze),
@@ -234,7 +234,7 @@ pub fn sewer_trap_table(depth: u32) -> (Vec<TrapSpec>, Vec<f32>) {
             TrapSpec::new(TrapKind::Flock),
             TrapSpec::new(TrapKind::Summoning),
             TrapSpec::new(TrapKind::Teleportation),
-            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+            TrapSpec::new(TrapKind::Gateway).avoids_closed_spaces(),
         ],
         vec![4.0, 4.0, 4.0, 4.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     )
@@ -489,7 +489,7 @@ mod tests {
     fn sewer_trap_constructor_properties_match_java_classes() {
         let (floor_one, weights) = sewer_trap_table(1);
         assert_eq!(weights, [1.0]);
-        assert!(floor_one[0].avoids_hallways);
+        assert!(floor_one[0].avoids_closed_spaces);
         assert!(!floor_one[0].can_be_hidden);
 
         let (later, weights) = sewer_trap_table(2);
@@ -498,8 +498,8 @@ mod tests {
             weights,
             [4.0, 4.0, 4.0, 4.0, 2.0, 2.0, 1.0, 1.0, 1.0, 1.0, 1.0]
         );
-        assert!(later[3].avoids_hallways);
-        assert!(later[10].avoids_hallways);
+        assert!(later[3].avoids_closed_spaces);
+        assert!(later[10].avoids_closed_spaces);
     }
 
     #[test]

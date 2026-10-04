@@ -26,7 +26,7 @@ fn scout_artifact_levels_match_the_games_double_rounding() {
             accessibility: Accessibility::Independent,
             secret: false,
         };
-        // Official BETA-4 level caps: Sandals 3; Chains/Hourglass 5; other spawnables 10.
+        // Official 4.0.1 level caps: Sandals 3; Chains/Hourglass 5; other spawnables 10.
         let expected = match entry.item {
             ItemId::SandalsOfNature => 7,
             ItemId::EtherealChains | ItemId::TimekeepersHourglass => 6,
@@ -40,11 +40,11 @@ fn scout_artifact_levels_match_the_games_double_rounding() {
 }
 
 #[test]
-fn all_spawn_artifacts_match_eight_official_beta4_worlds() {
+fn all_spawn_artifacts_match_eight_official_v401_worlds() {
     // ParityOracle 1-24; pinned official JAR SHA-256:
-    // 76f6983e7b619267666621de9f1ecbbc3645d4925c2c446736987c3011b9dfd1
+    // 452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea
     let mut identities = std::collections::HashSet::new();
-    for line in include_str!("fixtures/beta4-artifacts.txt").lines() {
+    for line in include_str!("fixtures/v4.0.1-artifacts.txt").lines() {
         let (seed, expected) = line.split_once('|').unwrap();
         let seed = DungeonSeed::from_code(seed).unwrap();
         let world = CanonicalMainWorldGenerator.generate(seed, 24);
@@ -86,7 +86,7 @@ fn all_spawn_artifacts_match_eight_official_beta4_worlds() {
 }
 
 #[test]
-fn aaa_artifacts_match_beta4_oracle_and_round_trip_native_wire() {
+fn aaa_artifacts_match_v401_oracle_and_round_trip_native_wire() {
     let mut world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
     let actual: Vec<_> = world
         .items
@@ -102,7 +102,7 @@ fn aaa_artifacts_match_beta4_oracle_and_round_trip_native_wire() {
             )
         })
         .collect();
-    // Official BETA-4 ParityOracle AAA-AAA-AAA 1-24. Sandals have
+    // Official 4.0.1 ParityOracle AAA-AAA-AAA 1-24. Sandals have
     // internal trueLevel 2; the search displays the transferUpgrade(5) amount.
     assert_eq!(
         actual,

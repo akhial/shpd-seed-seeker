@@ -649,7 +649,7 @@ public static class ItemCatalog
     public static IReadOnlyList<string> Glyphs => Catalog.Modifiers.ArmorGlyphs;
     public static IReadOnlyList<string> ArmorCurses => Catalog.Modifiers.ArmorCurses;
     private static Root Load() =>
-        JsonSerializer.Deserialize<Root>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "catalog-v4.0.0.json")), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+        JsonSerializer.Deserialize<Root>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "catalog-v4.0.1.json")), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
     public static CatalogItem? Find(string id) => All.FirstOrDefault(x => x.Id == id);
     public static IEnumerable<string> Modifiers(ItemKind kind) => kind.Family() switch { ItemKind.Weapon => Enchantments.Concat(WeaponCurses), ItemKind.Armor => Glyphs.Concat(ArmorCurses), _ => [] };
     /// <summary>The family's non-curse effects: what "any enchantment" stands for.</summary>

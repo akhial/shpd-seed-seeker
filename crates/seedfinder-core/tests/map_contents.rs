@@ -221,9 +221,8 @@ fn vault_vent_cycles_match_official_engine_and_preview_each_turn() {
             let visible = |index: usize, time: u32| {
                 let emitter = emitters[index];
                 emitter.particles.iter().any(|p| {
-                    let first = emitter.start_ms.unwrap() + u32::from(p.birth_ms);
-                    time >= first
-                        && (time - first) % u32::from(emitter.loop_ms) < u32::from(p.lifespan_ms)
+                    let first = emitter.start_ms.unwrap() + p.birth_ms;
+                    time >= first && (time - first) % emitter.loop_ms < u32::from(p.lifespan_ms)
                 })
             };
             // VaultFlameTraps.act evolves the existing blob, then decrements

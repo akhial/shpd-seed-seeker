@@ -1,4 +1,4 @@
-//! Room graph for the v4.0.0 Imp Vault (`levels/rooms/quest/vault/*`).
+//! Room graph for the v4.0.1 Imp Vault (`levels/rooms/quest/vault/*`).
 //!
 //! The vault's rooms are a closed family that never mixes with the regular
 //! dungeon's room classes, and every one of them has a rigid 11- or 21-cell
@@ -489,6 +489,7 @@ fn touches_entrance_within(rooms: &[VaultRoom], room: usize, hops: u32) -> bool 
 #[must_use]
 pub fn can_connect_rooms(rooms: &[VaultRoom], this: usize, other: usize) -> bool {
     match rooms[this].kind {
+        VaultRoomKind::LongRings if rooms[other].is_entrance() => return false,
         // r itself, its connections, and their connections must avoid the
         // entrance.
         VaultRoomKind::Tokens if touches_entrance_within(rooms, other, 2) => return false,

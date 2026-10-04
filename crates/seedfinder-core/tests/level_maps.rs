@@ -20,7 +20,7 @@ fn completed_map_matches_saved_game_fixtures_in_every_region() {
             .terrain
             .iter()
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v)),
-        -72_472_821
+        -445_847_158
     );
     for fixture in [
         include_str!("../../../tooling/oracle-4.0/tests/prison-floors.expected.json"),
@@ -263,19 +263,19 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
     assert_eq!((map.width, map.height), (38, 46));
     // Room.center() chooses integer cells, including either side of the
     // geometric midpoint in even dimensions. These match the official JAR.
-    assert_eq!((map.entrance, map.exit), (Some(769), Some(789)));
+    assert_eq!((map.entrance, map.exit), (Some(769), Some(790)));
     assert_eq!(map.feeling, shpd_seedfinder_core::level::Feeling::Water);
     assert_eq!(
         map.terrain
             .iter()
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v)),
-        606_879_645
+        -1_659_408_237
     );
     assert_eq!(
         map.terrain.iter().filter(|&&v| v == t::BOOKSHELF).count(),
-        73
+        75
     );
-    assert_eq!(map.terrain.iter().filter(|&&v| v == t::WATER).count(), 319);
+    assert_eq!(map.terrain.iter().filter(|&&v| v == t::WATER).count(), 322);
     let floor = map
         .scene
         .layers
@@ -329,12 +329,12 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
         })
     ));
     // The reported warlock is in the narrow HallwayRoom, with a 3x3 rug
-    // centered on the generated statue at (21,17), not a different layout.
+    // centered on the generated statue at (21,17).
     assert!(
         map.contents
             .mobs
             .iter()
-            .any(|m| m.kind == "Warlock" && m.cell == 666)
+            .any(|m| m.kind == "Warlock" && m.cell == 705)
     );
     for y in 16..=18 {
         for x in 20..=22 {
@@ -342,6 +342,66 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
         }
     }
     assert_drawing_bounds(&map);
+}
+
+#[test]
+fn vault_doors_match_the_official_custom_tile_selectors() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/vault-doors.json")).unwrap();
+    for sample in fixture["samples"].as_array().unwrap() {
+        let map = generate_level_map_in_branch(
+            DungeonSeed::from_code(sample["seed"].as_str().unwrap()).unwrap(),
+            u8::try_from(sample["depth"].as_u64().unwrap()).unwrap(),
+            1,
+            Challenges::NONE,
+            None,
+        )
+        .unwrap();
+        let floor = map
+            .scene
+            .layers
+            .iter()
+            .find(|l| l.name == "room_floor")
+            .unwrap();
+        let walls = map
+            .scene
+            .layers
+            .iter()
+            .find(|l| l.name == "room_walls")
+            .unwrap();
+        let check = |layer: &shpd_seedfinder_core::level_map::MapLayer,
+                     cell: usize,
+                     expected: i64| {
+            if expected == -1 {
+                assert!(
+                    layer.cells[cell].is_none(),
+                    "unexpected door tile at {cell}"
+                );
+            } else {
+                let sprite = &map.scene.sprites[layer.cells[cell].expect("custom door tile")];
+                let tile = u16::try_from(expected).unwrap();
+                assert!(
+                    matches!(sprite.frames[0].as_slice(), [MapDraw::Blit { asset: "city_quest.png", source, .. }]
+                    if *source == [(tile % 16) * 16, (tile / 16) * 16, 16, 16])
+                );
+            }
+        };
+        for door in sample["doors"].as_array().unwrap() {
+            let cell = usize::try_from(door["cell"].as_u64().unwrap()).unwrap();
+            assert!(
+                map.contents
+                    .features
+                    .iter()
+                    .any(|f| f.cell == cell && f.kind == door["kind"].as_str().unwrap())
+            );
+            check(floor, cell, door["floor"].as_i64().unwrap());
+            check(
+                walls,
+                cell - usize::try_from(map.width).unwrap(),
+                door["walls"][0].as_i64().unwrap(),
+            );
+            check(walls, cell, door["walls"][1].as_i64().unwrap());
+        }
+    }
 }
 
 #[test]

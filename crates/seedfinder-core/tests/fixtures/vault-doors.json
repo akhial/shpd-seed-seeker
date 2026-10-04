@@ -1,0 +1,104 @@
+{
+  "source": "Official ShatteredPD-v4.0.1-Java.jar custom vault door selectors",
+  "samples": [
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 19,
+      "doors": [
+        {
+          "cell": 698,
+          "kind": "VaultFinalDoor",
+          "floor": 192,
+          "walls": [
+            209,
+            212
+          ]
+        },
+        {
+          "cell": 710,
+          "kind": "VaultFinalDoor",
+          "floor": 194,
+          "walls": [
+            208,
+            211
+          ]
+        },
+        {
+          "cell": 1228,
+          "kind": "VaultTokenDoorFloor",
+          "floor": 145,
+          "walls": [
+            -1,
+            -1
+          ]
+        }
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 18,
+      "doors": [
+        {
+          "cell": 928,
+          "kind": "VaultTokenDoorFloor",
+          "floor": 145,
+          "walls": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "cell": 1328,
+          "kind": "VaultFinalDoor",
+          "floor": 192,
+          "walls": [
+            209,
+            212
+          ]
+        },
+        {
+          "cell": 1340,
+          "kind": "VaultFinalDoor",
+          "floor": 194,
+          "walls": [
+            208,
+            211
+          ]
+        }
+      ]
+    },
+    {
+      "seed": "AAA-AAA-ABG",
+      "depth": 17,
+      "doors": [
+        {
+          "cell": 276,
+          "kind": "VaultFinalDoor",
+          "floor": 146,
+          "walls": [
+            130,
+            -1
+          ]
+        },
+        {
+          "cell": 912,
+          "kind": "VaultFinalDoor",
+          "floor": 162,
+          "walls": [
+            130,
+            -1
+          ]
+        },
+        {
+          "cell": 2908,
+          "kind": "VaultTokenDoorFloor",
+          "floor": 145,
+          "walls": [
+            -1,
+            -1
+          ]
+        }
+      ]
+    }
+  ]
+}
