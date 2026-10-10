@@ -164,7 +164,7 @@ mod tests {
         // The artwork is pinned to the current source revision and release JAR.
         assert!(
             attribution
-                .contains("452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea")
+                .contains("bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602")
         );
         assert!(attribution.contains(shpd_seedfinder_core::SHPD_COMMIT));
         // Markdown punctuation is rendered away rather than shown verbatim.

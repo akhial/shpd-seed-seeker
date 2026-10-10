@@ -1,11 +1,11 @@
 # Raised map rendering fixtures
 
 `raised-map-visuals.expected.json` records all-cell atlas-index hashes from the
-unmodified official **v4.0.1** desktop JAR, matching the generation engine's pin.
+unmodified official **v4.0.2** desktop JAR, matching the generation engine's pin.
 JAR SHA-256:
 
 ```
-452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea
+bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602
 ```
 
 The 13 maps cover depths 1, 7, 12, 16, 23 for AAA-AAA-AAA and JHG-HJJ-BKK,
@@ -29,11 +29,11 @@ Reproduce from the repository root, supplying the official release JAR:
 
 ```sh
 cargo build -p shpd-seedfinder-core --features json-query --example level_map
-javac -cp /path/to/ShatteredPD-v4.0.1-Java.jar -d /tmp/map-oracle \
+javac -cp /path/to/ShatteredPD-v4.0.2-Java.jar -d /tmp/map-oracle \
   tooling/oracle-4.0/src/com/shatteredpixel/shatteredpixeldungeon/MapVisualOracle.java
 target/debug/examples/level_map \
   '{"seed":"JHG-HJJ-BKK","depth":7}' > /tmp/map-input.json
-java -cp /tmp/map-oracle:/path/to/ShatteredPD-v4.0.1-Java.jar \
+java -cp /tmp/map-oracle:/path/to/ShatteredPD-v4.0.2-Java.jar \
   com.shatteredpixel.shatteredpixeldungeon.MapVisualOracle /tmp/map-input.json
 ```
 

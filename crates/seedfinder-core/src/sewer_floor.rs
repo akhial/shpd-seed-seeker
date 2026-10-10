@@ -1223,7 +1223,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn aaa_floor_one_full_painted_map_matches_official_v401_oracle() {
+    fn aaa_floor_one_full_painted_map_matches_official_v402_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut random = RandomStack::with_base_seed(0);
@@ -1263,7 +1263,7 @@ mod tests {
     }
 
     #[test]
-    fn aaa_floor_one_mobs_and_searchable_items_match_official_v401_oracle() {
+    fn aaa_floor_one_mobs_and_searchable_items_match_official_v402_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut quests = QuestState::new();
@@ -1285,7 +1285,7 @@ mod tests {
     }
 
     #[test]
-    fn three_more_floor_one_maps_match_official_v401_oracle() {
+    fn three_more_floor_one_maps_match_official_v402_oracle() {
         for code in ["AAA-AAA-AAB", "ABC-DEF-GHI", "ZZZ-ZZZ-ZZZ"] {
             let seed = i64::try_from(DungeonSeed::from_code(code).unwrap().value()).unwrap();
             let mut run = RunState::new(seed);
@@ -1310,7 +1310,7 @@ mod tests {
     }
 
     #[test]
-    fn aaa_sequential_sewer_maps_match_official_v401_oracle() {
+    fn aaa_sequential_sewer_maps_match_official_v402_oracle() {
         let mut run = RunState::new(0);
         let mut limited = LimitedDrops::default();
         let mut quests = QuestState::new();

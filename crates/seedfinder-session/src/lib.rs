@@ -1224,7 +1224,7 @@ mod tests {
             query.requirements.last_mut().unwrap().max_depth = cap;
             let found = filter_matching_recipes(&query, &base, &[recipe]).unwrap();
             assert_eq!(found.len(), 1, "cap={cap:?}");
-            // This seed's 4.0.1 baseline also has the early donor, so replay
+            // This seed's 4.0.2 baseline also has the early donor, so replay
             // removes the now-unnecessary saved trinket while keeping the match.
             assert_eq!(
                 found[0].recipe,

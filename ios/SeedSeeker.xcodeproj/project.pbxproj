@@ -429,7 +429,7 @@
 			"outputPaths" = (
 			);
 			"shellPath" = "/bin/bash";
-			"shellScript" = "set -euo pipefail\nROOT=\"$SRCROOT/..\"\nASSETS=\"$ROOT/android/app/src/main/assets/third_party/shattered-pixel-dungeon\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$DEST\"\nfor asset in catalog-v4.0.1.json item-mapping-art.json items.png item_icons.png LICENSE.txt ATTRIBUTION.md; do\n    install -m 644 \"$ASSETS/$asset\" \"$DEST/$asset\"\ndone\ninstall -m 644 \"$ASSETS/LICENSE.txt\" \"$DEST/LICENSE-ShatteredPixelDungeon.txt\"\ninstall -m 644 \"$ROOT/web/src/assets/dungeon-icons.png\" \"$DEST/dungeon-icons.png\"\ninstall -m 644 \"$ROOT/web/src/assets/ATTRIBUTION.md\" \"$DEST/DUNGEON-ICONS-ATTRIBUTION.md\"\ninstall -m 644 \"$ROOT/assets/icon/ATTRIBUTION.md\" \"$DEST/APP-ICON-ATTRIBUTION.md\"\n";
+			"shellScript" = "set -euo pipefail\nROOT=\"$SRCROOT/..\"\nASSETS=\"$ROOT/android/app/src/main/assets/third_party/shattered-pixel-dungeon\"\nDEST=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\nmkdir -p \"$DEST\"\nfor asset in catalog-v4.0.2.json item-mapping-art.json items.png item_icons.png LICENSE.txt ATTRIBUTION.md; do\n    install -m 644 \"$ASSETS/$asset\" \"$DEST/$asset\"\ndone\ninstall -m 644 \"$ASSETS/LICENSE.txt\" \"$DEST/LICENSE-ShatteredPixelDungeon.txt\"\ninstall -m 644 \"$ROOT/web/src/assets/dungeon-icons.png\" \"$DEST/dungeon-icons.png\"\ninstall -m 644 \"$ROOT/web/src/assets/ATTRIBUTION.md\" \"$DEST/DUNGEON-ICONS-ATTRIBUTION.md\"\ninstall -m 644 \"$ROOT/assets/icon/ATTRIBUTION.md\" \"$DEST/APP-ICON-ATTRIBUTION.md\"\n";
 		};
 		"4D2755A880E358872B812F76" = {
 			"isa" = "PBXContainerItemProxy";

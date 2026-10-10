@@ -1,4 +1,4 @@
-//! Room graph for the v4.0.1 Imp Vault (`levels/rooms/quest/vault/*`).
+//! Room graph for the v4.0.2 Imp Vault (`levels/rooms/quest/vault/*`).
 //!
 //! The vault's rooms are a closed family that never mixes with the regular
 //! dungeon's room classes, and every one of them has a rigid 11- or 21-cell
