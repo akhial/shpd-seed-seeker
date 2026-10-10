@@ -2021,7 +2021,7 @@ mod tests {
             WandmakerQuestType,
         };
 
-        // Re-pinned from the v4.0.1 oracle (tooling/oracle-4.0): the
+        // Re-pinned from the v4.0.2 oracle (tooling/oracle-4.0): the
         // vault adds fifteen treasure options to the Imp's five prizes.
         let generated = native_world(DungeonSeed::MIN, 24);
         assert_eq!(generated.items.len(), 99);

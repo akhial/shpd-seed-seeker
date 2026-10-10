@@ -1,5 +1,5 @@
 {
-  "source": "Official ShatteredPD-v4.0.1-Java.jar: VaultFlameTraps setup arrays; cycles are [cell, initialCooldown, cooldown, triggers].",
+  "source": "Official ShatteredPD-v4.0.2-Java.jar: VaultFlameTraps setup arrays; cycles are [cell, initialCooldown, cooldown, triggers].",
   "samples": [
     {
       "seed": "AAA-AAA-AAA",

@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn necessary_trinkets_survive_baseline_replay_and_saved_choices_replay_the_match() {
         let seed = DungeonSeed::from_code("SRU-YSU-QHS").unwrap();
-        // 4.0.1 supplies a Grim tomahawk only in the Parchment Scrap world.
+        // 4.0.2 supplies a Grim tomahawk only in the Parchment Scrap world.
         let query = query(r#"[{"kind":"weapon","effect":"Grim"}]"#);
         let plan = QueryPlan::analyze(&query);
         let generator = CountingGenerator(AtomicUsize::new(0));

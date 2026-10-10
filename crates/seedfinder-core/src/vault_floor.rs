@@ -1,4 +1,4 @@
-//! Exact v4.0.1 generation of the Imp's Vault sub-level (`VaultLevel`,
+//! Exact v4.0.2 generation of the Imp's Vault sub-level (`VaultLevel`,
 //! `Dungeon.branch == 1` at the Imp's depth).
 //!
 //! `Level.create()` pushes `Dungeon.seedForDepth(depth, 1)` and, because the
@@ -857,7 +857,7 @@ mod tests {
         assert_eq!(search_rng, scouting_rng);
     }
 
-    /// An official v4.0.1 vault, captured with `tooling/oracle-4.0/run.sh`
+    /// An official v4.0.2 vault, captured with `tooling/oracle-4.0/run.sh`
     /// after generating the main floors and entering the Imp's branch.
     struct VaultFixture {
         code: &'static str,

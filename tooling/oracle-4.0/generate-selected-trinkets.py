@@ -8,7 +8,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 ORACLE = ROOT / "tooling/oracle-4.0"
-FIXTURE = ROOT / "crates/seedfinder-core/tests/fixtures/selected_trinkets_v4.0.1.json"
+FIXTURE = ROOT / "crates/seedfinder-core/tests/fixtures/selected_trinkets_v4.0.2.json"
 
 
 def stable_id(name):

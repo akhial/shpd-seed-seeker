@@ -12,7 +12,7 @@ pub struct MapAsset {
     pub png: &'static [u8],
 }
 
-pub const SOURCE_REVISION: &str = "e9defd0444c96d2fce3de5ec297c3398be8b7c55";
+pub const SOURCE_REVISION: &str = "57a4e06a4caf162446d1c28caa7983f0493fecf0";
 
 pub const ASSETS: &[MapAsset] = &[
     MapAsset {

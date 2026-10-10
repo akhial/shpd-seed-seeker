@@ -1,4 +1,4 @@
-//! Equipment loot regenerated from the official 4.0.1 Java oracle.
+//! Equipment loot regenerated from the official 4.0.2 Java oracle.
 //! Seven generation-changing trinkets, each at +3 after the first brewing
 //! opportunity, across three seeds through floor 24 (including vault rewards).
 //! Debug journal defaults retain the floor-24 Halls lore page.
@@ -18,7 +18,7 @@ struct Case {
 #[test]
 fn selected_trinket_loot_matches_java_fixtures() {
     let cases: Vec<Case> =
-        serde_json::from_str(include_str!("fixtures/selected_trinkets_v4.0.1.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/selected_trinkets_v4.0.2.json")).unwrap();
     assert_eq!(cases.len(), 21);
     for mut case in cases {
         let world = generate_main_world_with_trinket(

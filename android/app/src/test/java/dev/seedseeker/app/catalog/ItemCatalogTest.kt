@@ -24,7 +24,7 @@ class ItemCatalogTest {
     private val asset: JSONObject by lazy {
         val file = java.io.File(
             PackagedCatalog.directory,
-            "third_party/shattered-pixel-dungeon/catalog-v4.0.1.json",
+            "third_party/shattered-pixel-dungeon/catalog-v4.0.2.json",
         )
         check(file.exists()) { "catalog asset not found at ${file.absolutePath}" }
         JSONObject(file.readText())

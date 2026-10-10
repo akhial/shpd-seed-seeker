@@ -88,8 +88,8 @@ pub mod vault_sentries;
 pub mod wire;
 
 /// Upstream generation line this engine targets.
-pub const SHPD_VERSION: &str = "4.0.1";
+pub const SHPD_VERSION: &str = "4.0.2";
 
-/// Upstream source commit tagged `v4.0.1`. The matching official release
+/// Upstream source commit tagged `v4.0.2`. The matching official release
 /// JAR and its SHA-256 digest are pinned separately in `tooling/oracle-4.0`.
-pub const SHPD_COMMIT: &str = "e9defd0444c96d2fce3de5ec297c3398be8b7c55";
+pub const SHPD_COMMIT: &str = "57a4e06a4caf162446d1c28caa7983f0493fecf0";

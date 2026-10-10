@@ -20,5 +20,5 @@ for seed, depth in (("AAA-AAA-AAA", 19), ("AAA-AAA-AAB", 18), ("AAA-AAA-ABG", 17
     # Stdin also avoids translating a temporary file path for a Windows JVM.
     output = subprocess.check_output([str(ORACLE / "run.sh")], input=raw, env=env)
     samples.append(json.loads(output))
-fixture = dict(source="Official ShatteredPD-v4.0.1-Java.jar custom vault door selectors", samples=samples)
+fixture = dict(source="Official ShatteredPD-v4.0.2-Java.jar custom vault door selectors", samples=samples)
 (ROOT / "crates/seedfinder-core/tests/fixtures/vault-doors.json").write_text(json.dumps(fixture, indent=2) + "\n")
