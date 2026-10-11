@@ -22,7 +22,8 @@ use crate::room_decks::{
 };
 use crate::run::{
     ConsumableSpecialRoom, EquipmentSpecialRoom, GeneratorCategory, RunState,
-    SecretRoomKind as RunSecretRoom, SpecialRoomKind as RunSpecialRoom,
+    SecretRoomKind as RunSecretRoom, SecretRoomState, SpecialRoomKind as RunSpecialRoom,
+    SpecialRoomState,
 };
 
 /// Non-spatial state prepared before `RegularLevel.build()` begins.
@@ -216,64 +217,14 @@ pub fn init_regular_rooms(
 ) -> Result<InitializedRegularRooms, QuestError> {
     let region = MainRegion::for_regular_depth(depth);
     let depth_u8 = u8::try_from(depth).expect("main-path depth fits u8");
-    let depth_i32 = i32::try_from(depth).expect("main-path depth fits i32");
-    let mut rooms = vec![
-        create_entrance_room(depth, random),
-        create_exit_room(depth, random),
-    ];
-
-    let base_standard_count = if feeling == Feeling::Large {
-        region.maximum_standard_rooms()
-    } else {
-        region.draw_standard_rooms(random)
-    };
-    let standards = if feeling == Feeling::Large {
-        // Java evaluates this in float and truncates ceil back to int.
-        #[allow(clippy::cast_precision_loss)]
-        let scaled = (base_standard_count as f32 * 1.5_f32).ceil();
-        #[allow(clippy::cast_possible_truncation)]
-        let result = scaled as i32;
-        result
-    } else {
-        base_standard_count
-    };
-    append_standard_rooms(&mut rooms, standards, depth, random);
-
-    if matches!(depth, 6 | 11 | 16) {
-        rooms.push(Room::special(GraphSpecialRoom::Shop));
-    }
-
-    let mut special_count = if feeling == Feeling::Large {
-        region.maximum_special_rooms().wrapping_add(1)
-    } else {
-        region.draw_special_rooms(random)
-    };
-    let mut floor_specials =
-        begin_special_floor(&run.special_rooms, limited_drops, depth_i32, random);
-    let mut selected_specials = 0_i32;
-    while selected_specials < special_count {
-        let selected = select_special_room(
-            &mut run.special_rooms,
-            &mut floor_specials,
-            depth_i32,
-            random,
-        );
-        if selected == SelectedSpecialRoom::Pit {
-            special_count = special_count.wrapping_add(1);
-        }
-        rooms.push(Room::special(graph_special_kind(selected)));
-        selected_specials = selected_specials.wrapping_add(1);
-    }
-
-    let mut secret_count =
-        secrets_for_floor(&mut run.secret_rooms.region_secrets, depth_i32, random);
-    if feeling == Feeling::Secrets {
-        secret_count = secret_count.wrapping_add(1);
-    }
-    for _ in 0..secret_count {
-        let selected = select_secret_room(&mut run.secret_rooms.run_secrets, random);
-        rooms.push(Room::secret(graph_secret_kind(selected)));
-    }
+    let (mut rooms, floor_specials) = init_base_rooms(
+        &mut run.special_rooms,
+        &mut run.secret_rooms,
+        limited_drops,
+        depth,
+        feeling,
+        random,
+    );
 
     match region {
         MainRegion::Sewers => {}
@@ -321,6 +272,74 @@ pub fn init_regular_rooms(
         exit,
         floor_specials,
     })
+}
+
+/// The room-selection prefix shared by all regular regions, before quest
+/// scheduling and the final shuffle. Only these two queues and the laboratory
+/// counter persist into later room selection; layout and painting never alter
+/// them. Keeping this prefix shared also lets search preview future room types.
+pub(crate) fn init_base_rooms(
+    special_rooms: &mut SpecialRoomState,
+    secret_rooms: &mut SecretRoomState,
+    limited_drops: &mut LimitedDrops,
+    depth: u32,
+    feeling: Feeling,
+    random: &mut RandomStack,
+) -> (Vec<Room>, FloorSpecialDeck) {
+    let region = MainRegion::for_regular_depth(depth);
+    let depth_i32 = i32::try_from(depth).expect("main-path depth fits i32");
+    let mut rooms = vec![
+        create_entrance_room(depth, random),
+        create_exit_room(depth, random),
+    ];
+
+    let base_standard_count = if feeling == Feeling::Large {
+        region.maximum_standard_rooms()
+    } else {
+        region.draw_standard_rooms(random)
+    };
+    let standards = if feeling == Feeling::Large {
+        // Java evaluates this in float and truncates ceil back to int.
+        #[allow(clippy::cast_precision_loss)]
+        let scaled = (base_standard_count as f32 * 1.5_f32).ceil();
+        #[allow(clippy::cast_possible_truncation)]
+        let result = scaled as i32;
+        result
+    } else {
+        base_standard_count
+    };
+    append_standard_rooms(&mut rooms, standards, depth, random);
+
+    if matches!(depth, 6 | 11 | 16) {
+        rooms.push(Room::special(GraphSpecialRoom::Shop));
+    }
+
+    let mut special_count = if feeling == Feeling::Large {
+        region.maximum_special_rooms().wrapping_add(1)
+    } else {
+        region.draw_special_rooms(random)
+    };
+    let mut floor_specials = begin_special_floor(special_rooms, limited_drops, depth_i32, random);
+    let mut selected_specials = 0_i32;
+    while selected_specials < special_count {
+        let selected = select_special_room(special_rooms, &mut floor_specials, depth_i32, random);
+        if selected == SelectedSpecialRoom::Pit {
+            special_count = special_count.wrapping_add(1);
+        }
+        rooms.push(Room::special(graph_special_kind(selected)));
+        selected_specials = selected_specials.wrapping_add(1);
+    }
+
+    let mut secret_count = secrets_for_floor(&mut secret_rooms.region_secrets, depth_i32, random);
+    if feeling == Feeling::Secrets {
+        secret_count = secret_count.wrapping_add(1);
+    }
+    for _ in 0..secret_count {
+        let selected = select_secret_room(&mut secret_rooms.run_secrets, random);
+        rooms.push(Room::secret(graph_secret_kind(selected)));
+    }
+
+    (rooms, floor_specials)
 }
 
 impl MainRegion {
@@ -466,74 +485,14 @@ pub fn init_sewer_rooms(
     random: &mut RandomStack,
 ) -> InitializedRegularRooms {
     assert!((1..=4).contains(&depth), "Sewer regular depths are 1..=4");
-    let depth_i32 = i32::try_from(depth).expect("Sewer depth fits i32");
-    let mut rooms = Vec::new();
-
-    rooms.push(create_entrance_room(depth, random));
-    rooms.push(create_exit_room(depth, random));
-
-    let standards = if feeling == Feeling::Large {
-        // standardRooms(true) == 6, then ceil(6 * 1.5f).
-        9
-    } else {
-        4 + i32::try_from(
-            random
-                .chances(&[1.0, 3.0, 1.0])
-                .expect("Sewer standard-room weights are positive"),
-        )
-        .expect("fixed chance index fits i32")
-    };
-    let mut consumed_value = 0_i32;
-    while consumed_value < standards {
-        let remaining = standards.wrapping_sub(consumed_value);
-        let room = loop {
-            let mut candidate = create_standard_room(depth, random);
-            if candidate.set_size_category_for_value(remaining, random) {
-                break candidate;
-            }
-        };
-        consumed_value = consumed_value.wrapping_add(room.size_factor());
-        rooms.push(room);
-    }
-
-    // Dungeon.shopOnLevel() is false on Sewer floors.
-    let mut special_count = if feeling == Feeling::Large {
-        // specialRooms(true) == 2, plus one for LARGE.
-        3
-    } else {
-        1 + i32::try_from(
-            random
-                .chances(&[1.0, 4.0])
-                .expect("Sewer special-room weights are positive"),
-        )
-        .expect("fixed chance index fits i32")
-    };
-    let mut floor_specials =
-        begin_special_floor(&run.special_rooms, limited_drops, depth_i32, random);
-    let mut selected_specials = 0_i32;
-    while selected_specials < special_count {
-        let selected = select_special_room(
-            &mut run.special_rooms,
-            &mut floor_specials,
-            depth_i32,
-            random,
-        );
-        if selected == SelectedSpecialRoom::Pit {
-            special_count = special_count.wrapping_add(1);
-        }
-        rooms.push(Room::special(graph_special_kind(selected)));
-        selected_specials = selected_specials.wrapping_add(1);
-    }
-
-    let mut secret_count =
-        secrets_for_floor(&mut run.secret_rooms.region_secrets, depth_i32, random);
-    if feeling == Feeling::Secrets {
-        secret_count = secret_count.wrapping_add(1);
-    }
-    for _ in 0..secret_count {
-        let selected = select_secret_room(&mut run.secret_rooms.run_secrets, random);
-        rooms.push(Room::secret(graph_secret_kind(selected)));
-    }
+    let (mut rooms, floor_specials) = init_base_rooms(
+        &mut run.special_rooms,
+        &mut run.secret_rooms,
+        limited_drops,
+        depth,
+        feeling,
+        random,
+    );
 
     random.shuffle_list(&mut rooms);
     let entrance = rooms

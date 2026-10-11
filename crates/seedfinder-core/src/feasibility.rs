@@ -50,6 +50,7 @@ use crate::query::{
 use crate::quests::{QuestSummary, WandmakerQuestType};
 use crate::search::FloorGate;
 
+mod future_rooms;
 mod reasons;
 
 /// The four one-per-run reward quests, each offering a mutually exclusive
@@ -508,6 +509,8 @@ pub struct QueryPlan {
     floor_requirements: [Option<crate::floor_filters::CompiledFloorRequirement>; 25],
     /// Deepest required regular-floor feeling, or zero for no preflight.
     last_feeling_depth: u8,
+    /// Deepest room constraint that can reject before spatial generation.
+    last_room_depth: u8,
     auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
     /// Mandatory slots whose alternatives all name trinket deck outcomes.
@@ -1014,6 +1017,7 @@ impl QueryPlan {
                     .and_then(|_| u8::try_from(depth).ok())
             })
             .unwrap_or_default();
+        let last_room_depth = future_rooms::last_depth(&floor_requirements);
         // Deferred vault items may be missing even at ordinary callbacks with
         // no pending depth. Exclude every vault-capable donor envelope. Auto
         // also stays with the final allocator: its cost depends on reservations.
@@ -1050,6 +1054,7 @@ impl QueryPlan {
         let mut plan = Self {
             floor_requirements,
             last_feeling_depth,
+            last_room_depth,
             auto_trinket: None,
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
@@ -1369,7 +1374,13 @@ impl FloorGate for QueryPlan {
             return false;
         }
         if self.required_trinket_slots.is_empty() {
-            return self.feelings_possible(run.dungeon_seed);
+            return self.feelings_possible(run.dungeon_seed)
+                && future_rooms::possible(
+                    &self.floor_requirements,
+                    self.last_room_depth,
+                    self.wandmaker_deadline,
+                    run,
+                );
         }
         // Preserve the cheap four-card prefix for ordinary offer searches.
         if self
@@ -1383,7 +1394,13 @@ impl FloorGate for QueryPlan {
                 slot.iter()
                     .any(|r| r.item.is_some_and(|id| offers.contains(&id)))
             }) && trinket_slots_fit(&self.required_trinket_slots, &offers)
-                && self.feelings_possible(run.dungeon_seed);
+                && self.feelings_possible(run.dungeon_seed)
+                && future_rooms::possible(
+                    &self.floor_requirements,
+                    self.last_room_depth,
+                    self.wandmaker_deadline,
+                    run,
+                );
         }
         let order = crate::trinkets::order_from_generator(&run.generator);
         self.required_trinket_slots.iter().all(|slot| {
@@ -1394,6 +1411,12 @@ impl FloorGate for QueryPlan {
             })
         }) && trinket_slots_fit(&self.required_trinket_slots, &order)
             && self.feelings_possible(run.dungeon_seed)
+            && future_rooms::possible(
+                &self.floor_requirements,
+                self.last_room_depth,
+                self.wandmaker_deadline,
+                run,
+            )
     }
 
     fn selected_trinket(&self, seed: crate::seed::DungeonSeed) -> Option<crate::catalog::ItemId> {
