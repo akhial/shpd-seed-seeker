@@ -1,4 +1,4 @@
-//! Exact `paint(Level)` ports for every v4.0.1 Imp Vault room class.
+//! Exact `paint(Level)` ports for every v4.0.2 Imp Vault room class.
 //!
 //! Each function reproduces its Java counterpart's terrain writes, heap
 //! drops, mob placements, and RNG draws in source order. `Painter.fill`
@@ -842,7 +842,7 @@ fn paint_circle(
     fill_room_margins(state, &this, 4, 1, 4, 1, terrain::EMPTY);
     fill_room_margins(state, &this, 1, 4, 1, 4, terrain::EMPTY);
     set_point(state, this.center(), terrain::PEDESTAL);
-    // The difficult four-cone pattern was removed in 4.0.1.
+    // The difficult four-cone pattern is absent in 4.0.2.
     let pattern = random.int_bound(3);
     let cell = state.point_to_cell(this.center());
     state.add_mob(VaultMobKind::Sentry, cell);

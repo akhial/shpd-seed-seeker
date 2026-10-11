@@ -29,9 +29,9 @@ absent, rather than displaying an unshuffled or guessed mapping.
 
 Web, Android, Linux, Windows, and macOS share `item-mapping-art.json` in the
 Android artwork directory.
-This is display metadata from the pinned v4.0.1 game's
-[`ItemSpriteSheet`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.1/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java) and
-[`ScrollingGridPane`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.1/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ui/ScrollingGridPane.java).
+This is display metadata from the pinned v4.0.2 game's
+[`ItemSpriteSheet`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.2/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java) and
+[`ScrollingGridPane`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.2/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ui/ScrollingGridPane.java).
 The unmodified `items.png` and `item_icons.png` atlases remain the artwork source.
 
 Each category's identity icons use the same class order as the engine mappings:

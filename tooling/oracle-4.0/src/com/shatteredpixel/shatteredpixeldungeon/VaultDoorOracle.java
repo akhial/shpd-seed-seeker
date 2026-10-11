@@ -25,7 +25,7 @@ public final class VaultDoorOracle {
     }
 
     public static void main(String[] args) throws Exception {
-        com.watabou.noosa.Game.version = "4.0.1";
+        com.watabou.noosa.Game.version = "4.0.2";
         String input = args.length == 0
             ? new String(System.in.readAllBytes(), StandardCharsets.UTF_8)
             : Files.readString(Path.of(args[0]));

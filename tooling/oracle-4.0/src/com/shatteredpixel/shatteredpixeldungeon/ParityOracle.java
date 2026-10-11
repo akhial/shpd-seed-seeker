@@ -62,7 +62,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * A non-interactive, machine-readable oracle over the official v4.0.1
+ * A non-interactive, machine-readable oracle over the official v4.0.2
  * generation path, driven headlessly against the unmodified desktop JAR.
  * This class deliberately avoids identifying or otherwise mutating generated
  * items while recording them.
@@ -70,16 +70,16 @@ import java.util.TreeSet;
 public final class ParityOracle {
 
 	private static final String SCHEMA = "shpd-parity-oracle/v2";
-	private static final String GAME_VERSION = "4.0.1";
-	private static final int GAME_VERSION_CODE = 920;
-	private static final String GAME_COMMIT = "e9defd0444c96d2fce3de5ec297c3398be8b7c55";
+	private static final String GAME_VERSION = "4.0.2";
+	private static final int GAME_VERSION_CODE = 922;
+	private static final String GAME_COMMIT = "57a4e06a4caf162446d1c28caa7983f0493fecf0";
 	private static final String GAME_JAR_URL =
-			"https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.1/ShatteredPD-v4.0.1-Java.jar";
+			"https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Java.jar";
 	private static final String GAME_JAR_SHA256 =
-			"452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea";
+			"bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602";
 	/**
 	 * The JAR's own {@code DeviceCompat.isDebug()} is {@code Game.version.contains("INDEV")}.
-	 * Debug mode marks guide pages read (v4.0.1 excludes the Halls attrition lore page), keeping the unseeded
+	 * Debug mode marks guide pages read (v4.0.2 excludes the Halls attrition lore page), keeping the unseeded
 	 * early-Guidebook heap off the first floors.  Nothing else on the generation path
 	 * reads {@code Game.version} (see README), so the suffix is the smallest possible
 	 * headless intervention.
@@ -141,7 +141,7 @@ public final class ParityOracle {
 		Dungeon.initSeed();
 		GamesInProgress.selectedClass = HeroClass.WARRIOR;
 		Dungeon.init();
-		// Preserve v4.0.1's debug journal defaults: the Halls "attrition" page
+		// Preserve v4.0.2's debug journal defaults: the Halls "attrition" page
 		// remains unfound and is generated on floor 24, matching the engine.
 
 		output.emit(runInitRecord(options));
@@ -1074,7 +1074,7 @@ public final class ParityOracle {
 					}
 				}
 			}
-			// v4.0.1: Imp.Quest.spawn rolls six reward options (artifact-or-ring, ring,
+			// v4.0.2: Imp.Quest.spawn rolls six reward options (artifact-or-ring, ring,
 			// weapon/missile pair, PlateArmor, wand) on the Imp's floor.  The list is
 			// captured here, before VaultFinalRoom.paint() clears it.
 			if (!imp && !Imp.Quest.rewardOptions.isEmpty()) {

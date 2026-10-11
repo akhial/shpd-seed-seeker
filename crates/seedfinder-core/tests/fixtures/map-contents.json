@@ -1,5 +1,5 @@
 {
-  "source": "official ShatteredPD-v4.0.1-Java.jar; ParityOracle --map-contents --acquire-hourglass",
+  "source": "official ShatteredPD-v4.0.2-Java.jar; ParityOracle --map-contents --acquire-hourglass",
   "samples": [
     {
       "seed": "AAA-AAA-AAA",

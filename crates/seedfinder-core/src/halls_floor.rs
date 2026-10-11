@@ -1144,7 +1144,7 @@ mod tests {
 
     #[test]
     fn halls_lore_page_matches_its_official_drop_cell() {
-        // Official v4.0.1 JAR: seed 17, depth 24, attrition page at cell 560.
+        // Official v4.0.2 JAR: seed 17, depth 24, attrition page at cell 560.
         let floor = generate_halls_prefix(DungeonSeed::new(17).unwrap(), 24)
             .pop()
             .unwrap();

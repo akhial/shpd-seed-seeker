@@ -121,5 +121,5 @@
       }
     ]
   },
-  "provenance": "4.0.1 loot conditions retain the six saved-choice positive cases and Resin/baseline negative cases; historical_base_query records the original 4.0.0 report."
+  "provenance": "4.0.2 loot conditions retain the six saved-choice positive cases and Resin/baseline negative cases; historical_base_query records the original 4.0.0 report."
 }

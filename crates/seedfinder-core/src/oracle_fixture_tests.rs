@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use std::sync::LazyLock;
 
 static FIXTURE: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../tests/fixtures/main-floors-v4.0.1.json")).unwrap()
+    serde_json::from_str(include_str!("../tests/fixtures/main-floors-v4.0.2.json")).unwrap()
 });
 
 pub(crate) fn floor(code: &str, mask: u16, depth: u32) -> &'static Value {

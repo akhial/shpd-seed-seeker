@@ -6,10 +6,10 @@
 
 `sprites/item_icons.png`
 
-from Shattered Pixel Dungeon v4.0.1, source commit
-`e9defd0444c96d2fce3de5ec297c3398be8b7c55`, matching the official release JAR
-(`ShatteredPD-v4.0.1-Java.jar`, SHA-256
-`452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea`).
+from Shattered Pixel Dungeon v4.0.2, source commit
+`57a4e06a4caf162446d1c28caa7983f0493fecf0`, matching the official release JAR
+(`ShatteredPD-v4.0.2-Java.jar`, SHA-256
+`bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602`).
 The 256x512 atlas includes the updated runestone artwork. Sprite indices and
 `item_icons.png` are unchanged. Digests are recorded in `ASSET_MANIFEST.json`.
 

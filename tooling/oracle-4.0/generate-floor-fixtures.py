@@ -66,7 +66,7 @@ def main():
                              occupied=sorted(m["cell"] for m in level["mobs"]),
                              mobs=sorted(ordinary), items=sorted(i for i in items if i)))
         print(seed, mask, flush=True)
-    fixture = ROOT / "crates/seedfinder-core/tests/fixtures/main-floors-v4.0.1.json"
+    fixture = ROOT / "crates/seedfinder-core/tests/fixtures/main-floors-v4.0.2.json"
     fixture.write_text('{\n  "source": ' + json.dumps(document["records"][0]["game_jar_sha256"])
                        + ',\n  "floors": [\n'
                        + ',\n'.join('    ' + json.dumps(row, separators=(",", ":")) for row in rows)

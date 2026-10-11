@@ -349,23 +349,26 @@ impl<C: SewerRoomContent> CityRoomDispatcher<C> {
                         .expect("single-block StatuesRoom paints its transition tile")
                 } else {
                     let point = rooms[room].center(rng);
-                    let cell = level.point_to_cell(point);
-                    let width = level.width();
-                    let cell_i32 = i32::try_from(cell).expect("map exceeds Java int indexing");
-                    for offset in [
-                        -width - 1,
-                        -width,
-                        -width + 1,
-                        -1,
-                        1,
-                        width - 1,
-                        width,
-                        width + 1,
-                    ] {
-                        let neighbour = usize::try_from(cell_i32 + offset)
-                            .expect("transition center lies inside the padded room");
-                        if level.map.cells[neighbour] != terrain::STATUE {
-                            level.map.cells[neighbour] = terrain::EMPTY_DECO;
+                    let bounds = rooms[room].bounds;
+                    let mut carpet = Rect::new(point.x - 1, point.y - 1, point.x + 1, point.y + 1);
+                    if rooms[room].width() % 2 == 0 {
+                        if point.x * 2 < bounds.left + bounds.right {
+                            carpet.right += 1;
+                        } else {
+                            carpet.left -= 1;
+                        }
+                    }
+                    if rooms[room].height() % 2 == 0 {
+                        if point.y * 2 < bounds.top + bounds.bottom {
+                            carpet.bottom += 1;
+                        } else {
+                            carpet.top -= 1;
+                        }
+                    }
+                    for point in carpet.points() {
+                        let cell = level.point_to_cell(point);
+                        if level.map.cells[cell] != terrain::STATUE {
+                            level.map.cells[cell] = terrain::EMPTY_DECO;
                         }
                     }
                     point

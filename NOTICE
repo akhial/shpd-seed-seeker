@@ -15,10 +15,10 @@ Copyright (C) 2014-2026 Evan Debenham
 https://github.com/00-Evan/shattered-pixel-dungeon
 
 Compatibility source revision:
-e9defd0444c96d2fce3de5ec297c3398be8b7c55 (v4.0.1)
+57a4e06a4caf162446d1c28caa7983f0493fecf0 (v4.0.2)
 
 Level-map sprite and item-description source revision:
-e9defd0444c96d2fce3de5ec297c3398be8b7c55 (v4.0.1)
+57a4e06a4caf162446d1c28caa7983f0493fecf0 (v4.0.2)
 (see crates/seedfinder-core/assets/level-map/ATTRIBUTION.md)
 
 The program and bundled derived assets are distributed under the GNU General

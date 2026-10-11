@@ -2,9 +2,9 @@
 
 Shattered Pixel Dungeon generation changes between versions. Every engine result
 must therefore carry the target version, commit, and run profile. This project
-targets the final [v4.0.1 source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.1),
-build 920. `SHPD_COMMIT` holds its source commit,
-`e9defd0444c96d2fce3de5ec297c3398be8b7c55`. The 4.0.1 parity oracle
+targets the final [v4.0.2 source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2),
+build 922. `SHPD_COMMIT` holds its source commit,
+`57a4e06a4caf162446d1c28caa7983f0493fecf0`. The 4.0.2 parity oracle
 (`tooling/oracle-4.0`) runs the matching unmodified official release JAR,
 with its SHA-256 pinned separately. The v3.3.8 fixtures
 that still exist were pinned at commit

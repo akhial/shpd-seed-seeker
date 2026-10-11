@@ -59,9 +59,9 @@ in the initial offers or after either of the first two transmutations:
 {"requirements":[{"item":"rat_skull","trinket_transmutations":2}]}
 ```
 
-The pinned game's [catalyst window](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.1/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/trinkets/TrinketCatalyst.java#L163-L166)
+The pinned game's [catalyst window](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.2/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/trinkets/TrinketCatalyst.java#L163-L166)
 draws all four offers using the trinket category deck and never returns the
-unchosen three. [Transmutation](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.1/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java#L308-L318)
+unchosen three. [Transmutation](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.2/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java#L308-L318)
 continues drawing from that deck. Before its first refill all identities are
 unique, so the current-item rejection cannot skip a card: transmutation `X`
 is full-deck index `3 + X`, regardless of the initial choice. This setting
@@ -190,11 +190,11 @@ selected stable ID; an empty string means no selection. Scout matches must
 use the same request bytes so item indices refer to the selected world.
 Linux uses `production_scout_world_selected` directly with equivalent semantics.
 
-`TrinketOracle` verifies the order against the pinned v4.0.1 desktop JAR:
+`TrinketOracle` verifies the order against the pinned v4.0.2 desktop JAR:
 
 ```sh
 tooling/oracle-4.0/build.sh
-java -cp "tooling/oracle-4.0/.work/classes:tooling/oracle-4.0/.work/ShatteredPD-v4.0.1-Java.jar" \
+java -cp "tooling/oracle-4.0/.work/classes:tooling/oracle-4.0/.work/ShatteredPD-v4.0.2-Java.jar" \
   com.shatteredpixel.shatteredpixeldungeon.TrinketOracle AAA-AAA-AAA
 ```
 

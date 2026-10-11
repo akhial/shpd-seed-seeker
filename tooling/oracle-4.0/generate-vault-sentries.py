@@ -10,12 +10,12 @@ subprocess.run([str(ORACLE / 'build.sh')], check=True, stdout=subprocess.DEVNULL
 samples = []
 for seed in ('AAA-AAA-AAA', 'FOI-QDX-EMJ', 'BAD-RAT-KNG', 'HEL-LOO-WRD', 'GSA-DGS-ADG', 'SAD-BAD-RAD', 'AAA-AAA-AAB', 'AAA-AAA-AAC', 'AAA-AAA-AAD'):
     data = json.loads(subprocess.check_output([
-        'java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.1-Java.jar',
+        'java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.2-Java.jar',
         'com.shatteredpixel.shatteredpixeldungeon.ParityOracle', '--seed', seed,
         '--floors', '17-19', '--map-contents', '--acquire-hourglass', '--vault', '--format', 'json']))
     level = next(r for r in data['records'] if r.get('record') == 'level' and r['branch'] == 1)
     samples.append(dict(seed=seed, depth=level['depth'], sentries=level['sentries']))
-fixture = dict(source='Official ShatteredPD-v4.0.1-Java.jar: VaultLaser/VaultSentry setup; Ballistica, ConeAOE and Level.updateFieldOfView coverage before play.', samples=samples)
+fixture = dict(source='Official ShatteredPD-v4.0.2-Java.jar: VaultLaser/VaultSentry setup; Ballistica, ConeAOE and Level.updateFieldOfView coverage before play.', samples=samples)
 # Keep each sentry on one line so directions/coverage are easy to compare.
 lines = ['{', '  "source": '+json.dumps(fixture['source'])+',', '  "samples": [']
 for i, sample in enumerate(samples):

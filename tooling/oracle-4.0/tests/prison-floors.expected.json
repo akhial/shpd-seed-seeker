@@ -1,7 +1,7 @@
 {
   "schema": "shpd-prison-parity-fixture/v3",
-  "game_version": "4.0.1",
-  "game_jar_sha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
+  "game_version": "4.0.2",
+  "game_jar_sha256": "bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",

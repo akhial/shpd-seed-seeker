@@ -119,8 +119,8 @@ as big-endian u16-length-prefixed UTF-8 strings. Older scout requests retain
 legacy packet layouts. Match JSON adds `transmutedArtifacts` entries with `depth`
 and zero-based `index`; WASM exposes all floor decks as `artifactDecks`.
 
-The official v4.0.1 oracle in `tooling/oracle-4.0/ArtifactOracle` drains the saved
+The official v4.0.2 oracle in `tooling/oracle-4.0/ArtifactOracle` drains the saved
 artifact deck after a floor prefix and optionally runs actual scroll transmutations.
 Pinned remaining-deck fixtures supplement the existing generated-artifact parity
 checks. The implementation follows the upstream
-[artifact transmutation code](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.1/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java).
+[artifact transmutation code](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.2/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java).

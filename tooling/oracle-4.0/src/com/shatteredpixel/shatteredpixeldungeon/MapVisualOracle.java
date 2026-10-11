@@ -27,7 +27,7 @@ public final class MapVisualOracle {
         Field field=Unsafe.class.getDeclaredField("theUnsafe");field.setAccessible(true);
         Unsafe unsafe=(Unsafe)field.get(null);
         JsonValue doc=new JsonReader().parse(Files.readString(Path.of(args[0])));
-        com.watabou.noosa.Game.version="4.0.1";
+        com.watabou.noosa.Game.version="4.0.2";
         String kind=doc.getString("kind");
         Dungeon.seed=DungeonSeed.convertFromCode(doc.getString("seed"));
         Dungeon.depth=doc.getInt("depth");Dungeon.branch=doc.getInt("branch");

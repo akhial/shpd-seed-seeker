@@ -1,14 +1,14 @@
 # Selected trinket regression fixtures
 
-`selected_trinkets_v4.0.1.json` contains 21 official-JAR equipment cases across
+`selected_trinkets_v4.0.2.json` contains 21 official-JAR equipment cases across
 seven trinkets, each equipped at +3 after the first brewing opportunity.
-Every case was regenerated for 4.0.1 with Eclipse Adoptium JDK 25.0.4.1.
+Every case was regenerated for 4.0.2 with Eclipse Adoptium JDK 25.0.4.1.
 Loot includes the main floors through 24 and the Imp's vault, including Rat
 Skull statue equipment and Mossy Clump feeling rolls.
 
 The official JAR is pinned by `tooling/oracle-4.0/build.sh` (SHA-256
-`452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea`),
-matching source commit `e9defd0444c96d2fce3de5ec297c3398be8b7c55`.
+`bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602`),
+matching source commit `57a4e06a4caf162446d1c28caa7983f0493fecf0`.
 After building the oracle, regenerate all cases with:
 
 ```sh

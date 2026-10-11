@@ -3,11 +3,11 @@
   "upstream": {
     "name": "Shattered Pixel Dungeon",
     "repository": "https://github.com/00-Evan/shattered-pixel-dungeon",
-    "version": "4.0.1",
-    "release": "https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.1/ShatteredPD-v4.0.1-Java.jar",
-    "releaseSha256": "452a4b3811d271ff6078ed352905516d3a48aeac310b4b6609cbb7f44bf534ea",
+    "version": "4.0.2",
+    "release": "https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Java.jar",
+    "releaseSha256": "bcefd52a9c14f69c69d3ccc08a212cdd3830b2dc60d78d80895cd803fa1ec602",
     "license": "GPL-3.0-or-later",
-    "sourceCommit": "e9defd0444c96d2fce3de5ec297c3398be8b7c55"
+    "sourceCommit": "57a4e06a4caf162446d1c28caa7983f0493fecf0"
   },
   "asset": {
     "file": "items.png",
