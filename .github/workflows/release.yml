@@ -54,11 +54,14 @@ jobs:
           vp test
           vp build
 
+      # Hidden files are dropped by default, which would leave out
+      # .well-known/assetlinks.json and break Android App Link verification.
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
         with:
           name: seed-seeker-web-dist
           path: web/dist
+          include-hidden-files: true
           if-no-files-found: error
 
   web-deploy:
