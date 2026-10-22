@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.22.0" date="2026-10-11">
+    <release version="0.22.1" date="2026-10-22">
       <description>
-        <p>Update generation and maps for Shattered Pixel Dungeon 4.0.2, and preflight room requirements and Wandmaker quests before floor generation.</p>
+        <p>Move the web app to Cloudflare Pages and update share links while preserving existing links.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
