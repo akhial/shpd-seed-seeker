@@ -5,7 +5,7 @@ shareable link, and populate its query editor from such a link. The canonical
 link form is
 
 ```
-https://shpd-seed-seeker.web.app/#q=QAMtCYAA
+https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA
 ```
 
 where the value after `#q=` is a base64url code carrying the whole query. The
@@ -14,7 +14,8 @@ App Links; the desktop apps register the `seedseeker://` URI scheme
 (`seedseeker://q/CODE`) and also accept pasted web links. Decoders take the
 code from a `q=` parameter introduced by `#`, `?`, or `&` (ending at the next
 `&` or `#`), from the last path segment of a `seedseeker://` URI, or from bare
-code text.
+code text. Links on the original `https://shpd-seed-seeker.web.app/` host stay
+valid: that site redirects to the canonical host, and decoders ignore the host.
 
 The canonical implementation and its compatibility tests live in
 `crates/seedfinder-core/src/deep_link.rs` — it is the only implementation.
@@ -125,7 +126,7 @@ Every platform pins this vector:
 
 - Query document: `{"requirements":[{"item":"wand_fireblast","kind":"wand","upgrade":{"at_least":3}}]}`
 - Code: `QAMtCYAA`
-- Link: `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`
+- Link: `https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA`
 
 Encoding validates the query first, so a produced link always decodes;
 decoding returns the canonical query document (defaults omitted, `kind`

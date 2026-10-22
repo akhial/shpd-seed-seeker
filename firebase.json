@@ -1,12 +1,10 @@
 {
   "hosting": {
-    "public": "web/dist",
-    "ignore": ["**/.DS_Store", "**/node_modules/**"],
-    "rewrites": [{"source": "**", "destination": "/index.html"}],
-    "headers": [
-      {"source": "**/*.wasm", "headers": [{"key": "Content-Type", "value": "application/wasm"}]},
-      {"source": "/assets/**", "headers": [{"key": "Cache-Control", "value": "public, max-age=31536000, immutable"}]},
-      {"source": "/third_party/**", "headers": [{"key": "Cache-Control", "value": "public, max-age=86400"}]}
+    "public": "web/public",
+    "ignore": ["**/.DS_Store", "_headers", "third_party/**"],
+    "redirects": [
+      {"source": "/", "destination": "https://shpd-seed-seeker.pages.dev/", "type": 301},
+      {"regex": "^/(?P<path>[^.].*)$", "destination": "https://shpd-seed-seeker.pages.dev/:path", "type": 301}
     ]
   }
 }

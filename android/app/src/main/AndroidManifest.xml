@@ -36,14 +36,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <!-- Shared-search App Links; the matching assetlinks.json is
-                 served by the web host. -->
+                 served by both hosts. web.app now only redirects to
+                 pages.dev but keeps serving assetlinks.json, because links
+                 shared before the move still point at it. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:host="shpd-seed-seeker.web.app"
-                    android:scheme="https" />
+                <data android:scheme="https" />
+                <data android:host="shpd-seed-seeker.pages.dev" />
+                <data android:host="shpd-seed-seeker.web.app" />
             </intent-filter>
         </activity>
     </application>

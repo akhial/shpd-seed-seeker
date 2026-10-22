@@ -5,7 +5,7 @@ final class DeepLinkTests: XCTestCase {
     /// Cross-platform pinned vector: this query and this link must stay
     /// interchangeable on every platform. Re-frozen when the retired link
     /// formats were dropped alongside the journal-order effect table.
-    private static let pinnedLink = "https://shpd-seed-seeker.web.app/#q=QAMtCYAA"
+    private static let pinnedLink = "https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA"
 
     private func pinnedQuery() throws -> SavedQuery {
         SavedQuery(requirements: [
@@ -47,7 +47,7 @@ final class DeepLinkTests: XCTestCase {
             wandmakerQuest: .rotberry,
             challenges: Challenge.noHerbalism.rawValue)
         let link = try DeepLink.encodeLink(for: query)
-        XCTAssertTrue(link.hasPrefix("https://shpd-seed-seeker.web.app/#q="), link)
+        XCTAssertTrue(link.hasPrefix("https://shpd-seed-seeker.pages.dev/#q="), link)
         let decoded = try DeepLink.decode(link)
         XCTAssertEqual(decoded.maximumDepth, 12)
         XCTAssertTrue(decoded.requireBlacksmith)
@@ -83,8 +83,8 @@ final class DeepLinkTests: XCTestCase {
 
     func testGarbageAndEmptyTextAreRejected() {
         for text in ["", "   ", "not a link", "!!!", "https://example.com/",
-                     "https://shpd-seed-seeker.web.app/#q=", "seedseeker://q/",
-                     "https://shpd-seed-seeker.web.app/#q=EAGWhM"] {
+                     "https://shpd-seed-seeker.pages.dev/#q=", "seedseeker://q/",
+                     "https://shpd-seed-seeker.pages.dev/#q=EAGWhM"] {
             XCTAssertThrowsError(try DeepLink.decode(text), text) { error in
                 XCTAssertEqual(error as? DeepLinkError,
                                DeepLinkError("This is not a Seed Seeker query link."),

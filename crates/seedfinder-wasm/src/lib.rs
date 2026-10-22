@@ -1071,7 +1071,7 @@ mod tests {
     fn share_links_round_trip_the_canonical_document() {
         let document = r#"{"requirements":[{"item":"wand_fireblast","upgrade":{"at_least":3}}]}"#;
         let link = encode_share_link_impl(document).unwrap();
-        assert_eq!(link, "https://shpd-seed-seeker.web.app/#q=QAMtCYAA");
+        assert_eq!(link, "https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA");
         // Decoding returns the canonical document, which spells out the kind.
         let canonical = r#"{"requirements":[{"item":"wand_fireblast","kind":"wand","upgrade":{"at_least":3}}]}"#;
         assert_eq!(decode_share_text_impl(&link).unwrap(), canonical);

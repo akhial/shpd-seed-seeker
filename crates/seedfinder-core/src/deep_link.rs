@@ -1,7 +1,7 @@
 //! Compact shareable-link codec for search queries.
 //!
 //! A deep link carries a whole query as a short base64url code, e.g.
-//! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
+//! `https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
 //! ever grow at the end. Versions 4 through 14 are supported; versions 1
@@ -26,7 +26,7 @@ use crate::query::{
 use crate::quests::WandmakerQuestType;
 
 /// Canonical prefix for shared links; the code follows the `#q=` fragment.
-pub const WEB_LINK_PREFIX: &str = "https://shpd-seed-seeker.web.app/#q=";
+pub const WEB_LINK_PREFIX: &str = "https://shpd-seed-seeker.pages.dev/#q=";
 
 /// Custom URI scheme registered by the desktop apps.
 pub const URI_SCHEME: &str = "seedseeker";
@@ -1217,6 +1217,11 @@ mod tests {
         assert_eq!(extract_code(&link), Some(code.as_str()));
         assert_eq!(decode_text(&link).unwrap(), query);
         assert_eq!(decode_text(&format!("  {link}  ")).unwrap(), query);
+        // Links shared while the web app lived on Firebase Hosting.
+        assert_eq!(
+            extract_code(&format!("https://shpd-seed-seeker.web.app/#q={code}")),
+            Some(code.as_str())
+        );
         assert_eq!(
             extract_code(&format!("https://example.com/?utm=1&q={code}#top")),
             Some(code.as_str())
