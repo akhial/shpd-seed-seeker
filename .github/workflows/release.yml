@@ -54,11 +54,14 @@ jobs:
           vp test
           vp build
 
+      # Hidden files are dropped by default, which would leave out
+      # .well-known/assetlinks.json and break Android App Link verification.
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
         with:
           name: seed-seeker-web-dist
           path: web/dist
+          include-hidden-files: true
           if-no-files-found: error
 
   web-deploy:
@@ -77,13 +80,17 @@ jobs:
           name: seed-seeker-web-dist
           path: web/dist
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      # Tags check out a detached HEAD, which Wrangler would publish as a
+      # preview; naming the production branch makes the upload go live.
+      # Wrangler 2 silently skipped dotfiles such as .well-known/, so keep
+      # the major version pinned.
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          channelId: live
-          projectId: shpd-seed-seeker
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: pages deploy web/dist --project-name=shpd-seed-seeker --branch=main
 
   cli:
     name: CLI (${{ matrix.target }})
@@ -592,7 +599,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          # Exclude the web build; it deploys to Firebase and is not a release asset.
+          # Exclude the web build; it deploys to Cloudflare Pages and is not a release asset.
           pattern: '!seed-seeker-web-dist'
           path: dist
           merge-multiple: true

@@ -34,7 +34,7 @@ class DeepLinkTest {
         ),
     )
 
-    private val pinnedLink = "https://shpd-seed-seeker.web.app/#q=QAMtCYAA"
+    private val pinnedLink = "https://shpd-seed-seeker.pages.dev/#q=QAMtCYAA"
 
     /**
      * The cross-platform pinned vector: a known code must decode identically

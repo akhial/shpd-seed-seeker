@@ -55,7 +55,7 @@ application. Workspace Clippy and formatting checks passed.
 
 ```sh
 cargo build --locked --release -p shpd-seedfinder-core --features json-query --example benchmark_preparation
-target/release/examples/benchmark_preparation 'https://shpd-seed-seeker.web.app/#q=qgAAAXLcAAlsAAQAAXPGABc8AAueAAfrAAP3AAEEQRi7AWCgHZCwAA'
+target/release/examples/benchmark_preparation 'https://shpd-seed-seeker.pages.dev/#q=qgAAAXLcAAlsAAQAAXPGABc8AAueAAfrAAP3AAEEQRi7AWCgHZCwAA'
 target/release/examples/benchmark_preparation --queries crates/seedfinder-core/tests/fixtures/resin-preparation.json
 ```
 
